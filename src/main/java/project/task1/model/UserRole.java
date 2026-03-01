@@ -4,4 +4,5 @@ public enum UserRole {
     STUDENT,
     STAFF,
     LIBRARIAN,
+    AUTHOR
 }
