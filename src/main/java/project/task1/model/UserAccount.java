@@ -2,7 +2,7 @@ package project.task1.model;
 
 import java.util.Objects;
 
-public final class UserAccount {
+public class UserAccount {
     private final String username;
     private final String fullName;
     private final String passwordSaltBase64;
