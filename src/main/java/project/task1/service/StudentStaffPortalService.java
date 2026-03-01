@@ -1,6 +1,7 @@
 package project.task1.service;
 
 import project.task1.model.Book;
+import project.task1.model.LibrarianAccount;
 import project.task1.model.UserAccount;
 import project.task1.model.UserRole;
 import project.task1.repo.BookRepository;
@@ -22,7 +23,7 @@ public class StudentStaffPortalService {
         this.bookRepository = bookRepository;
     }
 
-    public OperationResult register(String username, String fullName, String rawPassword, String roleText) {
+    public OperationResult registerStaffStudent(String username, String fullName, String rawPassword, String roleText) {
         String normalizedUsername = safeTrim(username);
         String normalizedFullName = safeTrim(fullName);
         String normalizedRole = safeTrim(roleText).toUpperCase();
@@ -57,6 +58,46 @@ public class StudentStaffPortalService {
                 saltBase64,
                 hashBase64,
                 userRole.get()
+        );
+        userRepository.save(userAccount);
+        return OperationResult.success("Registration successful for " + normalizedUsername + ".");
+    }
+
+    public OperationResult registerLibrarian(String username, String fullName, String rawPassword, String employeeIDtext) {
+        String normalizedUsername = safeTrim(username);
+        String normalizedFullName = safeTrim(fullName);
+        int employeeID;
+        try {
+            employeeID = Integer.parseInt(safeTrim(employeeIDtext));
+        } catch (Exception e) {
+            return OperationResult.failure("Registration failed: employeeID must be a valid integer.");
+        }
+
+        if (normalizedUsername.isEmpty()) {
+            return OperationResult.failure("Registration failed: username is required.");
+        }
+        if (normalizedFullName.isEmpty()) {
+            return OperationResult.failure("Registration failed: full name is required.");
+        }
+        if (rawPassword == null || rawPassword.length() < MIN_PASSWORD_LENGTH) {
+            return OperationResult.failure("Registration failed: password must be at least " + MIN_PASSWORD_LENGTH + " characters.");
+        }
+        if (!rawPassword.matches(".*[A-Za-z].*") || !rawPassword.matches(".*\\d.*")) {
+            return OperationResult.failure("Registration failed: password must include at least one letter and one number.");
+        }
+        if (userRepository.existsByUsername(normalizedUsername)) {
+            return OperationResult.failure("Registration failed: username already exists.");
+        }
+
+        // Credentials are never stored as plain text; only salt + hash are persisted.
+        String saltBase64 = PasswordSecurity.generateSaltBase64();
+        String hashBase64 = PasswordSecurity.hashPasswordBase64(rawPassword, saltBase64);
+        UserAccount userAccount = new LibrarianAccount(
+                normalizedUsername,
+                normalizedFullName,
+                saltBase64,
+                hashBase64,
+                employeeID
         );
         userRepository.save(userAccount);
         return OperationResult.success("Registration successful for " + normalizedUsername + ".");

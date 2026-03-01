@@ -1,10 +1,7 @@
 package project.task1.model;
 
-import java.util.Objects;
-import project.task1.model.UserAccount;
-
 public class LibrarianAccount extends UserAccount  {
-    private int employeeID;
+    private final int employeeID;
 
     public LibrarianAccount(
             String username,
@@ -15,7 +12,6 @@ public class LibrarianAccount extends UserAccount  {
     ) {
         super(username, fullName, passwordSaltBase64, passwordHashBase64, UserRole.LIBRARIAN);
         this.employeeID = employeeID;
-
     }
 
     public int getEmployeeID() {

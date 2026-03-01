@@ -47,7 +47,7 @@ public class StudentStaffPortalConsole {
 
     private void printMenu() {
         System.out.println();
-        System.out.println("1) Register Student/Staff");
+        System.out.println("1) Register");
         System.out.println("2) Login Student/Staff");
         System.out.println("3) Available Book Screen");
         System.out.println("4) Borrow Book");
@@ -57,6 +57,22 @@ public class StudentStaffPortalConsole {
     }
 
     private void handleRegistration() {
+        System.out.println();
+        System.out.println("1) Register Student/Staff");
+        System.out.println("2) Register Author");
+        System.out.println("3) Register Librarian");
+        System.out.print("Select option: ");
+        String opt = scanner.nextLine();
+
+        switch (opt) {
+            case "1" -> handleStudentStaffRegistration();
+            case "2" -> handleAuthorRegistration();
+            case "3" -> handleLibrarianRegistration();
+            default -> System.out.println("Invalid option. Please choose from the menu.");
+        }
+    }
+
+    private void handleStudentStaffRegistration() {
         System.out.println("\n--- Register Student/Staff ---");
         System.out.print("Username: ");
         String username = scanner.nextLine();
@@ -67,7 +83,26 @@ public class StudentStaffPortalConsole {
         System.out.print("Role (Student or Staff): ");
         String role = scanner.nextLine();
 
-        OperationResult result = portalService.register(username, fullName, password, role);
+        OperationResult result = portalService.registerStaffStudent(username, fullName, password, role);
+        System.out.println(result.message());
+    }
+
+    private void handleAuthorRegistration() {
+        //Add implementation here
+    }
+
+    private void handleLibrarianRegistration() {
+        System.out.println("\n--- Register Librarian ---");
+        System.out.print("Username: ");
+        String username = scanner.nextLine();
+        System.out.print("Full Name: ");
+        String fullName = scanner.nextLine();
+        System.out.print("Password: ");
+        String password = scanner.nextLine();
+        System.out.print("Employee ID: ");
+        String eid = scanner.nextLine();
+
+        OperationResult result = portalService.registerLibrarian(username, fullName, password, eid);
         System.out.println(result.message());
     }
 
