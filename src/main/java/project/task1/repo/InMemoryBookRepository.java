@@ -20,14 +20,16 @@ public class InMemoryBookRepository implements BookRepository {
                 "Effective Java",
                 "Joshua Bloch",
                 LocalDate.now().minusDays(20),
-                "A practical guide to best practices in Java development."
+                "A practical guide to best practices in Java development.",
+                "PLACEHOLDER"
         );
         addApprovedBook(
                 "B002",
                 "Clean Code",
                 "Robert C. Martin",
                 LocalDate.now().minusDays(12),
-                "A handbook of software craftsmanship and clean coding principles."
+                "A handbook of software craftsmanship and clean coding principles.",
+                "PLACEHOLDER"
         );
     }
 
@@ -54,7 +56,7 @@ public class InMemoryBookRepository implements BookRepository {
     }
 
     @Override
-    public void addApprovedBook(String id, String title, String author, LocalDate publishDate, String summary) {
-        booksById.put(id, new Book(id, title, author, publishDate, summary, true));
+    public void addApprovedBook(String id, String title, String author, LocalDate publishDate, String summary, String genre) {
+        booksById.put(id, new Book(id, title, author, publishDate, summary, genre, true));
     }
 }
