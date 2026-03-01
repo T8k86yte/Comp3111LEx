@@ -5,6 +5,7 @@ import project.task1.model.LibrarianAccount;
 import project.task1.model.UserAccount;
 import project.task1.model.UserRole;
 import project.task1.repo.BookRepository;
+import project.task1.repo.SubmissionRepository;
 import project.task1.repo.UserRepository;
 import project.task1.security.PasswordSecurity;
 
@@ -17,10 +18,12 @@ public class StudentStaffPortalService {
 
     private final UserRepository userRepository;
     private final BookRepository bookRepository;
+    private final SubmissionRepository submissionRepository;
 
-    public StudentStaffPortalService(UserRepository userRepository, BookRepository bookRepository) {
+    public StudentStaffPortalService(UserRepository userRepository, BookRepository bookRepository, SubmissionRepository submissionRepository) {
         this.userRepository = userRepository;
         this.bookRepository = bookRepository;
+        this.submissionRepository = submissionRepository;
     }
 
     public OperationResult registerStaffStudent(String username, String fullName, String rawPassword, String roleText) {

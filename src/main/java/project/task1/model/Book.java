@@ -26,23 +26,18 @@ public final class Book {
     public String getId() {
         return id;
     }
-
     public String getTitle() {
         return title;
     }
-
     public String getAuthor() {
         return author;
     }
-
     public LocalDate getPublishDate() {
         return publishDate;
     }
-
     public String getSummary() {
         return summary;
     }
-
     public String getGenre() {
         return genre;
     }
@@ -50,7 +45,6 @@ public final class Book {
     public synchronized boolean isAvailable() {
         return available;
     }
-
     public synchronized String getBorrowedByUsername() {
         return borrowedByUsername;
     }

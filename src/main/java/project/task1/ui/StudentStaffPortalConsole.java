@@ -4,6 +4,7 @@ import project.task1.model.Book;
 import project.task1.model.UserAccount;
 import project.task1.repo.InMemoryBookRepository;
 import project.task1.repo.InMemoryUserRepository;
+import project.task1.repo.InMemorySubmissionRepository;
 import project.task1.service.StudentStaffPortalService;
 import project.task1.service.StudentStaffPortalService.LoginResult;
 import project.task1.service.StudentStaffPortalService.OperationResult;
@@ -19,7 +20,8 @@ public class StudentStaffPortalConsole {
     public StudentStaffPortalConsole() {
         this.portalService = new StudentStaffPortalService(
                 new InMemoryUserRepository(),
-                new InMemoryBookRepository()
+                new InMemoryBookRepository(),
+                new InMemorySubmissionRepository()
         );
         this.scanner = new Scanner(System.in);
     }

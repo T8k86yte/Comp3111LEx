@@ -12,11 +12,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class InMemoryBookRepository implements BookRepository {
     private final Map<String, Book> booksById = new ConcurrentHashMap<>();
+    private int nextid;
 
     public InMemoryBookRepository() {
         // Sample approved books to demonstrate Task 1.3 and 1.4.
+        nextid = 1;
         addApprovedBook(
-                "B001",
                 "Effective Java",
                 "Joshua Bloch",
                 LocalDate.now().minusDays(20),
@@ -24,7 +25,6 @@ public class InMemoryBookRepository implements BookRepository {
                 "PLACEHOLDER"
         );
         addApprovedBook(
-                "B002",
                 "Clean Code",
                 "Robert C. Martin",
                 LocalDate.now().minusDays(12),
@@ -56,7 +56,10 @@ public class InMemoryBookRepository implements BookRepository {
     }
 
     @Override
-    public void addApprovedBook(String id, String title, String author, LocalDate publishDate, String summary, String genre) {
-        booksById.put(id, new Book(id, title, author, publishDate, summary, genre, true));
+    public void addApprovedBook(String title, String author, LocalDate publishDate, String summary, String genre) {
+        String idstr = Integer.toString(nextid);
+        if (idstr.length() < 3) idstr = "0".repeat(3 - idstr.length()).concat(idstr);
+        idstr = "B".concat(idstr);
+        booksById.put(idstr, new Book(idstr, title, author, publishDate, summary, genre, true));
     }
 }
