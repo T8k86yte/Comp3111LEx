@@ -11,13 +11,10 @@ public class AuthorRepository {
     private final Map<String, AuthorAccount> authorsByUsername = new HashMap<>();
 
     public AuthorRepository() {
-        // Create data directory if it doesn't exist
         createDataDirectory();
-        // Load existing authors from file
-        loadFromFile();
+        loadFromFile();  // Load existing authors when repository is created
     }
 
-    // Create data directory
     private void createDataDirectory() {
         try {
             Path dataDir = Paths.get("data");
@@ -30,15 +27,15 @@ public class AuthorRepository {
         }
     }
 
-    // Save a new author
     public void save(AuthorAccount author) {
+        // Add to in-memory map
         authorsByUsername.put(author.getUsername(), author);
-        saveToFile();
+        // Save ALL authors to file
+        saveAllToFile();
         System.out.println("Author saved: " + author.getUsername());
     }
 
-    // Save all authors to file
-    private void saveToFile() {
+    private void saveAllToFile() {
         try {
             List<String> lines = new ArrayList<>();
             for (AuthorAccount author : authorsByUsername.values()) {
@@ -54,20 +51,26 @@ public class AuthorRepository {
         }
     }
 
-    // Load authors from file
     private void loadFromFile() {
         try {
             Path filePath = Paths.get(AUTHORS_FILE);
             if (Files.exists(filePath)) {
                 List<String> lines = Files.readAllLines(filePath);
+                int loadedCount = 0;
                 
                 for (String line : lines) {
                     if (!line.trim().isEmpty()) {
-                        // We'll implement fromString later when needed
-                        System.out.println("Found author in file: " + line);
+                        // Parse the line back into an AuthorAccount object
+                        AuthorAccount author = AuthorAccount.fromString(line);
+                        if (author != null) {
+                            // IMPORTANT: Add to the map!
+                            authorsByUsername.put(author.getUsername(), author);
+                            loadedCount++;
+                            System.out.println("Loaded author: " + author.getUsername());
+                        }
                     }
                 }
-                System.out.println("Loaded " + lines.size() + " authors from file");
+                System.out.println("Loaded " + loadedCount + " authors from " + AUTHORS_FILE);
             } else {
                 System.out.println("No existing authors file found, starting fresh");
             }
@@ -76,23 +79,27 @@ public class AuthorRepository {
         }
     }
 
-    // Check if username already exists
     public boolean existsByUsername(String username) {
         return authorsByUsername.containsKey(username);
     }
 
-    // Get all authors
     public List<AuthorAccount> findAll() {
         return new ArrayList<>(authorsByUsername.values());
     }
 
-    // Find author by username
     public Optional<AuthorAccount> findByUsername(String username) {
         return Optional.ofNullable(authorsByUsername.get(username));
     }
 
-    // Get total count of authors
     public int getCount() {
         return authorsByUsername.size();
+    }
+
+    // For debugging - show all authors in memory
+    public void printAllAuthors() {
+        System.out.println("\n📚 Authors in memory (" + authorsByUsername.size() + "):");
+        for (AuthorAccount author : authorsByUsername.values()) {
+            System.out.println("  • " + author.getUsername() + " | " + author.getFullName());
+        }
     }
 }
