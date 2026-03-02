@@ -61,5 +61,6 @@ public class InMemoryBookRepository implements BookRepository {
         if (idstr.length() < 3) idstr = "0".repeat(3 - idstr.length()).concat(idstr);
         idstr = "B".concat(idstr);
         booksById.put(idstr, new Book(idstr, title, author, publishDate, summary, genre, true));
+        nextid++;
     }
 }
