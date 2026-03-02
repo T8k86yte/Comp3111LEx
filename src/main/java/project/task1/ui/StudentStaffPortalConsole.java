@@ -3,8 +3,7 @@ package project.task1.ui;
 import project.task1.model.Book;
 import project.task1.model.UserAccount;
 import project.task1.repo.InMemoryBookRepository;
-import project.task1.repo.InMemoryUserRepository;
-import project.task1.repo.InMemorySubmissionRepository;
+import project.task1.repo.StudentStaffRepository;
 import project.task1.service.StudentStaffPortalService;
 import project.task1.service.StudentStaffPortalService.LoginResult;
 import project.task1.service.StudentStaffPortalService.OperationResult;
@@ -19,9 +18,8 @@ public class StudentStaffPortalConsole {
 
     public StudentStaffPortalConsole() {
         this.portalService = new StudentStaffPortalService(
-                new InMemoryUserRepository(),
-                new InMemoryBookRepository(),
-                new InMemorySubmissionRepository()
+                new StudentStaffRepository(),
+                new InMemoryBookRepository()
         );
         this.scanner = new Scanner(System.in);
     }
@@ -33,7 +31,7 @@ public class StudentStaffPortalConsole {
             printMenu();
             String option = scanner.nextLine().trim();
             switch (option) {
-                case "1" -> handleRegistration();
+                case "1" -> handleStudentStaffRegistration();
                 case "2" -> handleLogin();
                 case "3" -> showAvailableBookScreen();
                 case "4" -> handleBorrowBook();
@@ -58,22 +56,6 @@ public class StudentStaffPortalConsole {
         System.out.print("Select option: ");
     }
 
-    private void handleRegistration() {
-        System.out.println();
-        System.out.println("1) Register Student/Staff");
-        System.out.println("2) Register Author");
-        System.out.println("3) Register Librarian");
-        System.out.print("Select option: ");
-        String opt = scanner.nextLine();
-
-        switch (opt) {
-            case "1" -> handleStudentStaffRegistration();
-            case "2" -> handleAuthorRegistration();
-            case "3" -> handleLibrarianRegistration();
-            default -> System.out.println("Invalid option. Please choose from the menu.");
-        }
-    }
-
     private void handleStudentStaffRegistration() {
         System.out.println("\n--- Register Student/Staff ---");
         System.out.print("Username: ");
@@ -86,25 +68,6 @@ public class StudentStaffPortalConsole {
         String role = scanner.nextLine();
 
         OperationResult result = portalService.registerStaffStudent(username, fullName, password, role);
-        System.out.println(result.message());
-    }
-
-    private void handleAuthorRegistration() {
-        //Add implementation here
-    }
-
-    private void handleLibrarianRegistration() {
-        System.out.println("\n--- Register Librarian ---");
-        System.out.print("Username: ");
-        String username = scanner.nextLine();
-        System.out.print("Full Name: ");
-        String fullName = scanner.nextLine();
-        System.out.print("Password: ");
-        String password = scanner.nextLine();
-        System.out.print("Employee ID: ");
-        String eid = scanner.nextLine();
-
-        OperationResult result = portalService.registerLibrarian(username, fullName, password, eid);
         System.out.println(result.message());
     }
 
