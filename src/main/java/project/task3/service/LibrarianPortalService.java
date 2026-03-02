@@ -1,5 +1,6 @@
 package project.task3.service;
 
+import project.task1.model.Book;
 import project.task1.model.StudentStaffAccount;
 import project.task1.repo.BookRepository;
 import project.task1.security.PasswordSecurity;
@@ -7,7 +8,9 @@ import project.task1.service.StudentStaffPortalService;
 import project.task3.model.LibrarianAccount;
 import project.task3.repo.LibrarianRepository;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class LibrarianPortalService {
     private static final int MIN_PASSWORD_LENGTH = 8;
@@ -55,8 +58,28 @@ public class LibrarianPortalService {
         return OperationResult.success("Registration successful for " + username + ".");
     }
 
-    private static String safeTrim(String value) {
-        return value == null ? "" : value.trim();
+    public LoginResult login(String username, String rawPassword) {
+        if (username == null || username.isEmpty() || rawPassword == null || rawPassword.isEmpty()) {
+            return LoginResult.failure("Login failed: username and password are required.");
+        }
+
+        Optional<LibrarianAccount> userOpt = librarianRepository.findByUsername(username);
+        if (userOpt.isEmpty()) {
+            return LoginResult.failure("Login failed: invalid username or password.");
+        }
+
+        LibrarianAccount user = userOpt.get();
+        boolean matched = PasswordSecurity.verifyPassword(rawPassword, user.getPasswordSaltBase64(), user.getPasswordHashBase64());
+        if (!matched) {
+            return LoginResult.failure("Login failed: invalid username or password.");
+        }
+
+        return LoginResult.success("Login successful. Welcome, " + user.getFullName() + ".", user);
+    }
+
+    public OperationResult handleBookSubmission(String subId, LibrarianAccount user, boolean approve) {
+        return OperationResult.failure("TBA");
+        //TBA
     }
 
     public record OperationResult(boolean success, String message) {
@@ -69,13 +92,13 @@ public class LibrarianPortalService {
         }
     }
 
-    public record LoginResult(boolean success, String message, StudentStaffAccount user) {
-        public static StudentStaffPortalService.LoginResult success(String message, StudentStaffAccount user) {
-            return new StudentStaffPortalService.LoginResult(true, message, user);
+    public record LoginResult(boolean success, String message, LibrarianAccount user) {
+        public static LoginResult success(String message, LibrarianAccount user) {
+            return new LoginResult(true, message, user);
         }
 
-        public static StudentStaffPortalService.LoginResult failure(String message) {
-            return new StudentStaffPortalService.LoginResult(false, message, null);
+        public static LoginResult failure(String message) {
+            return new LoginResult(false, message, null);
         }
     }
 }
