@@ -1,6 +1,9 @@
 package project.task3.ui;
 
+import project.task1.model.Book;
 import project.task1.repo.InMemoryBookRepository;
+import project.task2.model.BookSubmission;
+import project.task3.repo.BookSubmissionRepository;
 import project.task3.repo.LibrarianRepository;
 import project.task3.service.LibrarianPortalService;
 import project.task3.model.LibrarianAccount;
@@ -16,7 +19,8 @@ public class LibrarianPortalConsole {
     public LibrarianPortalConsole() {
         this.portalService = new LibrarianPortalService(
                 new LibrarianRepository(),
-                new InMemoryBookRepository()
+                new InMemoryBookRepository(),
+                new BookSubmissionRepository()
         );
         this.scanner = new Scanner(System.in);
     }
@@ -81,7 +85,25 @@ public class LibrarianPortalConsole {
     }
 
     private void showBookSubmissionScreen() {
-        //TBA, will be implemented after finishing things about BookSubmission
+        System.out.println("\n--- Pending Book Submission Screen ---");
+        List<BookSubmission> subs = portalService.getBookSubmissionScreenData();
+        if (subs.isEmpty()) {
+            System.out.println("There are no pending book submissions currently.");
+            return;
+        }
+
+        for (BookSubmission sub : subs) {
+            System.out.println("----------------------------------------");
+            System.out.println("Submission ID: " + sub.getSubmissionId());
+            System.out.println("Title: " + sub.getTitle());
+            System.out.println("Author Username: " + sub.getAuthorUsername());
+            System.out.println("Author Full Name: " + sub.getAuthorFullName());
+            System.out.println("Genre: " + sub.getGenre());
+            System.out.println("Submit Date: " + sub.getSubmitDate());
+            System.out.println("Book Abstract/Summary: " + sub.getSummary());
+            System.out.println("Status: PENDING");
+        }
+        System.out.println("----------------------------------------");
     }
 
     private void handleApproveReject() {
@@ -93,7 +115,11 @@ public class LibrarianPortalConsole {
 
         System.out.print("Enter Submission ID to handle: ");
         String subId = scanner.nextLine();
-        //TBA: Check whether the submission ID is valid
+        LibrarianPortalService.OperationResult res = portalService.validateBookSubmissionId(subId);
+        if (!res.success()) {
+            System.out.println(res.message());
+            return;
+        }
 
         System.out.print("Enter the action (Approve/Reject): ");
         String action = scanner.nextLine();
@@ -105,8 +131,14 @@ public class LibrarianPortalConsole {
             return;
         }
 
-        LibrarianPortalService.OperationResult result = portalService.handleBookSubmission(subId, currentUser, isApprove);
-        System.out.println(result.message());
+        if (isApprove) res = portalService.approveBookSubmission(subId, currentUser);
+        else {
+            System.out.print("Enter the rejection reason: ");
+            String reason = scanner.nextLine();
+            res = portalService.rejectBookSubmission(subId, currentUser, reason);
+        }
+
+        System.out.println(res.message());
     }
 
     private void handleLogout() {

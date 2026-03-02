@@ -5,7 +5,9 @@ import project.task1.model.StudentStaffAccount;
 import project.task1.repo.BookRepository;
 import project.task1.security.PasswordSecurity;
 import project.task1.service.StudentStaffPortalService;
+import project.task2.model.BookSubmission;
 import project.task3.model.LibrarianAccount;
+import project.task3.repo.BookSubmissionRepository;
 import project.task3.repo.LibrarianRepository;
 
 import java.util.List;
@@ -17,10 +19,12 @@ public class LibrarianPortalService {
 
     private final LibrarianRepository librarianRepository;
     private final BookRepository bookRepository;
+    private final BookSubmissionRepository bookSubmissionRepository;
 
-    public LibrarianPortalService(LibrarianRepository librarianRepository, BookRepository bookRepository) {
+    public LibrarianPortalService(LibrarianRepository librarianRepository, BookRepository bookRepository, BookSubmissionRepository bookSubmissionRepository) {
         this.librarianRepository = librarianRepository;
         this.bookRepository = bookRepository;
+        this.bookSubmissionRepository = bookSubmissionRepository;
     }
 
     public LibrarianPortalService.OperationResult registerLibrarian(String username, String fullname, String rawPassword, String employeeIDtext) {
@@ -77,9 +81,36 @@ public class LibrarianPortalService {
         return LoginResult.success("Login successful. Welcome, " + user.getFullName() + ".", user);
     }
 
-    public OperationResult handleBookSubmission(String subId, LibrarianAccount user, boolean approve) {
-        return OperationResult.failure("TBA");
-        //TBA
+    public List<BookSubmission> getBookSubmissionScreenData() {
+        return bookSubmissionRepository.findAll()
+                .stream()
+                .filter(BookSubmission::isPending)
+                .collect(Collectors.toList());
+    }
+
+    public OperationResult validateBookSubmissionId(String subId) {
+        if (bookSubmissionRepository.findById(subId).isEmpty()) return OperationResult.failure("Invalid book submission Id.");
+        else return OperationResult.success("");
+    }
+
+    public OperationResult approveBookSubmission(String subId, LibrarianAccount user) {
+        Optional<BookSubmission> sub = bookSubmissionRepository.findById(subId);
+        if (sub.isEmpty()) return OperationResult.failure("Approve failed: Invalid submission ID.");
+        if (user == null) return OperationResult.failure("Approve failed: No user logged in.");
+
+        boolean result = bookSubmissionRepository.approveBookSubmission(subId, user.getUsername(), bookRepository);
+        if (result) return OperationResult.success("Approve successful: \"" + sub.get().getTitle() + "\" is approved and created.");
+        return OperationResult.failure("Approve failed: Unable to create the book.");
+    }
+
+    public OperationResult rejectBookSubmission(String subId, LibrarianAccount user, String reason) {
+        Optional<BookSubmission> sub = bookSubmissionRepository.findById(subId);
+        if (sub.isEmpty()) return OperationResult.failure("Approve failed: Invalid submission ID.");
+        if (user == null) return OperationResult.failure("Approve failed: No user logged in.");
+
+        boolean result = bookSubmissionRepository.rejectBookSubmission(subId, user.getUsername(), reason);
+        if (result) return OperationResult.success("Reject successful: \"" + sub.get().getTitle() + "\" is rejected.");
+        return OperationResult.failure("Reject failed: Unable to find the submission.");
     }
 
     public record OperationResult(boolean success, String message) {
