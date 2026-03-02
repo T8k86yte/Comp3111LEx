@@ -1,4 +1,4 @@
-package project.task1.model;
+package project.task2.model;
 
 public enum UserRole {
     STUDENT,

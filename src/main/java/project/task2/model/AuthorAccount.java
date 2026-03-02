@@ -1,8 +1,5 @@
 package project.task2.model;
 
-import project.task1.model.UserAccount;
-import project.task1.model.UserRole;
-
 public class AuthorAccount extends UserAccount {
     private final String bio;
 
@@ -13,14 +10,20 @@ public class AuthorAccount extends UserAccount {
             String passwordHashBase64,
             String bio
     ) {
+        // Super class constructor
         super(username, fullName, passwordSaltBase64, passwordHashBase64, UserRole.AUTHOR);
-        this.bio = bio != null ? bio : "";
+        if(bio == null){
+            this.bio = "";
+        }else{
+            this.bio = bio;
+        }
     }
 
     public String getBio() {
         return bio;
     }
 
+    // toString, which convert all data to string for repo
     @Override
     public String toString() {
         return String.join("|",
@@ -33,17 +36,5 @@ public class AuthorAccount extends UserAccount {
         );
     }
 
-    public static AuthorAccount fromString(String data) {
-        String[] parts = data.split("\\|");
-        if (parts.length >= 6) {
-            return new AuthorAccount(
-                parts[0],
-                parts[1],
-                parts[2],
-                parts[3],
-                parts[5]
-            );
-        }
-        return null;
-    }
+    
 }
