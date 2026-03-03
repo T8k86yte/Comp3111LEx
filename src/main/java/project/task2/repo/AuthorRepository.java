@@ -27,6 +27,7 @@ public class AuthorRepository {
         }
     }
 
+    // add the new user data to repository
     public void save(AuthorAccount author) {
         // Add to in-memory map
         authorsByUsername.put(author.getUsername(), author);
@@ -34,6 +35,8 @@ public class AuthorRepository {
         saveAllToFile();
         System.out.println("Author saved: " + author.getUsername());
     }
+
+
 
     private void saveAllToFile() {
         try {

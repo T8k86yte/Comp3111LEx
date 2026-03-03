@@ -19,15 +19,16 @@ public class AuthorAccount extends UserAccount {
         return bio;
     }
 
-    // Add these getters to access password fields from UserAccount
+    // Get the password (salt) of the author
     public String getPasswordSalt() {
         return getPasswordSaltBase64();
     }
-
+    // get the password (hash) of author
     public String getPasswordHash() {
         return getPasswordHashBase64();
     }
 
+    // tostring function that collect all user data, for repository usage
     @Override
     public String toString() {
         return String.join("|",
@@ -39,7 +40,7 @@ public class AuthorAccount extends UserAccount {
             bio
         );
     }
-
+    // fromstring function that decode user data from repository
     public static AuthorAccount fromString(String data) {
         String[] parts = data.split("\\|");
         if (parts.length >= 6) {

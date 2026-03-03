@@ -2,10 +2,9 @@ package project.task2.service;
 
 import project.task2.model.AuthorAccount;
 import project.task2.repo.AuthorRepository;
+import project.task2.utils.PasswordUtils;
 
 public class AuthorPortalService {
-    private static final int MIN_PASSWORD_LENGTH = 8;
-    
     private final AuthorRepository authorRepository;
 
     public AuthorPortalService() {
@@ -16,11 +15,12 @@ public class AuthorPortalService {
         this.authorRepository = authorRepository;
     }
 
-    // ========== TASK 2.1: REGISTRATION ==========
+    // ========== REGISTRATION (AUTHOR)==========
     public RegistrationResult registerAuthor(String username, String fullName, 
                                             String password, String confirmPassword,
                                             String bio) {
         
+        // Validation
         if (isBlank(username)) {
             return RegistrationResult.failure("Username is required.");
         }
@@ -41,16 +41,9 @@ public class AuthorPortalService {
             return RegistrationResult.failure("Username '" + username + "' is already taken.");
         }
 
-        if (password.length() < MIN_PASSWORD_LENGTH) {
-            return RegistrationResult.failure("Password must be at least " + MIN_PASSWORD_LENGTH + " characters long.");
-        }
-
-        if (!hasLetter(password)) {
-            return RegistrationResult.failure("Password must contain at least one letter.");
-        }
-
-        if (!hasNumber(password)) {
-            return RegistrationResult.failure("Password must contain at least one number.");
+        // Use PasswordUtils for password validation
+        if (!PasswordUtils.isStrongPassword(password)) {
+            return RegistrationResult.failure(PasswordUtils.getPasswordRequirements());
         }
 
         if (!password.equals(confirmPassword)) {
@@ -62,9 +55,9 @@ public class AuthorPortalService {
         }
 
         try {
-            // TODO: Replace with proper password hashing from Task 1
-            String salt = "salt_" + System.currentTimeMillis();
-            String hash = "hash_" + password;
+            // PROPER HASHING: Generate salt and hash using PasswordUtils
+            String salt = PasswordUtils.generateSalt();
+            String hash = PasswordUtils.hashPassword(password, salt);
 
             AuthorAccount author = new AuthorAccount(
                 username.trim(),
@@ -85,7 +78,7 @@ public class AuthorPortalService {
         }
     }
 
-    // LOGIN SYSTEM //
+    // ========== AUTHORLOGIN ==========
     public LoginResult login(String username, String password) {
         // Validation
         if (isBlank(username)) {
@@ -100,15 +93,20 @@ public class AuthorPortalService {
         var authorOpt = authorRepository.findByUsername(username.trim());
         
         if (authorOpt.isEmpty()) {
+            // Use same message for security (don't reveal if username exists)
             return LoginResult.failure("Invalid username or password.");
         }
 
         AuthorAccount author = authorOpt.get();
         
-        // TODO: Replace with proper password verification using PasswordSecurity
-        // For now, simple check (will be replaced with hash verification)
-        String expectedHash = "hash_" + password;
-        if (!author.getPasswordHash().equals(expectedHash)) {
+        // PROPER VERIFICATION: Use PasswordUtils to verify
+        boolean passwordMatches = PasswordUtils.verifyPassword(
+            password,
+            author.getPasswordSalt(),
+            author.getPasswordHash()
+        );
+
+        if (!passwordMatches) {
             return LoginResult.failure("Invalid username or password.");
         }
 
@@ -138,14 +136,6 @@ public class AuthorPortalService {
         String trimmed = username.trim();
         return trimmed.length() >= 3 && trimmed.length() <= 20 && 
                trimmed.matches("^[a-zA-Z0-9_]+$");
-    }
-
-    private boolean hasLetter(String str) {
-        return str.matches(".*[a-zA-Z].*");
-    }
-
-    private boolean hasNumber(String str) {
-        return str.matches(".*\\d.*");
     }
 
     // ========== RESULT CLASSES ==========
