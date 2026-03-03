@@ -13,12 +13,25 @@ public final class Book {
     private String borrowedByUsername;
 
     public Book(String id, String title, String author, LocalDate publishDate, String summary, boolean available) {
+        this(id, title, author, publishDate, summary, available, null);
+    }
+
+    public Book(
+            String id,
+            String title,
+            String author,
+            LocalDate publishDate,
+            String summary,
+            boolean available,
+            String borrowedByUsername
+    ) {
         this.id = Objects.requireNonNull(id, "id must not be null");
         this.title = Objects.requireNonNull(title, "title must not be null");
         this.author = Objects.requireNonNull(author, "author must not be null");
         this.publishDate = Objects.requireNonNull(publishDate, "publishDate must not be null");
         this.summary = Objects.requireNonNull(summary, "summary must not be null");
         this.available = available;
+        this.borrowedByUsername = borrowedByUsername;
     }
 
     public String getId() {
