@@ -15,5 +15,5 @@ public interface BookRepository {
 
     // Integration hook for Task 2/3:
     // Task 2 submits books, Task 3 approves them, then approved books are added here.
-    void addApprovedBook(String id, String title, String author, LocalDate publishDate, String summary);
+    void addApprovedBook(String title, String author, LocalDate publishDate, String summary, String genre);
 }

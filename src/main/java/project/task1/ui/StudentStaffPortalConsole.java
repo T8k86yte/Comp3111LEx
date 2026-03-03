@@ -3,7 +3,7 @@ package project.task1.ui;
 import project.task1.model.Book;
 import project.task1.model.UserAccount;
 import project.task1.repo.InMemoryBookRepository;
-import project.task1.repo.InMemoryUserRepository;
+import project.task1.repo.StudentStaffRepository;
 import project.task1.service.StudentStaffPortalService;
 import project.task1.service.StudentStaffPortalService.LoginResult;
 import project.task1.service.StudentStaffPortalService.OperationResult;
@@ -18,7 +18,7 @@ public class StudentStaffPortalConsole {
 
     public StudentStaffPortalConsole() {
         this.portalService = new StudentStaffPortalService(
-                new InMemoryUserRepository(),
+                new StudentStaffRepository(),
                 new InMemoryBookRepository()
         );
         this.scanner = new Scanner(System.in);
@@ -31,7 +31,7 @@ public class StudentStaffPortalConsole {
             printMenu();
             String option = scanner.nextLine().trim();
             switch (option) {
-                case "1" -> handleRegistration();
+                case "1" -> handleStudentStaffRegistration();
                 case "2" -> handleLogin();
                 case "3" -> showAvailableBookScreen();
                 case "4" -> handleBorrowBook();
@@ -47,7 +47,7 @@ public class StudentStaffPortalConsole {
 
     private void printMenu() {
         System.out.println();
-        System.out.println("1) Register Student/Staff");
+        System.out.println("1) Register");
         System.out.println("2) Login Student/Staff");
         System.out.println("3) Available Book Screen");
         System.out.println("4) Borrow Book");
@@ -56,7 +56,7 @@ public class StudentStaffPortalConsole {
         System.out.print("Select option: ");
     }
 
-    private void handleRegistration() {
+    private void handleStudentStaffRegistration() {
         System.out.println("\n--- Register Student/Staff ---");
         System.out.print("Username: ");
         String username = scanner.nextLine();
@@ -67,7 +67,7 @@ public class StudentStaffPortalConsole {
         System.out.print("Role (Student or Staff): ");
         String role = scanner.nextLine();
 
-        OperationResult result = portalService.register(username, fullName, password, role);
+        OperationResult result = portalService.registerStaffStudent(username, fullName, password, role);
         System.out.println(result.message());
     }
 

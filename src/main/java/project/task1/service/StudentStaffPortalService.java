@@ -1,10 +1,10 @@
 package project.task1.service;
 
 import project.task1.model.Book;
-import project.task1.model.UserAccount;
+import project.task1.model.StudentStaffAccount;
 import project.task1.model.UserRole;
 import project.task1.repo.BookRepository;
-import project.task1.repo.UserRepository;
+import project.task1.repo.StudentStaffRepository;
 import project.task1.security.PasswordSecurity;
 
 import java.util.List;
@@ -14,15 +14,15 @@ import java.util.stream.Collectors;
 public class StudentStaffPortalService {
     private static final int MIN_PASSWORD_LENGTH = 8;
 
-    private final UserRepository userRepository;
+    private final StudentStaffRepository studentstaffRepository;
     private final BookRepository bookRepository;
 
-    public StudentStaffPortalService(UserRepository userRepository, BookRepository bookRepository) {
-        this.userRepository = userRepository;
+    public StudentStaffPortalService(StudentStaffRepository studentstaffRepository, BookRepository bookRepository) {
+        this.studentstaffRepository = studentstaffRepository;
         this.bookRepository = bookRepository;
     }
 
-    public OperationResult register(String username, String fullName, String rawPassword, String roleText) {
+    public OperationResult registerStaffStudent(String username, String fullName, String rawPassword, String roleText) {
         String normalizedUsername = safeTrim(username);
         String normalizedFullName = safeTrim(fullName);
         String normalizedRole = safeTrim(roleText).toUpperCase();
@@ -39,7 +39,7 @@ public class StudentStaffPortalService {
         if (!rawPassword.matches(".*[A-Za-z].*") || !rawPassword.matches(".*\\d.*")) {
             return OperationResult.failure("Registration failed: password must include at least one letter and one number.");
         }
-        if (userRepository.existsByUsername(normalizedUsername)) {
+        if (studentstaffRepository.existsByUsername(normalizedUsername)) {
             return OperationResult.failure("Registration failed: username already exists.");
         }
 
@@ -51,14 +51,14 @@ public class StudentStaffPortalService {
         // Credentials are never stored as plain text; only salt + hash are persisted.
         String saltBase64 = PasswordSecurity.generateSaltBase64();
         String hashBase64 = PasswordSecurity.hashPasswordBase64(rawPassword, saltBase64);
-        UserAccount userAccount = new UserAccount(
+        StudentStaffAccount userAccount = new StudentStaffAccount(
                 normalizedUsername,
                 normalizedFullName,
                 saltBase64,
                 hashBase64,
                 userRole.get()
         );
-        userRepository.save(userAccount);
+        studentstaffRepository.save(userAccount);
         return OperationResult.success("Registration successful for " + normalizedUsername + ".");
     }
 
@@ -68,12 +68,12 @@ public class StudentStaffPortalService {
             return LoginResult.failure("Login failed: username and password are required.");
         }
 
-        Optional<UserAccount> userOpt = userRepository.findByUsername(normalizedUsername);
+        Optional<StudentStaffAccount> userOpt = studentstaffRepository.findByUsername(normalizedUsername);
         if (userOpt.isEmpty()) {
             return LoginResult.failure("Login failed: invalid username or password.");
         }
 
-        UserAccount user = userOpt.get();
+        StudentStaffAccount user = userOpt.get();
         boolean matched = PasswordSecurity.verifyPassword(rawPassword, user.getPasswordSaltBase64(), user.getPasswordHashBase64());
         if (!matched) {
             return LoginResult.failure("Login failed: invalid username or password.");
@@ -143,8 +143,8 @@ public class StudentStaffPortalService {
         }
     }
 
-    public record LoginResult(boolean success, String message, UserAccount user) {
-        public static LoginResult success(String message, UserAccount user) {
+    public record LoginResult(boolean success, String message, StudentStaffAccount user) {
+        public static LoginResult success(String message, StudentStaffAccount user) {
             return new LoginResult(true, message, user);
         }
 
