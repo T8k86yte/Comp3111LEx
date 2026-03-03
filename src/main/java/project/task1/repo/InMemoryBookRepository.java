@@ -2,10 +2,15 @@ package project.task1.repo;
 
 import project.task1.model.Book;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -13,14 +18,34 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class InMemoryBookRepository implements BookRepository {
-    private static final Path STORAGE_PATH = Paths.get("data", "task1", "books.db");
+    private static final String BOOKS_FILE = "data/books.txt";
     private final Map<String, Book> booksById = new ConcurrentHashMap<>();
+    private int nextid;
 
     public InMemoryBookRepository() {
-        loadFromFile();
+        nextid = 1;
+        try {
+            Files.createDirectories(Paths.get("data"));
+        } catch (IOException e) {
+            System.err.println("Error creating data directory: " + e.getMessage());
+        }
+
+        loadBooks();
         if (booksById.isEmpty()) {
-            seedDefaultBooks();
-            persistToFile();
+            addApprovedBook(
+                    "Effective Java",
+                    "Joshua Bloch",
+                    LocalDate.now().minusDays(20),
+                    "A practical guide to best practices in Java development.",
+                    "PLACEHOLDER"
+            );
+            addApprovedBook(
+                    "Clean Code",
+                    "Robert C. Martin",
+                    LocalDate.now().minusDays(12),
+                    "A handbook of software craftsmanship and clean coding principles.",
+                    "PLACEHOLDER"
+            );
         }
     }
 
@@ -43,92 +68,111 @@ public class InMemoryBookRepository implements BookRepository {
         if (book == null) {
             return false;
         }
-        boolean borrowed = book.borrowBy(borrowerUsername);
-        if (borrowed) {
-            persistToFile();
+        boolean success = book.borrowBy(borrowerUsername);
+        if (success) {
+            saveBooks();
         }
-        return borrowed;
+        return success;
     }
 
     @Override
-    public void addApprovedBook(String id, String title, String author, LocalDate publishDate, String summary) {
-        booksById.put(id, new Book(id, title, author, publishDate, summary, true));
-        persistToFile();
+    public void addApprovedBook(String title, String author, LocalDate publishDate, String summary, String genre) {
+        String idstr = Integer.toString(nextid);
+        if (idstr.length() < 3) idstr = "0".repeat(3 - idstr.length()).concat(idstr);
+        idstr = "B".concat(idstr);
+        booksById.put(idstr, new Book(idstr, title, author, publishDate, summary, true));
+        nextid++;
+        saveBooks();
     }
 
-    private void seedDefaultBooks() {
-        booksById.put(
-                "B001",
-                new Book(
-                        "B001",
-                        "Effective Java",
-                        "Joshua Bloch",
-                        LocalDate.now().minusDays(20),
-                        "A practical guide to best practices in Java development.",
-                        true
-                )
-        );
-        booksById.put(
-                "B002",
-                new Book(
-                        "B002",
-                        "Clean Code",
-                        "Robert C. Martin",
-                        LocalDate.now().minusDays(12),
-                        "A handbook of software craftsmanship and clean coding principles.",
-                        true
-                )
-        );
-    }
-
-    private void loadFromFile() {
-        List<String> lines = RepositoryFileStorageSupport.readLines(STORAGE_PATH);
-        for (String line : lines) {
-            if (line == null || line.isBlank()) {
-                continue;
+    private void loadBooks() {
+        try {
+            Path path = Paths.get(BOOKS_FILE);
+            if (!Files.exists(path)) {
+                return;
             }
-            List<String> parts = RepositoryFileStorageSupport.splitRecord(line, 7);
-            String id = parts.get(0);
-            String title = RepositoryFileStorageSupport.decode(parts.get(1));
-            String author = RepositoryFileStorageSupport.decode(parts.get(2));
-            LocalDate publishDate = LocalDate.parse(parts.get(3));
-            boolean available = Boolean.parseBoolean(parts.get(4));
-            String borrowedByEncoded = parts.get(5);
-            String borrowedBy = borrowedByEncoded.isEmpty()
-                    ? null
-                    : RepositoryFileStorageSupport.decode(borrowedByEncoded);
-            String summary = RepositoryFileStorageSupport.decode(parts.get(6));
-            booksById.put(
-                    id,
-                    new Book(id, title, author, publishDate, summary, available, borrowedBy)
-            );
+
+            List<String> lines = Files.readAllLines(path);
+            int maxId = 0;
+            for (String line : lines) {
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                Book book = parseBook(line);
+                if (book != null) {
+                    booksById.put(book.getId(), book);
+                    if (book.getId().startsWith("B")) {
+                        try {
+                            int numericId = Integer.parseInt(book.getId().substring(1));
+                            maxId = Math.max(maxId, numericId);
+                        } catch (NumberFormatException ignored) {
+                            // Keep loading even when one malformed id is encountered.
+                        }
+                    }
+                }
+            }
+            nextid = maxId + 1;
+            System.out.println("Loaded " + booksById.size() + " books from file.");
+        } catch (IOException e) {
+            System.err.println("Error loading books: " + e.getMessage());
         }
     }
 
-    private void persistToFile() {
-        List<String> lines = booksById.values()
-                .stream()
-                .sorted(Comparator.comparing(Book::getId))
-                .collect(ArrayList::new, (acc, book) -> acc.add(serialize(book)), ArrayList::addAll);
-        RepositoryFileStorageSupport.writeLines(STORAGE_PATH, lines);
+    private void saveBooks() {
+        try {
+            Path path = Paths.get(BOOKS_FILE);
+            List<String> lines = new ArrayList<>();
+            for (Book book : findAll()) {
+                lines.add(serializeBook(book));
+            }
+            Files.write(path, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            System.out.println("Saved " + lines.size() + " books to file.");
+        } catch (IOException e) {
+            System.err.println("Error saving books: " + e.getMessage());
+        }
     }
 
-    private static String serialize(Book book) {
-        String borrowedBy = book.getBorrowedByUsername() == null
-                ? ""
-                : RepositoryFileStorageSupport.encode(book.getBorrowedByUsername());
-        return book.getId()
-                + "|"
-                + RepositoryFileStorageSupport.encode(book.getTitle())
-                + "|"
-                + RepositoryFileStorageSupport.encode(book.getAuthor())
-                + "|"
-                + book.getPublishDate()
-                + "|"
-                + book.isAvailable()
-                + "|"
-                + borrowedBy
-                + "|"
-                + RepositoryFileStorageSupport.encode(book.getSummary());
+    private static String serializeBook(Book book) {
+        String borrowedBy = book.getBorrowedByUsername() == null ? "" : book.getBorrowedByUsername();
+        return String.join("|",
+                encodeField(book.getId()),
+                encodeField(book.getTitle()),
+                encodeField(book.getAuthor()),
+                book.getPublishDate().toString(),
+                encodeField(book.getSummary()),
+                Boolean.toString(book.isAvailable()),
+                encodeField(borrowedBy)
+        );
+    }
+
+    private static Book parseBook(String line) {
+        String[] parts = line.split("\\|", -1);
+        if (parts.length < 7) {
+            return null;
+        }
+
+        try {
+            String id = decodeField(parts[0]);
+            String title = decodeField(parts[1]);
+            String author = decodeField(parts[2]);
+            LocalDate publishDate = LocalDate.parse(parts[3]);
+            String summary = decodeField(parts[4]);
+            boolean available = Boolean.parseBoolean(parts[5]);
+            String borrowedBy = decodeField(parts[6]);
+            if (borrowedBy.isEmpty()) {
+                borrowedBy = null;
+            }
+            return new Book(id, title, author, publishDate, summary, available, borrowedBy);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String encodeField(String value) {
+        return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String decodeField(String value) {
+        return new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8);
     }
 }
