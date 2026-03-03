@@ -38,7 +38,7 @@ public class AuthorRegistrationUI {
                     System.out.println("\nThank you for using Author Portal. Goodbye!");
                     break;
                 default:
-                    System.out.println("❌ Invalid option. Please choose again.");
+                    System.out.println("Invalid option. Please choose again.");
             }
         }
         scanner.close();

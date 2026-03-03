@@ -2,7 +2,9 @@ package project.task2.ui;
 
 import project.task2.service.AuthorPortalService;
 import project.task2.model.AuthorAccount;
+import project.task2.model.BookSubmission;
 
+import java.util.List;
 import java.util.Scanner;
 
 public class AuthorLoginUI {
@@ -101,17 +103,13 @@ public class AuthorLoginUI {
             System.out.println("└" + "─".repeat(58) + "┘");
             
             System.out.println("\n👋 Welcome, " + loggedInAuthor.getFullName() + "!");
-            System.out.println("\n📊 Author Information:");
-            System.out.println("   • Username: " + loggedInAuthor.getUsername());
-            System.out.println("   • Full Name: " + loggedInAuthor.getFullName());
-            System.out.println("   • Bio: " + (loggedInAuthor.getBio().isEmpty() ? 
-                "Not provided" : loggedInAuthor.getBio()));
             
             System.out.println("\n" + "─".repeat(60));
             System.out.println("DASHBOARD MENU:");
             System.out.println("  1) View Profile");
-            System.out.println("  2) Publish New Book (Coming Soon - Task 2.3)");
-            System.out.println("  3) Logout");
+            System.out.println("  2) Publish New Book");
+            System.out.println("  3) View My Submissions");
+            System.out.println("  4) Logout");
             System.out.print("Enter your choice: ");
             
             String choice = scanner.nextLine().trim();
@@ -121,11 +119,14 @@ public class AuthorLoginUI {
                     viewProfile();
                     break;
                 case "2":
-                    System.out.println("\n⚠️  Publish Book feature coming soon in Task 2.3!");
-                    System.out.print("\nPress Enter to continue...");
-                    scanner.nextLine();
+                    // Launch Publish Book UI
+                    PublishBookUI publishUI = new PublishBookUI(loggedInAuthor);
+                    publishUI.start();
                     break;
                 case "3":
+                    viewMySubmissions();
+                    break;
+                case "4":
                     logout();
                     break;
                 default:
@@ -147,6 +148,50 @@ public class AuthorLoginUI {
         
         System.out.print("\nPress Enter to continue...");
         scanner.nextLine();
+    }
+
+    // ========== TASK 2.3: VIEW SUBMISSIONS METHOD ==========
+    private void viewMySubmissions() {
+        System.out.println("\n" + "┌" + "─".repeat(58) + "┐");
+        System.out.println("│              MY BOOK SUBMISSIONS                   │");
+        System.out.println("└" + "─".repeat(58) + "┘");
+        
+        List<BookSubmission> submissions = authorService.getAuthorSubmissions(loggedInAuthor.getUsername());
+        
+        if (submissions.isEmpty()) {
+            System.out.println("\n📭 You haven't submitted any books yet.");
+            System.out.println("\n💡 Use option 2 to publish your first book!");
+        } else {
+            System.out.println("\n📚 Your Submissions (Total: " + submissions.size() + "):");
+            System.out.println("─".repeat(60));
+            
+            for (int i = 0; i < submissions.size(); i++) {
+                BookSubmission sub = submissions.get(i);
+                System.out.println("\n📖 Book #" + (i+1));
+                System.out.println("   ID: " + sub.getSubmissionId());
+                System.out.println("   Title: " + sub.getTitle());
+                System.out.println("   Genre: " + sub.getGenre());
+                System.out.println("   Submitted: " + sub.getSubmissionDate());
+                System.out.println("   Status: " + getStatusEmoji(sub.getStatus()) + " " + sub.getStatus());
+                
+                if (sub.isRejected() && sub.getRejectionReason() != null) {
+                    System.out.println("   ❌ Rejection Reason: " + sub.getRejectionReason());
+                }
+                System.out.println("   ────────────────────────────────────────────");
+            }
+        }
+        
+        System.out.print("\nPress Enter to continue...");
+        scanner.nextLine();
+    }
+
+    private String getStatusEmoji(String status) {
+        switch (status) {
+            case "PENDING": return "⏳";
+            case "APPROVED": return "✅";
+            case "REJECTED": return "❌";
+            default: return "📌";
+        }
     }
 
     private void logout() {

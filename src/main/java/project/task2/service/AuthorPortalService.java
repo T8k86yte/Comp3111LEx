@@ -4,15 +4,24 @@ import project.task2.model.AuthorAccount;
 import project.task2.repo.AuthorRepository;
 import project.task2.utils.PasswordUtils;
 
+import project.task2.model.BookSubmission;
+import project.task2.repo.SubmissionRepository;
+import project.task2.utils.FileHandler;
+
+import java.util.List;  // Add this import
+
 public class AuthorPortalService {
     private final AuthorRepository authorRepository;
+    private final SubmissionRepository submissionRepository;
 
     public AuthorPortalService() {
         this.authorRepository = new AuthorRepository();
+        this.submissionRepository = new SubmissionRepository();
     }
 
     public AuthorPortalService(AuthorRepository authorRepository) {
         this.authorRepository = authorRepository;
+        this.submissionRepository = new SubmissionRepository(); // Add this
     }
 
     // ========== REGISTRATION (AUTHOR)==========
@@ -182,5 +191,77 @@ public class AuthorPortalService {
         public boolean isSuccess() { return success; }
         public String getMessage() { return message; }
         public AuthorAccount getAuthor() { return author; }
+    }
+
+    // ========== TASK 2.3: BOOK SUBMISSION RESULT CLASS ==========
+    public static class SubmissionResult {
+        private final boolean success;
+        private final String message;
+
+        private SubmissionResult(boolean success, String message) {
+            this.success = success;
+            this.message = message;
+        }
+
+        public static SubmissionResult success(String message) {
+            return new SubmissionResult(true, message);
+        }
+
+        public static SubmissionResult failure(String message) {
+            return new SubmissionResult(false, message);
+        }
+
+        public boolean isSuccess() { return success; }
+        public String getMessage() { return message; }
+    }
+
+    // ========== TASK 2.3: BOOK SUBMISSION METHODS ==========
+    public SubmissionResult submitBookForApproval(String authorUsername, String authorFullName,
+                                              String title, String genre, 
+                                              String description, String filePath) {
+    
+        // Validation
+        if (isBlank(title)) {
+            return SubmissionResult.failure("Book title is required.");
+        }
+        if (isBlank(genre)) {
+            return SubmissionResult.failure("Genre is required.");
+        }
+        if (isBlank(description)) {
+            return SubmissionResult.failure("Description is required.");
+        }
+        if (isBlank(filePath)) {
+            return SubmissionResult.failure("Book file is required.");
+        }
+
+        // Validate file type
+        if (!FileHandler.isValidFileType(filePath)) {
+            return SubmissionResult.failure("Invalid file type. Allowed: " + 
+                FileHandler.getAllowedFileTypes());
+        }
+
+        try {
+            // Create submission (in real app, would save file here)
+            BookSubmission submission = new BookSubmission(
+                title, authorUsername, authorFullName, 
+                genre, description, filePath
+            );
+
+            // Save to repository
+            submissionRepository.save(submission);
+
+            return SubmissionResult.success(
+                "Book '" + title + "' submitted successfully!\n" +
+                "Submission ID: " + submission.getSubmissionId()
+            );
+
+        } catch (Exception e) {
+            return SubmissionResult.failure("Submission failed: " + e.getMessage());
+        }
+    }
+
+    // Get all user book submission result (both approved and rejected)
+    public List<BookSubmission> getAuthorSubmissions(String authorUsername) {
+        return submissionRepository.findByAuthor(authorUsername);
     }
 }
