@@ -1,7 +1,6 @@
 package project.task1.repo;
 
 import project.task1.model.StudentStaffAccount;
-import project.task2.model.AuthorAccount;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 public class StudentStaffRepository {
     private static final String STUDENTSTAFFS_FILE = "data/studentstaffs.txt";
@@ -69,6 +67,7 @@ public class StudentStaffRepository {
 
     public void save(StudentStaffAccount userAccount) {
         studentstaffsByUsername.put(userAccount.getUsername(), userAccount);
+        saveStudentStaffs();
     }
 
     public Optional<StudentStaffAccount> findByUsername(String username) {
