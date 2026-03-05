@@ -149,6 +149,4 @@ public class LibrarianPortalConsole {
         System.out.println("Logged out: " + currentUser.getUsername());
         currentUser = null;
     }
-
-
 }
