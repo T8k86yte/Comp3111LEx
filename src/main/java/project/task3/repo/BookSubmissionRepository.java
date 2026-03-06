@@ -17,7 +17,7 @@ public class BookSubmissionRepository {
 
     public BookSubmissionRepository() {
         /*
-                addBookSubmission(
+        addBookSubmission(
                 "Test1",
                 "TestFullName1",
                 "TestUsername1",
@@ -34,6 +34,7 @@ public class BookSubmissionRepository {
                 "TestFilePath2"
         );
         */
+
         loadBookSubmissions();
     }
 

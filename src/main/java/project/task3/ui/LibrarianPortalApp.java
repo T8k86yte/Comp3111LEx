@@ -1,7 +1,11 @@
 package project.task3.ui;
 
 import javafx.application.Application;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
+import javafx.collections.ObservableArray;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -9,13 +13,14 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
-import project.task1.model.Book;
 import project.task2.model.BookSubmission;
 import project.task3.model.LibrarianAccount;
 import project.task1.repo.InMemoryBookRepository;
 import project.task3.repo.BookSubmissionRepository;
 import project.task3.repo.LibrarianRepository;
 import project.task3.service.LibrarianPortalService;
+
+import java.util.List;
 
 public class LibrarianPortalApp extends Application {
     private final LibrarianPortalService portalService;
@@ -25,7 +30,11 @@ public class LibrarianPortalApp extends Application {
     private Label statusLabel;
     private Label currentUserLabel;
     private TableView<BookSubmission> bookSubmissionTable;
+    private Label submissionTableExtra;
+
     private TextField approveSubmissionIdField;
+    private ComboBox<String> actionBox;
+    private TextField rejectReasonField;
 
     private TextField registerUsernameField;
     private TextField registerFullNameField;
@@ -75,7 +84,7 @@ public class LibrarianPortalApp extends Application {
         currentUserLabel = new Label("Current user: (none)");
         currentUserLabel.getStyleClass().add("current-user");
 
-        HBox cards = new HBox(16, buildRegisterCard(), buildLoginCard(), buildBorrowCard());
+        HBox cards = new HBox(16, buildRegisterCard(), buildLoginCard(), buildApproveRejectCard());
         cards.setAlignment(Pos.TOP_LEFT);
 
         wrapper.getChildren().addAll(title, subtitle, currentUserLabel, cards);
@@ -105,7 +114,7 @@ public class LibrarianPortalApp extends Application {
         grid.add(registerFullNameField, 1, 1);
         grid.add(new Label("Password"), 0, 2);
         grid.add(registerPasswordField, 1, 2);
-        grid.add(new Label("Role"), 0, 3);
+        grid.add(new Label("Staff ID"), 0, 3);
         grid.add(registerStaffIDField, 1, 3);
 
         Button registerBtn = new Button("Create Account");
@@ -150,27 +159,35 @@ public class LibrarianPortalApp extends Application {
         return card;
     }
 
-    private VBox buildBorrowCard() {
+    private VBox buildApproveRejectCard() {
         VBox card = new VBox(10);
         card.getStyleClass().add("card");
         card.setPrefWidth(320);
 
-        Label heading = new Label("Borrow");
+        Label heading = new Label("Approve or Reject");
         heading.getStyleClass().add("card-title");
-        Label hint = new Label("Select a book submission in the table, or type ID below.");
+        Label hint = new Label("Select a book submission in the table,\n or type ID below.");
         hint.getStyleClass().add("muted");
 
         approveSubmissionIdField = new TextField();
         approveSubmissionIdField.setPromptText("Submission ID");
+        rejectReasonField = new TextField();
+        rejectReasonField.setPromptText("Rejection Reason");
+        rejectReasonField.setDisable(true);
+        Button acceptRejectBtn = new Button("Approve Submission");
+        acceptRejectBtn.getStyleClass().add("primary-btn");
+        acceptRejectBtn.setOnAction(event -> handleApproveReject());
+        actionBox = new ComboBox<>(FXCollections.observableArrayList("Approve", "Reject"));
+        actionBox.setValue("Approve");
+        actionBox.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
+            @Override
+            public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
+                rejectReasonField.setDisable(newValue.equals("Approve"));
+                acceptRejectBtn.setText(newValue + " Submission");
+            }
+        });
 
-        Button acceptBtn = new Button("Approve Submission");
-        Button rejectBtn = new Button("Reject Submission");
-        acceptBtn.getStyleClass().add("primary-btn");
-        acceptBtn.setOnAction(event -> handleApprove());
-        rejectBtn.getStyleClass().add("primary-btn");
-        rejectBtn.setOnAction(event -> handleReject());
-
-        card.getChildren().addAll(heading, hint, approveSubmissionIdField, acceptBtn, rejectBtn);
+        card.getChildren().addAll(heading, hint, approveSubmissionIdField, actionBox, rejectReasonField, acceptRejectBtn);
         return card;
     }
 
@@ -207,17 +224,18 @@ public class LibrarianPortalApp extends Application {
         TableColumn<BookSubmission, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
 
-        if (bookSubmissionTable.getColumns().addAll(idCol, titleCol, authorUsernameCol, authorFullNameCol, genreCol, dateCol, summaryCol, statusCol)) {
-            return null;
-        }
+        bookSubmissionTable.getColumns().addAll(idCol, titleCol, authorUsernameCol, authorFullNameCol, genreCol, dateCol, summaryCol, statusCol);
+
         bookSubmissionTable.getSelectionModel().selectedItemProperty().addListener((obs, oldSubmission, newSubmission) -> {
             if (newSubmission != null) {
                 approveSubmissionIdField.setText(newSubmission.getSubmissionId());
             }
         });
 
+        submissionTableExtra = new Label("");
+
         VBox.setVgrow(bookSubmissionTable, Priority.ALWAYS);
-        wrapper.getChildren().addAll(heading, bookSubmissionTable);
+        wrapper.getChildren().addAll(heading, bookSubmissionTable, submissionTableExtra);
         return wrapper;
     }
 
@@ -270,15 +288,19 @@ public class LibrarianPortalApp extends Application {
         setStatus("Logged out: " + username);
     }
 
+    private void handleApproveReject() {
+        if (actionBox.getValue().equals("Approve")) handleApprove();
+        else handleReject();
+    }
+
     private void handleApprove() {
         if (currentUser == null) {
             setStatus("Action failed: please login first.");
             return;
         }
 
-        String bookId = approveSubmissionIdField.getText();
         LibrarianPortalService.OperationResult result =
-                portalService.approveBookSubmission(bookId, currentUser);
+                portalService.approveBookSubmission(approveSubmissionIdField.getText(), currentUser);
         setStatus(result.message());
         if (result.success()) {
             refreshSubmissions();
@@ -292,18 +314,21 @@ public class LibrarianPortalApp extends Application {
             return;
         }
 
-        String bookId = approveSubmissionIdField.getText();
         LibrarianPortalService.OperationResult result =
-                portalService.rejectBookSubmission(bookId, currentUser, "");
+                portalService.rejectBookSubmission(approveSubmissionIdField.getText(), currentUser, rejectReasonField.getText());
         setStatus(result.message());
         if (result.success()) {
             refreshSubmissions();
             approveSubmissionIdField.clear();
+            rejectReasonField.clear();
         }
     }
 
     private void refreshSubmissions() {
-        bookSubmissionTable.setItems(FXCollections.observableArrayList(portalService.getBookSubmissionScreenData()));
+        List<BookSubmission> l = portalService.getBookSubmissionScreenData();
+        bookSubmissionTable.setItems(FXCollections.observableArrayList(l));
+        if (l.isEmpty()) submissionTableExtra.setText("There are no pending new book submissions now.");
+        else submissionTableExtra.setText("");
     }
 
     private void setStatus(String message) {
