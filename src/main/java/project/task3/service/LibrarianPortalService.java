@@ -113,7 +113,7 @@ public class LibrarianPortalService {
         if (!genreFilter.matcher(sub.getGenre()).matches()) return false;
         if (submissionMin != null && sub.getSubmissionDate().isBefore(submissionMin)) return false;
         if (submissionMax != null && sub.getSubmissionDate().isAfter(submissionMax)) return false;
-        return sub.getStatus().equals(statusFilter);
+        return statusFilter.equals("ALL") || sub.getStatus().equals(statusFilter);
     }
 
     public List<BookSubmission> getBookSubmissionScreenData(String titleFilter,

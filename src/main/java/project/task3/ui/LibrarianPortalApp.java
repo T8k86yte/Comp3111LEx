@@ -242,7 +242,7 @@ public class LibrarianPortalApp extends Application {
         tableGenreFilter = new TextField();
         tableSubmissionMin = new DatePicker();
         tableSubmissionMax = new DatePicker();
-        tableStatusFilter = new ComboBox<>(FXCollections.observableArrayList("PENDING", "APPROVED", "REJECTED"));
+        tableStatusFilter = new ComboBox<>(FXCollections.observableArrayList("PENDING", "APPROVED", "REJECTED", "ALL"));
         tableStatusFilter.setValue("PENDING");
 
         Button refreshBtn = new Button("Refresh Table");
