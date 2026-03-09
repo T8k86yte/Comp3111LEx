@@ -90,7 +90,7 @@ public class BookSubmissionRepository {
         if (sub == null) return false;
 
         sub.approve(librarianUsername);
-        repo.addApprovedBook(sub.getTitle(), sub.getAuthorFullName(), LocalDate.now(), sub.getSummary(), sub.getGenre());
+        repo.addApprovedBook(sub.getTitle(), sub.getAuthorFullName(), LocalDate.now(), sub.getDescription(), sub.getGenre());
         saveBookSubmissions();//Changes should be saved once there are updates
         return true;
     }

@@ -1,15 +1,16 @@
 package project.task3.service;
 
 import project.task1.model.Book;
-import project.task1.model.StudentStaffAccount;
 import project.task1.repo.BookRepository;
 import project.task1.security.PasswordSecurity;
-import project.task1.service.StudentStaffPortalService;
 import project.task2.model.BookSubmission;
+import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
-import project.task3.repo.BookSubmissionRepository;
 import project.task3.repo.LibrarianRepository;
 
+import java.util.regex.Pattern;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -19,12 +20,31 @@ public class LibrarianPortalService {
 
     private final LibrarianRepository librarianRepository;
     private final BookRepository bookRepository;
-    private final BookSubmissionRepository bookSubmissionRepository;
+    private final SubmissionRepository bookSubmissionRepository;
 
-    public LibrarianPortalService(LibrarianRepository librarianRepository, BookRepository bookRepository, BookSubmissionRepository bookSubmissionRepository) {
+    public LibrarianPortalService(LibrarianRepository librarianRepository, BookRepository bookRepository, SubmissionRepository bookSubmissionRepository) {
         this.librarianRepository = librarianRepository;
         this.bookRepository = bookRepository;
         this.bookSubmissionRepository = bookSubmissionRepository;
+
+        bookSubmissionRepository.save(new BookSubmission(
+                "Test1",
+                "TestFullName1",
+                "TestUsername1",
+                "TestSummary1",
+                "TestGenre1",
+                "TestFilePath1"
+                )
+        );
+        bookSubmissionRepository.save(new BookSubmission(
+                "Test2",
+                "TestFullName2",
+                "TestUsername2",
+                "TestSummary2",
+                "TestGenre2",
+                "TestFilePath2"
+                )
+        );
     }
 
     public LibrarianPortalService.OperationResult registerLibrarian(String username, String fullname, String rawPassword, String employeeIDtext) {
@@ -81,6 +101,35 @@ public class LibrarianPortalService {
         return LoginResult.success("Login successful. Welcome, " + user.getFullName() + ".", user);
     }
 
+    private static boolean filterBookSubmission(BookSubmission sub,
+                                                Pattern titleFilter,
+                                                Pattern authorUsernameFilter,
+                                                Pattern genreFilter,
+                                                LocalDateTime submissionMin,
+                                                LocalDateTime submissionMax,
+                                                String statusFilter) {
+        if (!titleFilter.matcher(sub.getTitle()).matches()) return false;
+        if (!authorUsernameFilter.matcher(sub.getAuthorUsername()).matches()) return false;
+        if (!genreFilter.matcher(sub.getGenre()).matches()) return false;
+        if (submissionMin != null && sub.getSubmissionDate().isBefore(submissionMin)) return false;
+        if (submissionMax != null && sub.getSubmissionDate().isAfter(submissionMax)) return false;
+        return sub.getStatus().equals(statusFilter);
+    }
+
+    public List<BookSubmission> getBookSubmissionScreenData(String titleFilter,
+                                                            String authorUsernameFilter,
+                                                            String genreFilter,
+                                                            LocalDateTime submissionMin,
+                                                            LocalDateTime submissionMax,
+                                                            String statusFilter) {
+        Pattern titleP = Pattern.compile("[\\s\\S]*" + titleFilter + "[\\s\\S]*", Pattern.CASE_INSENSITIVE);
+        Pattern authorUsernameP = Pattern.compile("[\\s\\S]*" + authorUsernameFilter + "[\\s\\S]*", Pattern.CASE_INSENSITIVE);
+        Pattern genreP = Pattern.compile("[\\s\\S]*" + genreFilter + "[\\s\\S]*", Pattern.CASE_INSENSITIVE);
+        return bookSubmissionRepository.findAll()
+                .stream()
+                .filter(s -> filterBookSubmission(s, titleP, authorUsernameP, genreP, submissionMin, submissionMax, statusFilter))
+                .collect(Collectors.toList());
+    }
     public List<BookSubmission> getBookSubmissionScreenData() {
         return bookSubmissionRepository.findAll()
                 .stream()
@@ -98,9 +147,11 @@ public class LibrarianPortalService {
         if (sub.isEmpty()) return OperationResult.failure("Approve failed: Invalid submission ID.");
         if (user == null) return OperationResult.failure("Approve failed: No user logged in.");
 
-        boolean result = bookSubmissionRepository.approveBookSubmission(subId, user.getUsername(), bookRepository);
-        if (result) return OperationResult.success("Approve successful: \"" + sub.get().getTitle() + "\" is approved and created.");
-        return OperationResult.failure("Approve failed: Unable to create the book.");
+        BookSubmission s = sub.get();
+        s.approve(user.getUsername());
+        bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), s.getGenre());//Note that description is just an alias of summary for book
+        bookSubmissionRepository.update(s);//Changes should be saved once there are updates
+        return OperationResult.success("Approve successful: \"" + sub.get().getTitle() + "\" is approved and created.");
     }
 
     public OperationResult rejectBookSubmission(String subId, LibrarianAccount user, String reason) {
@@ -108,9 +159,10 @@ public class LibrarianPortalService {
         if (sub.isEmpty()) return OperationResult.failure("Approve failed: Invalid submission ID.");
         if (user == null) return OperationResult.failure("Approve failed: No user logged in.");
 
-        boolean result = bookSubmissionRepository.rejectBookSubmission(subId, user.getUsername(), reason);
-        if (result) return OperationResult.success("Reject successful: \"" + sub.get().getTitle() + "\" is rejected.");
-        return OperationResult.failure("Reject failed: Unable to find the submission.");
+        BookSubmission s = sub.get();
+        s.reject(user.getUsername(), reason);
+        bookSubmissionRepository.update(s);
+        return OperationResult.success("Reject successful: \"" + sub.get().getTitle() + "\" is rejected.");
     }
 
     public record OperationResult(boolean success, String message) {

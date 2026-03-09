@@ -4,8 +4,6 @@ import javafx.application.Application;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
-import javafx.collections.ObservableArray;
-import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -14,12 +12,13 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import project.task2.model.BookSubmission;
+import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
 import project.task1.repo.InMemoryBookRepository;
-import project.task3.repo.BookSubmissionRepository;
 import project.task3.repo.LibrarianRepository;
 import project.task3.service.LibrarianPortalService;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public class LibrarianPortalApp extends Application {
@@ -30,7 +29,13 @@ public class LibrarianPortalApp extends Application {
     private Label statusLabel;
     private Label currentUserLabel;
     private TableView<BookSubmission> bookSubmissionTable;
-    private Label submissionTableExtra;
+
+    private TextField tableTitleFilter;
+    private TextField tableAuthorUsernameFilter;
+    private TextField tableGenreFilter;
+    private DatePicker tableSubmissionMin;
+    private DatePicker tableSubmissionMax;
+    private ComboBox<String> tableStatusFilter;
 
     private TextField approveSubmissionIdField;
     private ComboBox<String> actionBox;
@@ -48,7 +53,7 @@ public class LibrarianPortalApp extends Application {
         portalService = new LibrarianPortalService(
                 new LibrarianRepository(),
                 new InMemoryBookRepository(),
-                new BookSubmissionRepository()
+                new SubmissionRepository()
         );
     }
 
@@ -172,7 +177,7 @@ public class LibrarianPortalApp extends Application {
         approveSubmissionIdField = new TextField();
         approveSubmissionIdField.setPromptText("Submission ID");
         rejectReasonField = new TextField();
-        rejectReasonField.setPromptText("Rejection Reason");
+        rejectReasonField.setPromptText("Rejection Reason (can be empty)");
         rejectReasonField.setDisable(true);
         Button acceptRejectBtn = new Button("Approve Submission");
         acceptRejectBtn.getStyleClass().add("primary-btn");
@@ -216,10 +221,10 @@ public class LibrarianPortalApp extends Application {
         genreCol.setCellValueFactory(new PropertyValueFactory<>("genre"));
 
         TableColumn<BookSubmission, Object> dateCol = new TableColumn<>("Submitted Date");
-        dateCol.setCellValueFactory(new PropertyValueFactory<>("submitDate"));
+        dateCol.setCellValueFactory(new PropertyValueFactory<>("submissionDate"));
 
         TableColumn<BookSubmission, String> summaryCol = new TableColumn<>("Summary");
-        summaryCol.setCellValueFactory(new PropertyValueFactory<>("summary"));
+        summaryCol.setCellValueFactory(new PropertyValueFactory<>("description"));
 
         TableColumn<BookSubmission, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
@@ -232,10 +237,36 @@ public class LibrarianPortalApp extends Application {
             }
         });
 
-        submissionTableExtra = new Label("");
+        tableTitleFilter = new TextField();
+        tableAuthorUsernameFilter = new TextField();
+        tableGenreFilter = new TextField();
+        tableSubmissionMin = new DatePicker();
+        tableSubmissionMax = new DatePicker();
+        tableStatusFilter = new ComboBox<>(FXCollections.observableArrayList("PENDING", "APPROVED", "REJECTED"));
+        tableStatusFilter.setValue("PENDING");
+
+        Button refreshBtn = new Button("Refresh Table");
+        refreshBtn.getStyleClass().add("primary-btn");
+        refreshBtn.setOnAction(event -> refreshSubmissions());
+
+        HBox filters1 = new HBox(5);
+        HBox filters2 = new HBox(5);
+        filters1.getChildren().add(new Label("Title: "));
+        filters1.getChildren().add(tableTitleFilter);
+        filters1.getChildren().add(new Label("Author Username: "));
+        filters1.getChildren().add(tableAuthorUsernameFilter);
+        filters1.getChildren().add(new Label("Genre: "));
+        filters1.getChildren().add(tableGenreFilter);
+        filters2.getChildren().add(new Label("Submission min: "));
+        filters2.getChildren().add(tableSubmissionMin);
+        filters2.getChildren().add(new Label("Submission max: "));
+        filters2.getChildren().add(tableSubmissionMax);
+        filters2.getChildren().add(new Label("Status: "));
+        filters2.getChildren().add(tableStatusFilter);
+        filters2.getChildren().add(refreshBtn);
 
         VBox.setVgrow(bookSubmissionTable, Priority.ALWAYS);
-        wrapper.getChildren().addAll(heading, bookSubmissionTable, submissionTableExtra);
+        wrapper.getChildren().addAll(new Label("Filters: "), filters1, filters2, heading, bookSubmissionTable);
         return wrapper;
     }
 
@@ -325,10 +356,10 @@ public class LibrarianPortalApp extends Application {
     }
 
     private void refreshSubmissions() {
-        List<BookSubmission> l = portalService.getBookSubmissionScreenData();
+        LocalDate mind = tableSubmissionMin.getValue();
+        LocalDate maxd = tableSubmissionMax.getValue();
+        List<BookSubmission> l = portalService.getBookSubmissionScreenData(tableTitleFilter.getText(), tableAuthorUsernameFilter.getText(), tableGenreFilter.getText(), mind != null ? mind.atStartOfDay() : null, maxd != null ? tableSubmissionMax.getValue().atTime(23, 59) : null, tableStatusFilter.getValue());
         bookSubmissionTable.setItems(FXCollections.observableArrayList(l));
-        if (l.isEmpty()) submissionTableExtra.setText("There are no pending new book submissions now.");
-        else submissionTableExtra.setText("");
     }
 
     private void setStatus(String message) {

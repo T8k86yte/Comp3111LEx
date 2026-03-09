@@ -3,7 +3,7 @@ package project.task3.ui;
 import project.task1.model.Book;
 import project.task1.repo.InMemoryBookRepository;
 import project.task2.model.BookSubmission;
-import project.task3.repo.BookSubmissionRepository;
+import project.task2.repo.SubmissionRepository;
 import project.task3.repo.LibrarianRepository;
 import project.task3.service.LibrarianPortalService;
 import project.task3.model.LibrarianAccount;
@@ -20,7 +20,7 @@ public class LibrarianPortalConsole {
         this.portalService = new LibrarianPortalService(
                 new LibrarianRepository(),
                 new InMemoryBookRepository(),
-                new BookSubmissionRepository()
+                new SubmissionRepository()
         );
         this.scanner = new Scanner(System.in);
     }
@@ -99,8 +99,8 @@ public class LibrarianPortalConsole {
             System.out.println("Author Username: " + sub.getAuthorUsername());
             System.out.println("Author Full Name: " + sub.getAuthorFullName());
             System.out.println("Genre: " + sub.getGenre());
-            System.out.println("Submit Date: " + sub.getSubmitDate());
-            System.out.println("Book Abstract/Summary: " + sub.getSummary());
+            System.out.println("Submit Date: " + sub.getSubmissionDate());
+            System.out.println("Book Abstract/Summary: " + sub.getDescription());
             System.out.println("Status: PENDING");
         }
         System.out.println("----------------------------------------");
