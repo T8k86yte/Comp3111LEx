@@ -5,26 +5,35 @@ import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.RadioButton;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import project.task1.model.Book;
-import project.task1.model.StudentStaffAccount;
+import project.task1.model.UserAccount;
 import project.task1.repo.InMemoryBookRepository;
 import project.task1.repo.StudentStaffRepository;
 import project.task1.service.StudentStaffPortalService;
+
+import java.util.List;
+import java.util.Optional;
 
 public class StudentStaffPortalApp extends Application {
     private final StudentStaffPortalService portalService = new StudentStaffPortalService(
@@ -32,27 +41,35 @@ public class StudentStaffPortalApp extends Application {
             new InMemoryBookRepository()
     );
 
-    private StudentStaffAccount currentUser;
+    private UserAccount currentUser;
 
+    private BorderPane root;
     private Label statusLabel;
     private Label currentUserLabel;
+    private VBox authPage;
+    private BorderPane studentDashboard;
+    private StackPane contentPane;
+
+    private TextField authUsernameField;
+    private TextField authFullNameField;
+    private PasswordField authPasswordField;
+    private ComboBox<String> authRoleBox;
+    private RadioButton loginModeButton;
+    private RadioButton registerModeButton;
+    private Label fullNameLabel;
+
     private TableView<Book> bookTable;
     private TextField borrowBookIdField;
-
-    private TextField registerUsernameField;
-    private TextField registerFullNameField;
-    private PasswordField registerPasswordField;
-    private ComboBox<String> registerRoleBox;
-
-    private TextField loginUsernameField;
-    private PasswordField loginPasswordField;
+    private TextField returnBookIdField;
+    private VBox recommendationBox;
 
     @Override
     public void start(Stage stage) {
-        BorderPane root = new BorderPane();
+        root = new BorderPane();
         root.getStyleClass().add("root-pane");
-        root.setTop(buildHeader());
-        root.setCenter(buildBookCenterPanel());
+        authPage = buildAuthPage();
+        studentDashboard = buildStudentDashboard();
+        root.setCenter(authPage);
         root.setBottom(buildStatusBar());
 
         Scene scene = new Scene(root, 1060, 700);
@@ -64,123 +81,137 @@ public class StudentStaffPortalApp extends Application {
         stage.setScene(scene);
         stage.show();
 
-        refreshBooks();
-        setStatus("Ready.");
+        setStatus("Please login or register.");
     }
 
-    private VBox buildHeader() {
-        VBox wrapper = new VBox(14);
-        wrapper.setPadding(new Insets(18, 18, 8, 18));
+    private VBox buildAuthPage() {
+        VBox page = new VBox(14);
+        page.setPadding(new Insets(26));
+        page.setAlignment(Pos.TOP_CENTER);
 
         Label title = new Label("Student/Staff Portal");
         title.getStyleClass().add("page-title");
-        Label subtitle = new Label("Task 1 light UI - Register, login, browse available books, and borrow.");
+        Label subtitle = new Label("Login/Register to enter the student dashboard.");
         subtitle.getStyleClass().add("page-subtitle");
-        currentUserLabel = new Label("Current user: (none)");
-        currentUserLabel.getStyleClass().add("current-user");
-
-        HBox cards = new HBox(16, buildRegisterCard(), buildLoginCard(), buildBorrowCard());
-        cards.setAlignment(Pos.TOP_LEFT);
-
-        wrapper.getChildren().addAll(title, subtitle, currentUserLabel, cards);
-        return wrapper;
+        page.getChildren().addAll(title, subtitle, buildUnifiedAuthCard());
+        return page;
     }
 
-    private VBox buildRegisterCard() {
+    private VBox buildUnifiedAuthCard() {
         VBox card = new VBox(10);
         card.getStyleClass().add("card");
-        card.setPrefWidth(330);
+        card.setPrefWidth(430);
 
-        Label heading = new Label("Register");
+        Label heading = new Label("Account");
         heading.getStyleClass().add("card-title");
+        Label hint = new Label("Choose mode and role first, then submit.");
+        hint.getStyleClass().add("muted");
+
+        ToggleGroup authModeGroup = new ToggleGroup();
+        loginModeButton = new RadioButton("Login");
+        registerModeButton = new RadioButton("Register");
+        loginModeButton.setToggleGroup(authModeGroup);
+        registerModeButton.setToggleGroup(authModeGroup);
+        registerModeButton.setSelected(true);
+
+        HBox modeBox = new HBox(10, loginModeButton, registerModeButton);
+        modeBox.setAlignment(Pos.CENTER_LEFT);
 
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(8);
 
-        registerUsernameField = new TextField();
-        registerFullNameField = new TextField();
-        registerPasswordField = new PasswordField();
-        registerRoleBox = new ComboBox<>(FXCollections.observableArrayList("Student", "Staff"));
-        registerRoleBox.setValue("Student");
-        registerRoleBox.setMaxWidth(Double.MAX_VALUE);
+        authUsernameField = new TextField();
+        authFullNameField = new TextField();
+        authPasswordField = new PasswordField();
+        authRoleBox = new ComboBox<>(FXCollections.observableArrayList("Student", "Staff", "Author", "Librarian"));
+        authRoleBox.setValue("Student");
+        authRoleBox.setMaxWidth(Double.MAX_VALUE);
 
         grid.add(new Label("Username"), 0, 0);
-        grid.add(registerUsernameField, 1, 0);
-        grid.add(new Label("Full name"), 0, 1);
-        grid.add(registerFullNameField, 1, 1);
+        grid.add(authUsernameField, 1, 0);
+        fullNameLabel = new Label("Full name");
+        grid.add(fullNameLabel, 0, 1);
+        grid.add(authFullNameField, 1, 1);
         grid.add(new Label("Password"), 0, 2);
-        grid.add(registerPasswordField, 1, 2);
+        grid.add(authPasswordField, 1, 2);
         grid.add(new Label("Role"), 0, 3);
-        grid.add(registerRoleBox, 1, 3);
+        grid.add(authRoleBox, 1, 3);
 
-        Button registerBtn = new Button("Create Account");
-        registerBtn.getStyleClass().add("primary-btn");
-        registerBtn.setOnAction(event -> handleRegister());
+        Button submitBtn = new Button("Submit");
+        submitBtn.getStyleClass().add("primary-btn");
+        submitBtn.setOnAction(event -> handleAuthSubmit());
 
-        card.getChildren().addAll(heading, grid, registerBtn);
-        return card;
-    }
-
-    private VBox buildLoginCard() {
-        VBox card = new VBox(10);
-        card.getStyleClass().add("card");
-        card.setPrefWidth(290);
-
-        Label heading = new Label("Login");
-        heading.getStyleClass().add("card-title");
-
-        GridPane grid = new GridPane();
-        grid.setHgap(8);
-        grid.setVgap(8);
-
-        loginUsernameField = new TextField();
-        loginPasswordField = new PasswordField();
-
-        grid.add(new Label("Username"), 0, 0);
-        grid.add(loginUsernameField, 1, 0);
-        grid.add(new Label("Password"), 0, 1);
-        grid.add(loginPasswordField, 1, 1);
-
-        HBox actions = new HBox(8);
-        Button loginBtn = new Button("Login");
-        loginBtn.getStyleClass().add("primary-btn");
-        loginBtn.setOnAction(event -> handleLogin());
+        Button readSummaryBtn = new Button("Read Summary");
+        readSummaryBtn.getStyleClass().add("secondary-btn");
+        readSummaryBtn.setOnAction(event -> handleReadSummary());
 
         Button logoutBtn = new Button("Logout");
         logoutBtn.getStyleClass().add("secondary-btn");
         logoutBtn.setOnAction(event -> handleLogout());
 
-        actions.getChildren().addAll(loginBtn, logoutBtn);
-        card.getChildren().addAll(heading, grid, actions);
+        HBox actions = new HBox(8, submitBtn, readSummaryBtn, logoutBtn);
+        authModeGroup.selectedToggleProperty().addListener((obs, oldValue, newValue) -> updateAuthFormVisibility());
+        updateAuthFormVisibility();
+
+        card.getChildren().addAll(heading, hint, modeBox, grid, actions);
         return card;
     }
 
-    private VBox buildBorrowCard() {
-        VBox card = new VBox(10);
-        card.getStyleClass().add("card");
-        card.setPrefWidth(320);
+    private BorderPane buildStudentDashboard() {
+        BorderPane dashboard = new BorderPane();
+        dashboard.setPadding(new Insets(16));
+        dashboard.setTop(buildDashboardHeader());
 
-        Label heading = new Label("Borrow");
-        heading.getStyleClass().add("card-title");
-        Label hint = new Label("Select a book in the table, or type ID below.");
-        hint.getStyleClass().add("muted");
+        VBox nav = new VBox(8);
+        nav.setPrefWidth(170);
+        Button booksBtn = new Button("Book List");
+        Button borrowBtn = new Button("Borrow");
+        Button returnBtn = new Button("Return");
+        Button recBtn = new Button("Recommendations");
+        booksBtn.getStyleClass().add("secondary-btn");
+        borrowBtn.getStyleClass().add("secondary-btn");
+        returnBtn.getStyleClass().add("secondary-btn");
+        recBtn.getStyleClass().add("secondary-btn");
+        booksBtn.setMaxWidth(Double.MAX_VALUE);
+        borrowBtn.setMaxWidth(Double.MAX_VALUE);
+        returnBtn.setMaxWidth(Double.MAX_VALUE);
+        recBtn.setMaxWidth(Double.MAX_VALUE);
+        nav.getChildren().addAll(booksBtn, borrowBtn, returnBtn, recBtn);
 
-        borrowBookIdField = new TextField();
-        borrowBookIdField.setPromptText("Book ID (e.g. B001)");
+        contentPane = new StackPane();
+        contentPane.setPadding(new Insets(0, 0, 0, 12));
 
-        Button borrowBtn = new Button("Borrow Book");
-        borrowBtn.getStyleClass().add("primary-btn");
-        borrowBtn.setOnAction(event -> handleBorrowBook());
+        booksBtn.setOnAction(e -> showBooksView());
+        borrowBtn.setOnAction(e -> showBorrowView());
+        returnBtn.setOnAction(e -> showReturnView());
+        recBtn.setOnAction(e -> showRecommendationView());
 
-        card.getChildren().addAll(heading, hint, borrowBookIdField, borrowBtn);
-        return card;
+        HBox center = new HBox(nav, contentPane);
+        HBox.setHgrow(contentPane, Priority.ALWAYS);
+        dashboard.setCenter(center);
+        return dashboard;
     }
 
-    private VBox buildBookCenterPanel() {
+    private HBox buildDashboardHeader() {
+        HBox header = new HBox(12);
+        header.setAlignment(Pos.CENTER_LEFT);
+        header.setPadding(new Insets(0, 0, 14, 0));
+        Label title = new Label("Student Dashboard");
+        title.getStyleClass().add("section-title");
+        currentUserLabel = new Label("Current user: (none)");
+        currentUserLabel.getStyleClass().add("current-user");
+        Button logoutBtn = new Button("Logout");
+        logoutBtn.getStyleClass().add("secondary-btn");
+        logoutBtn.setOnAction(event -> handleLogout());
+        header.getChildren().addAll(title, currentUserLabel, logoutBtn);
+        return header;
+    }
+
+    private VBox buildBookListView() {
         VBox wrapper = new VBox(10);
-        wrapper.setPadding(new Insets(8, 18, 18, 18));
-        Label heading = new Label("Available Books");
+        wrapper.getStyleClass().add("card");
+        Label heading = new Label("Book List");
         heading.getStyleClass().add("section-title");
 
         bookTable = new TableView<>();
@@ -198,19 +229,102 @@ public class StudentStaffPortalApp extends Application {
         TableColumn<Book, Object> dateCol = new TableColumn<>("Publish Date");
         dateCol.setCellValueFactory(new PropertyValueFactory<>("publishDate"));
 
+        TableColumn<Book, String> availabilityCol = new TableColumn<>("Availability");
+        availabilityCol.setCellValueFactory(cell -> {
+            String text = cell.getValue().isAvailable() ? "Available" : "Unavailable";
+            return new javafx.beans.property.SimpleStringProperty(text);
+        });
+
         TableColumn<Book, String> summaryCol = new TableColumn<>("Summary");
         summaryCol.setCellValueFactory(new PropertyValueFactory<>("summary"));
 
-        bookTable.getColumns().addAll(idCol, titleCol, authorCol, dateCol, summaryCol);
+        titleCol.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                    return;
+                }
+                Book rowBook = getTableRow() == null ? null : (Book) getTableRow().getItem();
+                setText(item);
+                if (rowBook != null && !rowBook.isAvailable()) {
+                    setStyle("-fx-text-fill: #dc2626; -fx-font-weight: 600;");
+                } else {
+                    setStyle("-fx-text-fill: #111827;");
+                }
+            }
+        });
+
+        Button readSummaryBtn = new Button("Read Summary");
+        readSummaryBtn.getStyleClass().add("secondary-btn");
+        readSummaryBtn.setOnAction(event -> handleReadSummary());
+
+        bookTable.getColumns().addAll(idCol, titleCol, authorCol, dateCol, availabilityCol, summaryCol);
         bookTable.getSelectionModel().selectedItemProperty().addListener((obs, oldBook, newBook) -> {
             if (newBook != null) {
-                borrowBookIdField.setText(newBook.getId());
+                if (borrowBookIdField != null) {
+                    borrowBookIdField.setText(newBook.getId());
+                }
+                if (returnBookIdField != null) {
+                    returnBookIdField.setText(newBook.getId());
+                }
             }
         });
 
         VBox.setVgrow(bookTable, Priority.ALWAYS);
-        wrapper.getChildren().addAll(heading, bookTable);
+        wrapper.getChildren().addAll(heading, bookTable, readSummaryBtn);
         return wrapper;
+    }
+
+    private VBox buildBorrowView() {
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        Label heading = new Label("Borrow Book");
+        heading.getStyleClass().add("card-title");
+        Label hint = new Label("Go to Book List first, select an available book, then confirm borrow.");
+        hint.getStyleClass().add("muted");
+
+        borrowBookIdField = new TextField();
+        borrowBookIdField.setPromptText("Book ID (e.g. B001)");
+        Button borrowBtn = new Button("Borrow");
+        borrowBtn.getStyleClass().add("primary-btn");
+        borrowBtn.setOnAction(event -> handleBorrowBook());
+        card.getChildren().addAll(heading, hint, borrowBookIdField, borrowBtn);
+        return card;
+    }
+
+    private VBox buildReturnView() {
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        Label heading = new Label("Return Book");
+        heading.getStyleClass().add("card-title");
+        Label hint = new Label("Return a book currently borrowed by you.");
+        hint.getStyleClass().add("muted");
+
+        returnBookIdField = new TextField();
+        returnBookIdField.setPromptText("Book ID (e.g. B001)");
+        Button returnBtn = new Button("Return");
+        returnBtn.getStyleClass().add("primary-btn");
+        returnBtn.setOnAction(event -> handleReturnBook());
+        card.getChildren().addAll(heading, hint, returnBookIdField, returnBtn);
+        return card;
+    }
+
+    private VBox buildRecommendationView() {
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        Label heading = new Label("Recommendations");
+        heading.getStyleClass().add("card-title");
+        Label hint = new Label("Popular titles based on borrow history.");
+        hint.getStyleClass().add("muted");
+        recommendationBox = new VBox(6);
+        Button refreshBtn = new Button("Refresh");
+        refreshBtn.getStyleClass().add("secondary-btn");
+        refreshBtn.setOnAction(event -> refreshRecommendations());
+        card.getChildren().addAll(heading, hint, recommendationBox, refreshBtn);
+        return card;
     }
 
     private HBox buildStatusBar() {
@@ -222,32 +336,91 @@ public class StudentStaffPortalApp extends Application {
         return statusBar;
     }
 
-    private void handleRegister() {
-        String username = registerUsernameField.getText();
-        String fullName = registerFullNameField.getText();
-        String password = registerPasswordField.getText();
-        String role = registerRoleBox.getValue();
-
-        StudentStaffPortalService.OperationResult result =
-                portalService.registerStaffStudent(username, fullName, password, role);
-        setStatus(result.message());
-
-        if (result.success()) {
-            registerUsernameField.clear();
-            registerFullNameField.clear();
-            registerPasswordField.clear();
-        }
+    private void showBooksView() {
+        contentPane.getChildren().setAll(buildBookListView());
+        refreshBooks();
     }
 
-    private void handleLogin() {
+    private void showBorrowView() {
+        contentPane.getChildren().setAll(buildBorrowView());
+    }
+
+    private void showReturnView() {
+        contentPane.getChildren().setAll(buildReturnView());
+    }
+
+    private void showRecommendationView() {
+        refreshRecommendations();
+        contentPane.getChildren().setAll(buildRecommendationView());
+        refreshRecommendations();
+    }
+
+    private void updateAuthFormVisibility() {
+        boolean registerMode = registerModeButton.isSelected();
+        authFullNameField.setManaged(registerMode);
+        authFullNameField.setVisible(registerMode);
+        fullNameLabel.setManaged(registerMode);
+        fullNameLabel.setVisible(registerMode);
+    }
+
+    private void handleAuthSubmit() {
+        if (registerModeButton.isSelected()) {
+            StudentStaffPortalService.OperationResult result = portalService.registerWithRoleSelection(
+                    authUsernameField.getText(),
+                    authFullNameField.getText(),
+                    authPasswordField.getText(),
+                    authRoleBox.getValue()
+            );
+            setStatus(result.message());
+            if (result.success()) {
+                authFullNameField.clear();
+                authPasswordField.clear();
+            }
+            return;
+        }
         StudentStaffPortalService.LoginResult result =
-                portalService.login(loginUsernameField.getText(), loginPasswordField.getText());
+                portalService.login(authUsernameField.getText(), authPasswordField.getText(), authRoleBox.getValue());
         setStatus(result.message());
         if (result.success()) {
             currentUser = result.user();
+            if (!"STUDENT".equalsIgnoreCase(currentUser.getRole().name())) {
+                currentUser = null;
+                setStatus("This dashboard is for student users. Please login as Student.");
+                return;
+            }
             currentUserLabel.setText("Current user: " + currentUser.getUsername() + " (" + currentUser.getRole() + ")");
-            loginPasswordField.clear();
+            authPasswordField.clear();
+            root.setCenter(studentDashboard);
+            showBooksView();
         }
+    }
+
+    private void handleReadSummary() {
+        if (bookTable == null) {
+            setStatus("Open Book List first.");
+            return;
+        }
+        Book selected = bookTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            setStatus("Select a book first.");
+            return;
+        }
+        String summary = selected.getSummary();
+        if (summary.length() <= 180) {
+            setStatus("Summary: " + summary);
+            return;
+        }
+
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Quick Summary");
+        alert.setHeaderText(selected.getTitle() + " - " + selected.getAuthor());
+        TextArea area = new TextArea(summary);
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setPrefColumnCount(48);
+        area.setPrefRowCount(12);
+        alert.getDialogPane().setContent(area);
+        alert.showAndWait();
     }
 
     private void handleLogout() {
@@ -258,6 +431,7 @@ public class StudentStaffPortalApp extends Application {
         String username = currentUser.getUsername();
         currentUser = null;
         currentUserLabel.setText("Current user: (none)");
+        root.setCenter(authPage);
         setStatus("Logged out: " + username);
     }
 
@@ -267,18 +441,82 @@ public class StudentStaffPortalApp extends Application {
             return;
         }
 
-        String bookId = borrowBookIdField.getText();
+        String bookId = borrowBookIdField.getText() == null ? "" : borrowBookIdField.getText().trim();
+        if (bookId.isEmpty()) {
+            setStatus("Borrow failed: please provide a book ID.");
+            return;
+        }
+
+        String confirmationDetails = portalService.buildBorrowConfirmation(currentUser.getUsername(), bookId);
+        Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
+        confirmation.setTitle("Confirm Borrow");
+        confirmation.setHeaderText("Borrow request for " + bookId.toUpperCase());
+        confirmation.setContentText(confirmationDetails);
+        Optional<ButtonType> choice = confirmation.showAndWait();
+        if (choice.isEmpty() || choice.get() != ButtonType.OK) {
+            setStatus("Borrow cancelled.");
+            return;
+        }
+
         StudentStaffPortalService.OperationResult result =
                 portalService.borrowBook(currentUser.getUsername(), bookId);
         setStatus(result.message());
         if (result.success()) {
             refreshBooks();
+            refreshRecommendations();
             borrowBookIdField.clear();
         }
     }
 
+    private void handleReturnBook() {
+        if (currentUser == null) {
+            setStatus("Return failed: please login first.");
+            return;
+        }
+        String bookId = returnBookIdField.getText() == null ? "" : returnBookIdField.getText().trim();
+        if (bookId.isEmpty()) {
+            setStatus("Return failed: please provide a book ID.");
+            return;
+        }
+
+        StudentStaffPortalService.OperationResult result =
+                portalService.returnBook(currentUser.getUsername(), bookId);
+        setStatus(result.message());
+        if (result.success()) {
+            refreshBooks();
+            refreshRecommendations();
+            returnBookIdField.clear();
+        }
+    }
+
     private void refreshBooks() {
+        if (bookTable == null) {
+            if (contentPane != null) {
+                contentPane.getChildren().setAll(buildBookListView());
+            } else {
+                return;
+            }
+        }
         bookTable.setItems(FXCollections.observableArrayList(portalService.getBookScreenData()));
+    }
+
+    private void refreshRecommendations() {
+        if (recommendationBox == null) {
+            return;
+        }
+        recommendationBox.getChildren().clear();
+        List<Book> recommended = portalService.getRecommendedBooks(3);
+        if (recommended.isEmpty()) {
+            recommendationBox.getChildren().add(new Label("No recommendations yet."));
+            return;
+        }
+        for (Book book : recommended) {
+            Label item = new Label(
+                    book.getTitle() + " (" + book.getAuthor() + ") - borrowed " + book.getBorrowCount() + " time(s)"
+            );
+            item.getStyleClass().add("muted");
+            recommendationBox.getChildren().add(item);
+        }
     }
 
     private void setStatus(String message) {

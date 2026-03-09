@@ -58,6 +58,19 @@ public class InMemoryBookRepository implements BookRepository {
     }
 
     @Override
+    public List<Book> findTopRecommended(int limit) {
+        return booksById.values()
+                .stream()
+                .sorted(
+                        Comparator.comparingInt(Book::getBorrowCount).reversed()
+                                .thenComparing(Book::isAvailable)
+                                .thenComparing(Book::getTitle)
+                )
+                .limit(Math.max(0, limit))
+                .collect(ArrayList::new, ArrayList::add, ArrayList::addAll);
+    }
+
+    @Override
     public Optional<Book> findById(String bookId) {
         return Optional.ofNullable(booksById.get(bookId));
     }
@@ -69,6 +82,19 @@ public class InMemoryBookRepository implements BookRepository {
             return false;
         }
         boolean success = book.borrowBy(borrowerUsername);
+        if (success) {
+            saveBooks();
+        }
+        return success;
+    }
+
+    @Override
+    public boolean returnBook(String bookId, String borrowerUsername) {
+        Book book = booksById.get(bookId);
+        if (book == null) {
+            return false;
+        }
+        boolean success = book.returnBy(borrowerUsername);
         if (success) {
             saveBooks();
         }
@@ -141,7 +167,8 @@ public class InMemoryBookRepository implements BookRepository {
                 book.getPublishDate().toString(),
                 encodeField(book.getSummary()),
                 Boolean.toString(book.isAvailable()),
-                encodeField(borrowedBy)
+                encodeField(borrowedBy),
+                Integer.toString(book.getBorrowCount())
         );
     }
 
@@ -162,7 +189,14 @@ public class InMemoryBookRepository implements BookRepository {
             if (borrowedBy.isEmpty()) {
                 borrowedBy = null;
             }
-            return new Book(id, title, author, publishDate, summary, available, borrowedBy);
+            int borrowCount = 0;
+            if (parts.length >= 8) {
+                borrowCount = Integer.parseInt(parts[7]);
+            } else if (!available) {
+                // Backward compatibility with old data format.
+                borrowCount = 1;
+            }
+            return new Book(id, title, author, publishDate, summary, available, borrowedBy, borrowCount);
         } catch (Exception e) {
             return null;
         }
