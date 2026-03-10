@@ -1,62 +1,108 @@
 package project.task2.model;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Objects;
-import java.util.UUID;
+import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.List;
+import java.util.ArrayList;
 
 public class BookSubmission {
     private final String submissionId;
     private final String title;
-    private final String authorFullName;
     private final String authorUsername;
-    private final LocalDate submitDate;
-    private final String summary;
-    private final String genre;
+    private final String authorFullName;
+    private List<String> genres;  // Changed to List for multiple genres
+    private final String description;
     private final String filePath;
-    private String status; // PENDING, APPROVED, REJECTED
+    private final LocalDateTime submissionDate;
+    private String status; // PENDING, APPROVED, REJECTED, DRAFT
     private String rejectionReason;
     private LocalDateTime reviewedDate;
     private String reviewedBy;
+    private boolean isDraft; // For auto-save feature
 
-    public BookSubmission(
-            String title,
-            String authorFullName,
-            String authorUsername,
-            String summary,
-            String genre,
-            String filePath
-    ) {
-        this.submissionId = "SUB_" + UUID.randomUUID().toString().substring(0, 8);
-        this.title = Objects.requireNonNull(title, "title must not be null");
-        this.authorFullName = Objects.requireNonNull(authorFullName, "authorFullName must not be null");
-        this.authorUsername = Objects.requireNonNull(authorUsername, "authorUsername must not be null");
-        this.submitDate = LocalDate.now();
-        this.summary = Objects.requireNonNull(summary, "summary must not be null");
-        this.genre = Objects.requireNonNull(genre, "genre must not be null");
-        this.filePath = Objects.requireNonNull(filePath, "filePath must not be null");
+    // Constructor for new submissions
+    public BookSubmission(String title, String authorUsername, String authorFullName,
+                         List<String> genres, String description, String filePath) {
+        this.submissionId = generateSubmissionId();
+        this.title = title;
+        this.authorUsername = authorUsername;
+        this.authorFullName = authorFullName;
+        this.genres = genres != null ? genres : new ArrayList<>();
+        this.description = description;
+        this.filePath = filePath;
+        this.submissionDate = LocalDateTime.now();
         this.status = "PENDING";
+        this.isDraft = false;
+    }
+
+    // Constructor for drafts
+    public static BookSubmission createDraft(String authorUsername, String authorFullName) {
+        BookSubmission draft = new BookSubmission("", authorUsername, authorFullName, 
+                                                   new ArrayList<>(), "", "");
+        draft.status = "DRAFT";
+        draft.isDraft = true;
+        return draft;
+    }
+
+    // Constructor for loading from file
+    public BookSubmission(String submissionId, String title, String authorUsername,
+                         String authorFullName, String genresStr, String description,
+                         String filePath, LocalDateTime submissionDate, String status,
+                         String rejectionReason, LocalDateTime reviewedDate, String reviewedBy,
+                         boolean isDraft) {
+        this.submissionId = submissionId;
+        this.title = title;
+        this.authorUsername = authorUsername;
+        this.authorFullName = authorFullName;
+        this.genres = parseGenres(genresStr);
+        this.description = description;
+        this.filePath = filePath;
+        this.submissionDate = submissionDate;
+        this.status = status;
+        this.rejectionReason = rejectionReason;
+        this.reviewedDate = reviewedDate;
+        this.reviewedBy = reviewedBy;
+        this.isDraft = isDraft;
+    }
+
+    private String generateSubmissionId() {
+        return "SUB" + System.currentTimeMillis();
+    }
+
+    private List<String> parseGenres(String genresStr) {
+        if (genresStr == null || genresStr.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return Arrays.asList(genresStr.split(","));
+    }
+
+    private String genresToString() {
+        return String.join(",", genres);
     }
 
     // Getters
     public String getSubmissionId() { return submissionId; }
     public String getTitle() { return title; }
-    public String getAuthorFullName() { return authorFullName; }
     public String getAuthorUsername() { return authorUsername; }
-    public LocalDate getSubmitDate() { return submitDate; }
-    public String getSummary() { return summary; }
-    public String getGenre() { return genre; }
+    public String getAuthorFullName() { return authorFullName; }
+    public List<String> getGenres() { return genres; }
+    public String getGenresAsString() { return genresToString(); }
+    public String getDescription() { return description; }
     public String getFilePath() { return filePath; }
+    public LocalDateTime getSubmissionDate() { return submissionDate; }
     public String getStatus() { return status; }
     public String getRejectionReason() { return rejectionReason; }
     public LocalDateTime getReviewedDate() { return reviewedDate; }
     public String getReviewedBy() { return reviewedBy; }
+    public boolean isDraft() { return isDraft; }
 
-    // Status methods
+    // Status setters
     public void approve(String librarianUsername) {
         this.status = "APPROVED";
         this.reviewedDate = LocalDateTime.now();
         this.reviewedBy = librarianUsername;
+        this.isDraft = false;
     }
 
     public void reject(String librarianUsername, String reason) {
@@ -64,8 +110,16 @@ public class BookSubmission {
         this.rejectionReason = reason;
         this.reviewedDate = LocalDateTime.now();
         this.reviewedBy = librarianUsername;
+        this.isDraft = false;
     }
 
+    // Convert draft to submission
+    public void submitForApproval() {
+        this.status = "PENDING";
+        this.isDraft = false;
+    }
+
+    // Helper methods
     public boolean isPending() {
         return "PENDING".equals(status);
     }
@@ -78,37 +132,45 @@ public class BookSubmission {
         return "REJECTED".equals(status);
     }
 
+    // Format for file storage
     @Override
     public String toString() {
+        DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
         return String.join("|",
             submissionId,
             title,
-            authorFullName,
             authorUsername,
-            submitDate.toString(),
-            summary,
-            genre,
+            authorFullName,
+            genresToString(),
+            description,
             filePath,
+            submissionDate.format(formatter),
             status,
             rejectionReason != null ? rejectionReason : "",
-            reviewedDate != null ? reviewedDate.toString() : "",
-            reviewedBy != null ? reviewedBy : ""
+            reviewedDate != null ? reviewedDate.format(formatter) : "",
+            reviewedBy != null ? reviewedBy : "",
+            String.valueOf(isDraft)
         );
     }
 
+    // Parse from file string
     public static BookSubmission fromString(String data) {
         String[] parts = data.split("\\|");
-        if (parts.length >= 8) {
-            BookSubmission submission = new BookSubmission(
-                parts[1], // title
-                parts[2], // authorFullName
-                parts[3], // authorUsername
-                parts[5], // summary
-                parts[6], // genre
-                parts[7]  // filePath
+        if (parts.length >= 13) {
+            DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+            
+            LocalDateTime submissionDate = LocalDateTime.parse(parts[7], formatter);
+            LocalDateTime reviewedDate = parts[10].isEmpty() ? null : 
+                LocalDateTime.parse(parts[10], formatter);
+            boolean isDraft = Boolean.parseBoolean(parts[12]);
+            
+            return new BookSubmission(
+                parts[0], parts[1], parts[2], parts[3], parts[4], 
+                parts[5], parts[6], submissionDate, parts[8],
+                parts[9].isEmpty() ? null : parts[9],
+                reviewedDate, parts[11].isEmpty() ? null : parts[11],
+                isDraft
             );
-            // Use reflection or add setters for these fields if needed
-            return submission;
         }
         return null;
     }
