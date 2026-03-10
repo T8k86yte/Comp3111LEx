@@ -20,6 +20,7 @@ import project.task3.service.LibrarianPortalService;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public class LibrarianPortalApp extends Application {
     private final LibrarianPortalService portalService;
@@ -424,8 +425,22 @@ public class LibrarianPortalApp extends Application {
             return;
         }
 
-        LibrarianPortalService.OperationResult result =
-                portalService.approveBookSubmission(approveSubmissionIdField.getText(), currentUser);
+        String subId = approveSubmissionIdField.getText();
+        LibrarianPortalService.OperationResult result = portalService.validateBookSubmissionId(subId);
+        if (!result.success()) {
+            setStatus(result.message());
+            return;
+        }
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Confirm Approval");
+        alert.setHeaderText("Approve this book submission?");
+        alert.setContentText(portalService.getConfirmDetail(subId));
+
+        Optional<ButtonType> alertr = alert.showAndWait();
+        if (alertr.get() != ButtonType.OK) return;
+
+        result = portalService.approveBookSubmission(subId, currentUser);
         setStatus(result.message());
         if (result.success()) {
             refreshSubmissions();
@@ -439,8 +454,24 @@ public class LibrarianPortalApp extends Application {
             return;
         }
 
-        LibrarianPortalService.OperationResult result =
-                portalService.rejectBookSubmission(approveSubmissionIdField.getText(), currentUser, rejectReasonField.getText());
+        String subId = approveSubmissionIdField.getText();
+        LibrarianPortalService.OperationResult result = portalService.validateBookSubmissionId(subId);
+        if (!result.success()) {
+            setStatus(result.message());
+            return;
+        }
+
+        String rReason = rejectReasonField.getText();
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Confirm Rejection");
+        alert.setHeaderText("Reject this book submission?");
+        alert.setContentText(portalService.getConfirmDetail(subId) + "Rejection reason: " + (rReason.isEmpty() ? "Empty" : rReason) + "\n");
+
+        Optional<ButtonType> alertr = alert.showAndWait();
+        if (alertr.get() != ButtonType.OK) return;
+
+        result = portalService.rejectBookSubmission(subId, currentUser, rReason);
         setStatus(result.message());
         if (result.success()) {
             refreshSubmissions();

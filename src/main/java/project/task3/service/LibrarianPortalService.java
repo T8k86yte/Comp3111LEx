@@ -165,6 +165,11 @@ public class LibrarianPortalService {
         return OperationResult.success("Reject successful: \"" + sub.get().getTitle() + "\" is rejected.");
     }
 
+    public String getConfirmDetail(String subId) {
+        BookSubmission sub = bookSubmissionRepository.findById(subId).get();
+        return "Title: " + sub.getTitle() + "\nAuthor Username: "+ sub.getAuthorUsername() + "\nDescription: " + sub.getDescription() + "\nSubmission Time: " + sub.getSubmissionDate() + "\n";
+    }
+
     public record OperationResult(boolean success, String message) {
         public static OperationResult success(String message) {
             return new OperationResult(true, message);
