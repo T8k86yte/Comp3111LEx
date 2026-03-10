@@ -9,9 +9,13 @@ import java.util.Optional;
 public interface BookRepository {
     List<Book> findAll();
 
+    List<Book> findTopRecommended(int limit);
+
     Optional<Book> findById(String bookId);
 
     boolean borrowBook(String bookId, String borrowerUsername);
+
+    boolean returnBook(String bookId, String borrowerUsername);
 
     // Integration hook for Task 2/3:
     // Task 2 submits books, Task 3 approves them, then approved books are added here.

@@ -11,9 +11,10 @@ public final class Book {
     private final String summary;
     private boolean available;
     private String borrowedByUsername;
+    private int borrowCount;
 
     public Book(String id, String title, String author, LocalDate publishDate, String summary, boolean available) {
-        this(id, title, author, publishDate, summary, available, null);
+        this(id, title, author, publishDate, summary, available, null, 0);
     }
 
     public Book(
@@ -25,6 +26,19 @@ public final class Book {
             boolean available,
             String borrowedByUsername
     ) {
+        this(id, title, author, publishDate, summary, available, borrowedByUsername, 0);
+    }
+
+    public Book(
+            String id,
+            String title,
+            String author,
+            LocalDate publishDate,
+            String summary,
+            boolean available,
+            String borrowedByUsername,
+            int borrowCount
+    ) {
         this.id = Objects.requireNonNull(id, "id must not be null");
         this.title = Objects.requireNonNull(title, "title must not be null");
         this.author = Objects.requireNonNull(author, "author must not be null");
@@ -32,6 +46,7 @@ public final class Book {
         this.summary = Objects.requireNonNull(summary, "summary must not be null");
         this.available = available;
         this.borrowedByUsername = borrowedByUsername;
+        this.borrowCount = Math.max(0, borrowCount);
     }
 
     public String getId() {
@@ -68,6 +83,23 @@ public final class Book {
         }
         available = false;
         borrowedByUsername = username;
+        borrowCount++;
         return true;
+    }
+
+    public synchronized boolean returnBy(String username) {
+        if (available) {
+            return false;
+        }
+        if (borrowedByUsername == null || !borrowedByUsername.equals(username)) {
+            return false;
+        }
+        available = true;
+        borrowedByUsername = null;
+        return true;
+    }
+
+    public synchronized int getBorrowCount() {
+        return borrowCount;
     }
 }
