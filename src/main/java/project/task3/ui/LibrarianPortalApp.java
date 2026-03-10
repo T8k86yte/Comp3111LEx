@@ -26,6 +26,11 @@ public class LibrarianPortalApp extends Application {
 
     private LibrarianAccount currentUser;
 
+    private Stage stage;
+    private Scene loginRegisterScene;
+    private Scene acceptRejectScene;
+    private HBox statusBar;
+
     private Label statusLabel;
     private Label currentUserLabel;
     private TableView<BookSubmission> bookSubmissionTable;
@@ -59,6 +64,7 @@ public class LibrarianPortalApp extends Application {
 
     @Override
     public void start(Stage stage) {
+        /*
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
         root.setTop(buildHeader());
@@ -68,16 +74,89 @@ public class LibrarianPortalApp extends Application {
         Scene scene = new Scene(root, 1060, 700);
         scene.getStylesheets().add(
                 getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
-        );
+        refreshSubmissions();
+        );*/
+
+        statusBar = buildStatusBar();
+        loginRegisterScene = buildLoginRegisterScene();
+        acceptRejectScene = buildAcceptRejectScene();
 
         stage.setTitle("Task 3 - Librarian Portal");
-        stage.setScene(scene);
+        stage.setScene(loginRegisterScene);
         stage.show();
+        this.stage = stage;
 
-        refreshSubmissions();
         setStatus("Ready.");
     }
 
+
+
+    private Scene buildLoginRegisterScene() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setTop(buildLoginRegisterHeader());
+        root.setBottom(statusBar);
+
+        Scene scene = new Scene(root, 1060, 700);
+        scene.getStylesheets().add(
+                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
+        );
+
+        return scene;
+    }
+
+    private VBox buildLoginRegisterHeader() {
+        VBox wrapper = new VBox(14);
+        wrapper.setPadding(new Insets(18, 18, 8, 18));
+
+        Label title = new Label("Librarian Portal");
+        title.getStyleClass().add("page-title");
+        Label subtitle = new Label("Task 3 Register, login");
+        subtitle.getStyleClass().add("page-subtitle");
+
+        HBox cards = new HBox(16, buildRegisterCard(), buildLoginCard());
+        cards.setAlignment(Pos.TOP_LEFT);
+
+        wrapper.getChildren().addAll(title, subtitle, cards);
+        return wrapper;
+    }
+
+
+    private Scene buildAcceptRejectScene() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setTop(buildAcceptRejectHeader());
+        root.setCenter(buildBookCenterPanel());
+        root.setBottom(statusBar);
+
+        Scene scene = new Scene(root, 1060, 700);
+        scene.getStylesheets().add(
+                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
+        );
+
+        refreshSubmissions();
+
+        return scene;
+    }
+
+    private VBox buildAcceptRejectHeader() {
+        VBox wrapper = new VBox(14);
+        wrapper.setPadding(new Insets(18, 18, 8, 18));
+
+        Label title = new Label("Librarian Portal");
+        title.getStyleClass().add("page-title");
+        Label subtitle = new Label("Task 3 Register, login");
+        subtitle.getStyleClass().add("page-subtitle");
+
+        currentUserLabel = new Label("Current user: (none)");
+        currentUserLabel.getStyleClass().add("current-user");
+
+        wrapper.getChildren().addAll(title, subtitle, currentUserLabel, buildApproveRejectCard());
+        return wrapper;
+    }
+
+
+    /*
     private VBox buildHeader() {
         VBox wrapper = new VBox(14);
         wrapper.setPadding(new Insets(18, 18, 8, 18));
@@ -95,6 +174,7 @@ public class LibrarianPortalApp extends Application {
         wrapper.getChildren().addAll(title, subtitle, currentUserLabel, cards);
         return wrapper;
     }
+    */
 
     private VBox buildRegisterCard() {
         VBox card = new VBox(10);
@@ -155,11 +235,7 @@ public class LibrarianPortalApp extends Application {
         loginBtn.getStyleClass().add("primary-btn");
         loginBtn.setOnAction(event -> handleLogin());
 
-        Button logoutBtn = new Button("Logout");
-        logoutBtn.getStyleClass().add("secondary-btn");
-        logoutBtn.setOnAction(event -> handleLogout());
-
-        actions.getChildren().addAll(loginBtn, logoutBtn);
+        actions.getChildren().addAll(loginBtn);
         card.getChildren().addAll(heading, grid, actions);
         return card;
     }
@@ -174,14 +250,22 @@ public class LibrarianPortalApp extends Application {
         Label hint = new Label("Select a book submission in the table,\n or type ID below.");
         hint.getStyleClass().add("muted");
 
-        approveSubmissionIdField = new TextField();
-        approveSubmissionIdField.setPromptText("Submission ID");
-        rejectReasonField = new TextField();
-        rejectReasonField.setPromptText("Rejection Reason (can be empty)");
-        rejectReasonField.setDisable(true);
+        HBox actions = new HBox(10);
+
         Button acceptRejectBtn = new Button("Approve Submission");
         acceptRejectBtn.getStyleClass().add("primary-btn");
         acceptRejectBtn.setOnAction(event -> handleApproveReject());
+
+        Button logoutBtn = new Button("Logout");
+        logoutBtn.getStyleClass().add("secondary-btn");
+        logoutBtn.setOnAction(event -> handleLogout());
+
+        actions.getChildren().addAll(acceptRejectBtn, logoutBtn);
+
+        HBox fields = new HBox(10);
+
+        approveSubmissionIdField = new TextField();
+        approveSubmissionIdField.setPromptText("Submission ID");
         actionBox = new ComboBox<>(FXCollections.observableArrayList("Approve", "Reject"));
         actionBox.setValue("Approve");
         actionBox.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
@@ -191,8 +275,14 @@ public class LibrarianPortalApp extends Application {
                 acceptRejectBtn.setText(newValue + " Submission");
             }
         });
+        rejectReasonField = new TextField();
+        rejectReasonField.setPromptText("Rejection Reason (can be empty)");
+        rejectReasonField.setDisable(true);
 
-        card.getChildren().addAll(heading, hint, approveSubmissionIdField, actionBox, rejectReasonField, acceptRejectBtn);
+        fields.getChildren().addAll(approveSubmissionIdField, actionBox, rejectReasonField);
+
+
+        card.getChildren().addAll(heading, hint, fields, actions);
         return card;
     }
 
@@ -306,6 +396,8 @@ public class LibrarianPortalApp extends Application {
             currentUserLabel.setText("Current user: " + currentUser.getUsername());
             loginPasswordField.clear();
         }
+
+        stage.setScene(acceptRejectScene);
     }
 
     private void handleLogout() {
@@ -317,6 +409,8 @@ public class LibrarianPortalApp extends Application {
         currentUser = null;
         currentUserLabel.setText("Current user: (none)");
         setStatus("Logged out: " + username);
+
+        stage.setScene(loginRegisterScene);
     }
 
     private void handleApproveReject() {
