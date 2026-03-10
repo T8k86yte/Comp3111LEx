@@ -6,22 +6,27 @@ import project.task2.utils.PasswordUtils;
 
 import project.task2.model.BookSubmission;
 import project.task2.repo.SubmissionRepository;
+import project.task2.repo.DraftRepository;
 import project.task2.utils.FileHandler;
 
-import java.util.List;  // Add this import
+import java.util.List;
+import java.util.Arrays;
 
 public class AuthorPortalService {
     private final AuthorRepository authorRepository;
     private final SubmissionRepository submissionRepository;
+    private final DraftRepository draftRepository;
 
     public AuthorPortalService() {
         this.authorRepository = new AuthorRepository();
         this.submissionRepository = new SubmissionRepository();
+        this.draftRepository = new DraftRepository();
     }
 
     public AuthorPortalService(AuthorRepository authorRepository) {
         this.authorRepository = authorRepository;
-        this.submissionRepository = new SubmissionRepository(); // Add this
+        this.submissionRepository = new SubmissionRepository();
+        this.draftRepository = new DraftRepository();
     }
 
     // ========== REGISTRATION (AUTHOR)==========
@@ -126,6 +131,48 @@ public class AuthorPortalService {
         );
     }
 
+    // ========== DRAFT METHODS ==========
+    public void saveDraft(String authorUsername, String title, List<String> genres, 
+                          String description, String filePath) {
+        // Format draft data
+        String genresStr = genres != null ? String.join(",", genres) : "";
+        String draftData = String.join("|",
+            title != null ? title : "",
+            genresStr,
+            description != null ? description : "",
+            filePath != null ? filePath : ""
+        );
+        
+        // Only save if there's some content
+        if (!title.isEmpty() || !genresStr.isEmpty() || !description.isEmpty() || !filePath.isEmpty()) {
+            draftRepository.saveDraft(authorUsername, draftData);
+        } else {
+            // If all empty, delete any existing draft
+            draftRepository.deleteDraft(authorUsername);
+        }
+    }
+
+    public String[] loadDraft(String authorUsername) {
+        String draftData = draftRepository.loadDraft(authorUsername);
+        if (draftData == null || draftData.isEmpty()) {
+            return null;
+        }
+        
+        String[] parts = draftData.split("\\|", 4);
+        if (parts.length == 4) {
+            return parts; // [title, genres, description, filePath]
+        }
+        return null;
+    }
+
+    public boolean hasDraft(String authorUsername) {
+        return draftRepository.hasDraft(authorUsername);
+    }
+
+    public void clearDraft(String authorUsername) {
+        draftRepository.deleteDraft(authorUsername);
+    }
+
     // Get author by username (for session management)
     public AuthorAccount getAuthorByUsername(String username) {
         return authorRepository.findByUsername(username).orElse(null);
@@ -217,15 +264,15 @@ public class AuthorPortalService {
 
     // ========== TASK 2.3: BOOK SUBMISSION METHODS ==========
     public SubmissionResult submitBookForApproval(String authorUsername, String authorFullName,
-                                              String title, String genre, 
+                                              String title, String genresStr, 
                                               String description, String filePath) {
     
         // Validation
         if (isBlank(title)) {
             return SubmissionResult.failure("Book title is required.");
         }
-        if (isBlank(genre)) {
-            return SubmissionResult.failure("Genre is required.");
+        if (isBlank(genresStr)) {
+            return SubmissionResult.failure("Please select at least one genre.");
         }
         if (isBlank(description)) {
             return SubmissionResult.failure("Description is required.");
@@ -241,14 +288,20 @@ public class AuthorPortalService {
         }
 
         try {
-            // Create submission (in real app, would save file here)
+            // Parse genres (comma-separated string to list)
+            List<String> genres = Arrays.asList(genresStr.split(","));
+            
+            // Create submission with multiple genres
             BookSubmission submission = new BookSubmission(
                 title, authorUsername, authorFullName, 
-                genre, description, filePath
+                genres, description, filePath
             );
 
             // Save to repository
             submissionRepository.save(submission);
+            
+            // Clear draft after successful submission
+            clearDraft(authorUsername);
 
             return SubmissionResult.success(
                 "Book '" + title + "' submitted successfully!\n" +

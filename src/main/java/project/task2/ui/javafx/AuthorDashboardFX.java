@@ -176,7 +176,8 @@ public class AuthorDashboardFX extends Application {
 
                 header.getChildren().addAll(statusLabel, title);
 
-                Label genreLabel = new Label("Genre: " + sub.getGenre());
+                // FIX: Use getGenresAsString() instead of getGenre()
+                Label genreLabel = new Label("Genres: " + sub.getGenresAsString());
                 genreLabel.getStyleClass().add("muted");
 
                 Label dateLabel = new Label("Submitted: " + sub.getSubmissionDate());
