@@ -1,19 +1,7 @@
-To compile/ test the code now, first do
+in console, type
 
-find . -name "*.class" -delete
+./run.sh 
 
-to delete all previous class file,
-then compile all file inside task2 by doing
+for compiling the program, it contains javac and java class file compile short cut
 
-javac -d . project/task2/model/*.java \
-         project/task2/utils/*.java \
-         project/task2/repo/*.java \
-         project/task2/service/*.java \
-         project/task2/ui/*.java \
-         project/task2/AuthorPortalMain.java
-
-(note that there might be file adding or removing, so it might vary)
-
-then run the main program AuthorPortalMain.java by typing
-
-java project.task2.AuthorPortalMain
+*This version is supporting javaFX ui but not terminal ui
