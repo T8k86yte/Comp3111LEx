@@ -164,7 +164,7 @@ public class PublishBookUI {
         
         for (var sub : submissions) {
             System.out.println("📖 Title: " + sub.getTitle());
-            System.out.println("   Genre: " + sub.getGenre());
+            System.out.println("   Genre: " + sub.getGenresAsString());
             System.out.println("   Submitted: " + sub.getSubmissionDate());
             System.out.println("   Status: " + getStatusEmoji(sub.getStatus()) + " " + sub.getStatus());
             if (sub.isRejected() && sub.getRejectionReason() != null) {

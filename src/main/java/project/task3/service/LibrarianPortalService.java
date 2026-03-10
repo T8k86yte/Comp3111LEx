@@ -8,6 +8,7 @@ import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
 import project.task3.repo.LibrarianRepository;
 
+import java.util.ArrayList;
 import java.util.regex.Pattern;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,21 +28,30 @@ public class LibrarianPortalService {
         this.bookRepository = bookRepository;
         this.bookSubmissionRepository = bookSubmissionRepository;
 
+        ArrayList<String> l = new ArrayList<>(2);
+        l.add("TestGenre1.1");
+        l.add("TestGenre1.2");
+
         bookSubmissionRepository.save(new BookSubmission(
                 "Test1",
                 "TestFullName1",
                 "TestUsername1",
+                l,
                 "TestSummary1",
-                "TestGenre1",
                 "TestFilePath1"
                 )
         );
+
+        l.clear();
+        l.add("TestGenre2.1");
+        l.add("TestGenre2.2");
+
         bookSubmissionRepository.save(new BookSubmission(
                 "Test2",
                 "TestFullName2",
                 "TestUsername2",
+                l,
                 "TestSummary2",
-                "TestGenre2",
                 "TestFilePath2"
                 )
         );
@@ -110,7 +120,7 @@ public class LibrarianPortalService {
                                                 String statusFilter) {
         if (!titleFilter.matcher(sub.getTitle()).matches()) return false;
         if (!authorUsernameFilter.matcher(sub.getAuthorUsername()).matches()) return false;
-        if (!genreFilter.matcher(sub.getGenre()).matches()) return false;
+        if (!genreFilter.matcher(sub.getGenresAsString()).matches()) return false;
         if (submissionMin != null && sub.getSubmissionDate().isBefore(submissionMin)) return false;
         if (submissionMax != null && sub.getSubmissionDate().isAfter(submissionMax)) return false;
         return statusFilter.equals("ALL") || sub.getStatus().equals(statusFilter);
@@ -149,7 +159,7 @@ public class LibrarianPortalService {
 
         BookSubmission s = sub.get();
         s.approve(user.getUsername());
-        bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), s.getGenre());//Note that description is just an alias of summary for book
+        bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), "s.getGenres()");//Note that description is just an alias of summary for book
         bookSubmissionRepository.update(s);//Changes should be saved once there are updates
         return OperationResult.success("Approve successful: \"" + sub.get().getTitle() + "\" is approved and created.");
     }

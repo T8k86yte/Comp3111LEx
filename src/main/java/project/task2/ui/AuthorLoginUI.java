@@ -170,7 +170,7 @@ public class AuthorLoginUI {
                 System.out.println("\n📖 Book #" + (i+1));
                 System.out.println("   ID: " + sub.getSubmissionId());
                 System.out.println("   Title: " + sub.getTitle());
-                System.out.println("   Genre: " + sub.getGenre());
+                System.out.println("   Genre: " + sub.getGenresAsString());
                 System.out.println("   Submitted: " + sub.getSubmissionDate());
                 System.out.println("   Status: " + getStatusEmoji(sub.getStatus()) + " " + sub.getStatus());
                 

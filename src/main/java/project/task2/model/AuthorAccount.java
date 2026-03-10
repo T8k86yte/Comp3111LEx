@@ -1,5 +1,8 @@
 package project.task2.model;
 
+import project.task1.model.UserAccount;
+import project.task1.model.UserRole;
+
 public class AuthorAccount extends UserAccount {
     private final String bio;
 

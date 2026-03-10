@@ -309,7 +309,7 @@ public class LibrarianPortalApp extends Application {
         authorFullNameCol.setCellValueFactory(new PropertyValueFactory<>("authorFullName"));
 
         TableColumn<BookSubmission, String> genreCol = new TableColumn<>("Genre");
-        genreCol.setCellValueFactory(new PropertyValueFactory<>("genre"));
+        genreCol.setCellValueFactory(new PropertyValueFactory<>("GenresAsString"));
 
         TableColumn<BookSubmission, Object> dateCol = new TableColumn<>("Submitted Date");
         dateCol.setCellValueFactory(new PropertyValueFactory<>("submissionDate"));
