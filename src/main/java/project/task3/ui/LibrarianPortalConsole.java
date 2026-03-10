@@ -98,7 +98,7 @@ public class LibrarianPortalConsole {
             System.out.println("Title: " + sub.getTitle());
             System.out.println("Author Username: " + sub.getAuthorUsername());
             System.out.println("Author Full Name: " + sub.getAuthorFullName());
-            System.out.println("Genre: " + sub.getGenre());
+            System.out.println("Genre: " + sub.getGenresAsString());
             System.out.println("Submit Date: " + sub.getSubmissionDate());
             System.out.println("Book Abstract/Summary: " + sub.getDescription());
             System.out.println("Status: PENDING");

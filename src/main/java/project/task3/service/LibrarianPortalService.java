@@ -1,14 +1,14 @@
 package project.task3.service;
 
+import project.task1.model.Book;
 import project.task1.repo.BookRepository;
-import project.task1.repo.StudentStaffRepository;
-import project.shared.SharedAuthFacade;
+import project.task1.security.PasswordSecurity;
 import project.task2.model.BookSubmission;
-import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
 import project.task3.repo.LibrarianRepository;
 
+import java.util.ArrayList;
 import java.util.regex.Pattern;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -17,45 +17,98 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class LibrarianPortalService {
+    private static final int MIN_PASSWORD_LENGTH = 8;
+
     private final LibrarianRepository librarianRepository;
-    private final SharedAuthFacade sharedAuthFacade;
     private final BookRepository bookRepository;
     private final SubmissionRepository bookSubmissionRepository;
 
     public LibrarianPortalService(LibrarianRepository librarianRepository, BookRepository bookRepository, SubmissionRepository bookSubmissionRepository) {
         this.librarianRepository = librarianRepository;
-        this.sharedAuthFacade = new SharedAuthFacade(new StudentStaffRepository(), new AuthorRepository(), librarianRepository);
         this.bookRepository = bookRepository;
         this.bookSubmissionRepository = bookSubmissionRepository;
+
+        ArrayList<String> l = new ArrayList<>(2);
+        l.add("TestGenre1.1");
+        l.add("TestGenre1.2");
+
+        bookSubmissionRepository.save(new BookSubmission(
+                "Test1",
+                "TestFullName1",
+                "TestUsername1",
+                l,
+                "TestSummary1",
+                "TestFilePath1"
+                )
+        );
+
+        l.clear();
+        l.add("TestGenre2.1");
+        l.add("TestGenre2.2");
+
+        bookSubmissionRepository.save(new BookSubmission(
+                "Test2",
+                "TestFullName2",
+                "TestUsername2",
+                l,
+                "TestSummary2",
+                "TestFilePath2"
+                )
+        );
     }
 
     public LibrarianPortalService.OperationResult registerLibrarian(String username, String fullname, String rawPassword, String employeeIDtext) {
-        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.register(
+        if (username == null || username.isEmpty()) {
+            return OperationResult.failure("Registration failed: username is required.");
+        }
+        if (fullname == null || fullname.isEmpty()) {
+            return OperationResult.failure("Registration failed: full name is required.");
+        }
+        if (rawPassword == null || rawPassword.length() < MIN_PASSWORD_LENGTH) {
+            return OperationResult.failure("Registration failed: password must be at least " + MIN_PASSWORD_LENGTH + " characters.");
+        }
+        if (!rawPassword.matches(".*[A-Za-z].*") || !rawPassword.matches(".*\\d.*")) {
+            return OperationResult.failure("Registration failed: password must include at least one letter and one number.");
+        }
+        if (librarianRepository.existsByUsername(username)) {
+            return OperationResult.failure("Registration failed: username already exists.");
+        }
+        if (employeeIDtext == null || employeeIDtext.isEmpty()) {
+            return OperationResult.failure("Registration failed: employee ID is required.");
+        }
+        int ID = Integer.parseInt(employeeIDtext);
+
+        // Credentials are never stored as plain text; only salt + hash are persisted.
+        String saltBase64 = PasswordSecurity.generateSaltBase64();
+        String hashBase64 = PasswordSecurity.hashPasswordBase64(rawPassword, saltBase64);
+        LibrarianAccount userAccount = new LibrarianAccount(
                 username,
                 fullname,
-                rawPassword,
-                null,
-                "Librarian",
-                null,
-                employeeIDtext
+                saltBase64,
+                hashBase64,
+                ID
         );
-        if (!authResult.success()) {
-            return OperationResult.failure(authResult.message());
-        }
-        return OperationResult.success(authResult.message());
+        librarianRepository.save(userAccount);
+        return OperationResult.success("Registration successful for " + username + ".");
     }
 
     public LoginResult login(String username, String rawPassword) {
-        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.login(username, rawPassword, "Librarian");
-        if (!authResult.success()) {
-            return LoginResult.failure(authResult.message());
+        if (username == null || username.isEmpty() || rawPassword == null || rawPassword.isEmpty()) {
+            return LoginResult.failure("Login failed: username and password are required.");
         }
-        LibrarianAccount user = librarianRepository.findByUsername(authResult.principal().username()).orElse(null);
-        if (user == null) {
+
+        Optional<LibrarianAccount> userOpt = librarianRepository.findByUsername(username);
+        if (userOpt.isEmpty()) {
             return LoginResult.failure("Login failed: invalid username or password.");
         }
 
-        return LoginResult.success(authResult.message(), user);
+        LibrarianAccount user = userOpt.get();
+        boolean matched = PasswordSecurity.verifyPassword(rawPassword, user.getPasswordSaltBase64(), user.getPasswordHashBase64());
+        if (!matched) {
+            return LoginResult.failure("Login failed: invalid username or password.");
+        }
+
+        return LoginResult.success("Login successful. Welcome, " + user.getFullName() + ".", user);
     }
 
     private static boolean filterBookSubmission(BookSubmission sub,
@@ -67,7 +120,7 @@ public class LibrarianPortalService {
                                                 String statusFilter) {
         if (!titleFilter.matcher(sub.getTitle()).matches()) return false;
         if (!authorUsernameFilter.matcher(sub.getAuthorUsername()).matches()) return false;
-        if (!genreFilter.matcher(sub.getGenre()).matches()) return false;
+        if (!genreFilter.matcher(sub.getGenresAsString()).matches()) return false;
         if (submissionMin != null && sub.getSubmissionDate().isBefore(submissionMin)) return false;
         if (submissionMax != null && sub.getSubmissionDate().isAfter(submissionMax)) return false;
         return statusFilter.equals("ALL") || sub.getStatus().equals(statusFilter);
@@ -106,7 +159,7 @@ public class LibrarianPortalService {
 
         BookSubmission s = sub.get();
         s.approve(user.getUsername());
-        bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), s.getGenre());//Note that description is just an alias of summary for book
+        bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), "s.getGenres()");//Note that description is just an alias of summary for book
         bookSubmissionRepository.update(s);//Changes should be saved once there are updates
         return OperationResult.success("Approve successful: \"" + sub.get().getTitle() + "\" is approved and created.");
     }
