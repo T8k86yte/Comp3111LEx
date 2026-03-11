@@ -25,10 +25,11 @@ public class SubmissionRepository {
         }
     }
 
-    private void loadFromFile() {
+    private synchronized void loadFromFile() {
         try {
             Path filePath = Paths.get(SUBMISSIONS_FILE);
             if (Files.exists(filePath)) {
+                submissionsById.clear();
                 List<String> lines = Files.readAllLines(filePath);
                 for (String line : lines) {
                     if (!line.trim().isEmpty()) {
@@ -45,7 +46,7 @@ public class SubmissionRepository {
         }
     }
 
-    private void saveToFile() {
+    private synchronized void saveToFile() {
         try {
             List<String> lines = new ArrayList<>();
             for (BookSubmission submission : submissionsById.values()) {
@@ -75,11 +76,13 @@ public class SubmissionRepository {
 
     // Find by ID
     public Optional<BookSubmission> findById(String submissionId) {
+        loadFromFile();
         return Optional.ofNullable(submissionsById.get(submissionId));
     }
 
     // Find all submissions by an author
     public List<BookSubmission> findByAuthor(String authorUsername) {
+        loadFromFile();
         return submissionsById.values().stream()
                 .filter(sub -> sub.getAuthorUsername().equals(authorUsername))
                 .collect(Collectors.toList());
@@ -87,6 +90,7 @@ public class SubmissionRepository {
 
     // Find all pending submissions (for librarian)
     public List<BookSubmission> findPendingSubmissions() {
+        loadFromFile();
         return submissionsById.values().stream()
                 .filter(BookSubmission::isPending)
                 .collect(Collectors.toList());
@@ -94,11 +98,13 @@ public class SubmissionRepository {
 
     // Find all submissions
     public List<BookSubmission> findAll() {
+        loadFromFile();
         return new ArrayList<>(submissionsById.values());
     }
 
     // Get count
     public int getCount() {
+        loadFromFile();
         return submissionsById.size();
     }
 }

@@ -7,15 +7,26 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
+import project.shared.SharedAuthFacade;
+import project.task1.repo.StudentStaffRepository;
+import project.task2.repo.AuthorRepository;
 import project.task2.service.AuthorPortalService;
+import project.task3.repo.LibrarianRepository;
 
 public class AuthorRegistrationFX extends Application {
     private AuthorPortalService authorService;
+    private SharedAuthFacade authFacade;
     private Stage primaryStage;
 
     @Override
     public void start(Stage primaryStage) {
-        this.authorService = new AuthorPortalService();
+        AuthorRepository authorRepository = new AuthorRepository();
+        this.authorService = new AuthorPortalService(authorRepository);
+        this.authFacade = new SharedAuthFacade(
+                new StudentStaffRepository(),
+                authorRepository,
+                new LibrarianRepository()
+        );
         this.primaryStage = primaryStage;
         showRegistrationScreen();
     }
@@ -121,12 +132,31 @@ public class AuthorRegistrationFX extends Application {
             String confirm = confirmField.getText();
             String bio = bioArea.getText().trim();
 
-            AuthorPortalService.RegistrationResult result = authorService.registerAuthor(
-                username, fullName, password, confirm, bio
+            if (username.isEmpty() || fullName.isEmpty() || password.isEmpty() || confirm.isEmpty()) {
+                showMessage(
+                    messageLabel,
+                    "Registration failed: username, full name, password, and confirm password are required.",
+                    "status-rejected"
+                );
+                return;
+            }
+            if (!password.equals(confirm)) {
+                showMessage(messageLabel, "Registration failed: passwords do not match.", "status-rejected");
+                return;
+            }
+
+            SharedAuthFacade.AuthResult result = authFacade.register(
+                username,
+                fullName,
+                password,
+                confirm,
+                "Author",
+                bio,
+                null
             );
 
-            if (result.isSuccess()) {
-                showMessage(messageLabel,result.getMessage(), "status-approved");
+            if (result.success()) {
+                showMessage(messageLabel, result.message(), "status-approved");
                 // Clear fields
                 usernameField.clear();
                 fullNameField.clear();
@@ -134,7 +164,7 @@ public class AuthorRegistrationFX extends Application {
                 confirmField.clear();
                 bioArea.clear();
             } else {
-                showMessage(messageLabel,result.getMessage(), "status-rejected");
+                showMessage(messageLabel, result.message(), "status-rejected");
             }
         });
 

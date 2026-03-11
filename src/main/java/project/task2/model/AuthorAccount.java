@@ -42,7 +42,8 @@ public class AuthorAccount extends UserAccount {
     }
     // fromstring function that decode user data from repository
     public static AuthorAccount fromString(String data) {
-        String[] parts = data.split("\\|");
+        // Keep trailing empty bio field when a record ends with '|'.
+        String[] parts = data.split("\\|", -1);
         if (parts.length >= 6) {
             return new AuthorAccount(
                 parts[0],  // username

@@ -11,13 +11,11 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
-import javafx.scene.control.RadioButton;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
@@ -27,21 +25,33 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import project.task1.model.Book;
-import project.task1.model.UserAccount;
 import project.task1.repo.InMemoryBookRepository;
 import project.task1.repo.StudentStaffRepository;
 import project.task1.service.StudentStaffPortalService;
+import project.shared.SharedAuthFacade;
+import project.task2.repo.AuthorRepository;
+import project.task3.repo.LibrarianRepository;
 
 import java.util.List;
 import java.util.Optional;
 
 public class StudentStaffPortalApp extends Application {
+    private final StudentStaffRepository studentStaffRepository = new StudentStaffRepository();
+    private final AuthorRepository authorRepository = new AuthorRepository();
+    private final LibrarianRepository librarianRepository = new LibrarianRepository();
     private final StudentStaffPortalService portalService = new StudentStaffPortalService(
-            new StudentStaffRepository(),
-            new InMemoryBookRepository()
+            studentStaffRepository,
+            new InMemoryBookRepository(),
+            authorRepository,
+            librarianRepository
+    );
+    private final SharedAuthFacade authFacade = new SharedAuthFacade(
+            studentStaffRepository,
+            authorRepository,
+            librarianRepository
     );
 
-    private UserAccount currentUser;
+    private SharedAuthFacade.UserPrincipal currentUser;
 
     private BorderPane root;
     private Label statusLabel;
@@ -50,13 +60,13 @@ public class StudentStaffPortalApp extends Application {
     private BorderPane studentDashboard;
     private StackPane contentPane;
 
-    private TextField authUsernameField;
-    private TextField authFullNameField;
-    private PasswordField authPasswordField;
-    private ComboBox<String> authRoleBox;
-    private RadioButton loginModeButton;
-    private RadioButton registerModeButton;
-    private Label fullNameLabel;
+    private TextField loginUsernameField;
+    private PasswordField loginPasswordField;
+    private TextField registerUsernameField;
+    private TextField registerFullNameField;
+    private PasswordField registerPasswordField;
+    private PasswordField registerConfirmPasswordField;
+    private ComboBox<String> registerRoleBox;
 
     private TableView<Book> bookTable;
     private TextField borrowBookIdField;
@@ -67,7 +77,7 @@ public class StudentStaffPortalApp extends Application {
     public void start(Stage stage) {
         root = new BorderPane();
         root.getStyleClass().add("root-pane");
-        authPage = buildAuthPage();
+        authPage = buildStudentLoginPage();
         studentDashboard = buildStudentDashboard();
         root.setCenter(authPage);
         root.setBottom(buildStatusBar());
@@ -81,81 +91,141 @@ public class StudentStaffPortalApp extends Application {
         stage.setScene(scene);
         stage.show();
 
-        setStatus("Please login or register.");
+        setStatus("Please log in or register.");
     }
 
-    private VBox buildAuthPage() {
-        VBox page = new VBox(14);
-        page.setPadding(new Insets(26));
-        page.setAlignment(Pos.TOP_CENTER);
+    private VBox buildStudentLoginPage() {
+        VBox page = new VBox(20);
+        page.setPadding(new Insets(50));
+        page.setAlignment(Pos.CENTER);
 
-        Label title = new Label("Student/Staff Portal");
+        Label title = new Label("🎓 Student/Staff Portal");
         title.getStyleClass().add("page-title");
-        Label subtitle = new Label("Login/Register to enter the student dashboard.");
+        Label subtitle = new Label("Sign in with your student/staff account.");
         subtitle.getStyleClass().add("page-subtitle");
-        page.getChildren().addAll(title, subtitle, buildUnifiedAuthCard());
+        page.getChildren().addAll(title, subtitle, buildStudentLoginCard());
         return page;
     }
 
-    private VBox buildUnifiedAuthCard() {
-        VBox card = new VBox(10);
+    private VBox buildStudentLoginCard() {
+        VBox card = new VBox(20);
         card.getStyleClass().add("card");
-        card.setPrefWidth(430);
+        card.setMaxWidth(400);
+        card.setPadding(new Insets(30));
 
-        Label heading = new Label("Account");
+        Label heading = new Label("Student/Staff Login");
         heading.getStyleClass().add("card-title");
-        Label hint = new Label("Choose mode and role first, then submit.");
-        hint.getStyleClass().add("muted");
+        heading.setAlignment(Pos.CENTER);
+        heading.setMaxWidth(Double.MAX_VALUE);
 
-        ToggleGroup authModeGroup = new ToggleGroup();
-        loginModeButton = new RadioButton("Login");
-        registerModeButton = new RadioButton("Register");
-        loginModeButton.setToggleGroup(authModeGroup);
-        registerModeButton.setToggleGroup(authModeGroup);
-        registerModeButton.setSelected(true);
+        VBox usernameBox = new VBox(5);
+        Label usernameLabel = new Label("Username");
+        usernameLabel.getStyleClass().add("muted");
 
-        HBox modeBox = new HBox(10, loginModeButton, registerModeButton);
-        modeBox.setAlignment(Pos.CENTER_LEFT);
+        loginUsernameField = new TextField();
+        loginUsernameField.setPromptText("Enter username");
+        loginUsernameField.getStyleClass().add("text-field");
+
+        usernameBox.getChildren().addAll(usernameLabel, loginUsernameField);
+
+        VBox passwordBox = new VBox(5);
+        Label passwordLabel = new Label("Password");
+        passwordLabel.getStyleClass().add("muted");
+        loginPasswordField = new PasswordField();
+        loginPasswordField.setPromptText("Enter password");
+        loginPasswordField.getStyleClass().add("password-field");
+        passwordBox.getChildren().addAll(passwordLabel, loginPasswordField);
+
+        Button loginBtn = new Button("Sign In");
+        loginBtn.getStyleClass().add("primary-btn");
+        loginBtn.setOnAction(event -> handleStudentLogin());
+        loginBtn.setPrefWidth(150);
+
+        Button registerBtn = new Button("Register");
+        registerBtn.getStyleClass().add("secondary-btn");
+        registerBtn.setOnAction(event -> root.setCenter(buildStudentRegisterPage()));
+        registerBtn.setPrefWidth(150);
+
+        HBox actions = new HBox(15, loginBtn, registerBtn);
+        actions.setAlignment(Pos.CENTER);
+
+        card.getChildren().addAll(heading, usernameBox, passwordBox, actions);
+        return card;
+    }
+
+    private VBox buildStudentRegisterPage() {
+        VBox page = new VBox(20);
+        page.setPadding(new Insets(30));
+        page.setAlignment(Pos.TOP_CENTER);
+
+        Label title = new Label("📝 Student/Staff Registration");
+        title.getStyleClass().add("page-title");
+        Label subtitle = new Label("Create a student or staff account.");
+        subtitle.getStyleClass().add("page-subtitle");
+
+        VBox card = new VBox(20);
+        card.getStyleClass().add("card");
+        card.setMaxWidth(500);
+        card.setPadding(new Insets(30));
 
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(8);
 
-        authUsernameField = new TextField();
-        authFullNameField = new TextField();
-        authPasswordField = new PasswordField();
-        authRoleBox = new ComboBox<>(FXCollections.observableArrayList("Student", "Staff", "Author", "Librarian"));
-        authRoleBox.setValue("Student");
-        authRoleBox.setMaxWidth(Double.MAX_VALUE);
+        registerUsernameField = new TextField();
+        registerUsernameField.setPromptText("Choose username");
+        registerFullNameField = new TextField();
+        registerFullNameField.setPromptText("Enter full name");
+        registerPasswordField = new PasswordField();
+        registerPasswordField.setPromptText("Create password");
+        registerConfirmPasswordField = new PasswordField();
+        registerConfirmPasswordField.setPromptText("Re-enter password");
+        registerRoleBox = new ComboBox<>(FXCollections.observableArrayList("Student", "Staff"));
+        registerRoleBox.setValue("Student");
+        registerRoleBox.setMaxWidth(Double.MAX_VALUE);
 
         grid.add(new Label("Username"), 0, 0);
-        grid.add(authUsernameField, 1, 0);
-        fullNameLabel = new Label("Full name");
-        grid.add(fullNameLabel, 0, 1);
-        grid.add(authFullNameField, 1, 1);
+        grid.add(registerUsernameField, 1, 0);
+        grid.add(new Label("Full name"), 0, 1);
+        grid.add(registerFullNameField, 1, 1);
         grid.add(new Label("Password"), 0, 2);
-        grid.add(authPasswordField, 1, 2);
-        grid.add(new Label("Role"), 0, 3);
-        grid.add(authRoleBox, 1, 3);
+        grid.add(registerPasswordField, 1, 2);
+        grid.add(new Label("Confirm password"), 0, 3);
+        grid.add(registerConfirmPasswordField, 1, 3);
+        grid.add(new Label("Role"), 0, 4);
+        grid.add(registerRoleBox, 1, 4);
 
-        Button submitBtn = new Button("Submit");
+        VBox reqBox = new VBox(4);
+        reqBox.setPadding(new Insets(10));
+        reqBox.setStyle("-fx-background-color: #f8fafc; -fx-background-radius: 8px;");
+        Label reqTitle = new Label("Password Requirements:");
+        reqTitle.setStyle("-fx-font-weight: bold;");
+        Label req1 = new Label("• At least 8 characters long");
+        Label req2 = new Label("• At least one letter");
+        Label req3 = new Label("• At least one number");
+        Label req4 = new Label("• At least one uppercase letter");
+        req1.getStyleClass().add("muted");
+        req2.getStyleClass().add("muted");
+        req3.getStyleClass().add("muted");
+        req4.getStyleClass().add("muted");
+        reqBox.getChildren().addAll(reqTitle, req1, req2, req3, req4);
+
+        Button submitBtn = new Button("Create Account");
         submitBtn.getStyleClass().add("primary-btn");
-        submitBtn.setOnAction(event -> handleAuthSubmit());
+        submitBtn.setOnAction(event -> handleStudentRegister());
+        submitBtn.setPrefWidth(180);
 
-        Button readSummaryBtn = new Button("Read Summary");
-        readSummaryBtn.getStyleClass().add("secondary-btn");
-        readSummaryBtn.setOnAction(event -> handleReadSummary());
+        Button backBtn = new Button("Back to Login");
+        backBtn.getStyleClass().add("secondary-btn");
+        backBtn.setOnAction(event -> root.setCenter(authPage));
+        backBtn.setPrefWidth(180);
 
-        Button logoutBtn = new Button("Logout");
-        logoutBtn.getStyleClass().add("secondary-btn");
-        logoutBtn.setOnAction(event -> handleLogout());
+        HBox actions = new HBox(10, submitBtn, backBtn);
+        actions.setAlignment(Pos.CENTER);
 
-        HBox actions = new HBox(8, submitBtn, readSummaryBtn, logoutBtn);
-        authModeGroup.selectedToggleProperty().addListener((obs, oldValue, newValue) -> updateAuthFormVisibility());
-        updateAuthFormVisibility();
-
-        card.getChildren().addAll(heading, hint, modeBox, grid, actions);
-        return card;
+        card.getChildren().addAll(grid, reqBox, actions);
+        page.getChildren().addAll(title, subtitle, card);
+        return page;
     }
 
     private BorderPane buildStudentDashboard() {
@@ -355,44 +425,62 @@ public class StudentStaffPortalApp extends Application {
         refreshRecommendations();
     }
 
-    private void updateAuthFormVisibility() {
-        boolean registerMode = registerModeButton.isSelected();
-        authFullNameField.setManaged(registerMode);
-        authFullNameField.setVisible(registerMode);
-        fullNameLabel.setManaged(registerMode);
-        fullNameLabel.setVisible(registerMode);
-    }
+    private void handleStudentRegister() {
+        String username = registerUsernameField.getText() == null ? "" : registerUsernameField.getText().trim();
+        String fullName = registerFullNameField.getText() == null ? "" : registerFullNameField.getText().trim();
+        String password = registerPasswordField.getText() == null ? "" : registerPasswordField.getText();
+        String confirmPassword = registerConfirmPasswordField.getText() == null ? "" : registerConfirmPasswordField.getText();
+        String role = registerRoleBox.getValue();
 
-    private void handleAuthSubmit() {
-        if (registerModeButton.isSelected()) {
-            StudentStaffPortalService.OperationResult result = portalService.registerWithRoleSelection(
-                    authUsernameField.getText(),
-                    authFullNameField.getText(),
-                    authPasswordField.getText(),
-                    authRoleBox.getValue()
-            );
-            setStatus(result.message());
-            if (result.success()) {
-                authFullNameField.clear();
-                authPasswordField.clear();
-            }
+        if (username.isEmpty() || fullName.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()) {
+            setStatus("Registration failed: username, full name, password, and confirm password are required.");
             return;
         }
-        StudentStaffPortalService.LoginResult result =
-                portalService.login(authUsernameField.getText(), authPasswordField.getText(), authRoleBox.getValue());
+        if (!password.equals(confirmPassword)) {
+            setStatus("Registration failed: passwords do not match.");
+            return;
+        }
+
+        SharedAuthFacade.AuthResult result = authFacade.register(
+                username,
+                fullName,
+                password,
+                confirmPassword,
+                role,
+                null,
+                null
+        );
         setStatus(result.message());
         if (result.success()) {
-            currentUser = result.user();
-            if (!"STUDENT".equalsIgnoreCase(currentUser.getRole().name())) {
-                currentUser = null;
-                setStatus("This dashboard is for student users. Please login as Student.");
-                return;
-            }
-            currentUserLabel.setText("Current user: " + currentUser.getUsername() + " (" + currentUser.getRole() + ")");
-            authPasswordField.clear();
-            root.setCenter(studentDashboard);
-            showBooksView();
+            registerUsernameField.clear();
+            registerFullNameField.clear();
+            registerPasswordField.clear();
+            registerConfirmPasswordField.clear();
+            root.setCenter(authPage);
         }
+    }
+
+    private void handleStudentLogin() {
+        SharedAuthFacade.AuthResult result =
+                authFacade.login(loginUsernameField.getText(), loginPasswordField.getText(), "Student");
+        if (!result.success()) {
+            // Try staff automatically so login page keeps only username/password.
+            result = authFacade.login(loginUsernameField.getText(), loginPasswordField.getText(), "Staff");
+        }
+        setStatus(result.message());
+        if (!result.success()) {
+            return;
+        }
+        currentUser = result.principal();
+        if (!"STUDENT".equalsIgnoreCase(currentUser.role()) && !"STAFF".equalsIgnoreCase(currentUser.role())) {
+            currentUser = null;
+            setStatus("This dashboard is only for student/staff users.");
+            return;
+        }
+        currentUserLabel.setText("Current user: " + currentUser.username() + " (" + currentUser.role() + ")");
+        loginPasswordField.clear();
+        root.setCenter(studentDashboard);
+        showBooksView();
     }
 
     private void handleReadSummary() {
@@ -428,7 +516,7 @@ public class StudentStaffPortalApp extends Application {
             setStatus("No user is currently logged in.");
             return;
         }
-        String username = currentUser.getUsername();
+        String username = currentUser.username();
         currentUser = null;
         currentUserLabel.setText("Current user: (none)");
         root.setCenter(authPage);
@@ -447,7 +535,7 @@ public class StudentStaffPortalApp extends Application {
             return;
         }
 
-        String confirmationDetails = portalService.buildBorrowConfirmation(currentUser.getUsername(), bookId);
+        String confirmationDetails = portalService.buildBorrowConfirmation(currentUser.username(), bookId);
         Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
         confirmation.setTitle("Confirm Borrow");
         confirmation.setHeaderText("Borrow request for " + bookId.toUpperCase());
@@ -459,7 +547,7 @@ public class StudentStaffPortalApp extends Application {
         }
 
         StudentStaffPortalService.OperationResult result =
-                portalService.borrowBook(currentUser.getUsername(), bookId);
+                portalService.borrowBook(currentUser.username(), bookId);
         setStatus(result.message());
         if (result.success()) {
             refreshBooks();
@@ -480,7 +568,7 @@ public class StudentStaffPortalApp extends Application {
         }
 
         StudentStaffPortalService.OperationResult result =
-                portalService.returnBook(currentUser.getUsername(), bookId);
+                portalService.returnBook(currentUser.username(), bookId);
         setStatus(result.message());
         if (result.success()) {
             refreshBooks();

@@ -7,16 +7,27 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
+import project.shared.SharedAuthFacade;
+import project.task1.repo.StudentStaffRepository;
 import project.task2.service.AuthorPortalService;
 import project.task2.model.AuthorAccount;
+import project.task2.repo.AuthorRepository;
+import project.task3.repo.LibrarianRepository;
 
 public class AuthorLoginFX extends Application {
     private AuthorPortalService authorService;
+    private SharedAuthFacade authFacade;
     private Stage primaryStage;
 
     @Override
     public void start(Stage primaryStage) {
-        this.authorService = new AuthorPortalService();
+        AuthorRepository authorRepository = new AuthorRepository();
+        this.authorService = new AuthorPortalService(authorRepository);
+        this.authFacade = new SharedAuthFacade(
+                new StudentStaffRepository(),
+                authorRepository,
+                new LibrarianRepository()
+        );
         this.primaryStage = primaryStage;
         showLoginScreen();
     }
@@ -94,13 +105,18 @@ public class AuthorLoginFX extends Application {
                 return;
             }
 
-            AuthorPortalService.LoginResult result = authorService.login(username, password);
+            SharedAuthFacade.AuthResult result = authFacade.login(username, password, "Author");
             
-            if (result.isSuccess()) {
-                showMessage(messageLabel, "Login successful!", "status-approved");
-                openDashboard(result.getAuthor());
+            if (result.success()) {
+                showMessage(messageLabel, result.message(), "status-approved");
+                AuthorAccount author = authorService.getAuthorByUsername(username);
+                if (author == null) {
+                    showMessage(messageLabel, "Login failed: unable to resolve author profile.", "status-rejected");
+                    return;
+                }
+                openDashboard(author);
             } else {
-                showMessage(messageLabel,result.getMessage(), "status-rejected");
+                showMessage(messageLabel, result.message(), "status-rejected");
             }
         });
 

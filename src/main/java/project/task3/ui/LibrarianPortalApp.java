@@ -11,7 +11,10 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
+import project.shared.SharedAuthFacade;
+import project.task1.repo.StudentStaffRepository;
 import project.task2.model.BookSubmission;
+import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
 import project.task1.repo.InMemoryBookRepository;
@@ -24,11 +27,14 @@ import java.util.Optional;
 
 public class LibrarianPortalApp extends Application {
     private final LibrarianPortalService portalService;
+    private final LibrarianRepository librarianRepository;
+    private final SharedAuthFacade authFacade;
 
     private LibrarianAccount currentUser;
 
     private Stage stage;
     private Scene loginRegisterScene;
+    private Scene registerScene;
     private Scene acceptRejectScene;
     private HBox statusBar;
 
@@ -50,36 +56,31 @@ public class LibrarianPortalApp extends Application {
     private TextField registerUsernameField;
     private TextField registerFullNameField;
     private PasswordField registerPasswordField;
+    private PasswordField registerConfirmPasswordField;
     private TextField registerStaffIDField;
 
     private TextField loginUsernameField;
     private PasswordField loginPasswordField;
 
     public LibrarianPortalApp() {
+        librarianRepository = new LibrarianRepository();
         portalService = new LibrarianPortalService(
-                new LibrarianRepository(),
+                librarianRepository,
                 new InMemoryBookRepository(),
                 new SubmissionRepository()
+        );
+        authFacade = new SharedAuthFacade(
+                new StudentStaffRepository(),
+                new AuthorRepository(),
+                librarianRepository
         );
     }
 
     @Override
     public void start(Stage stage) {
-        /*
-        BorderPane root = new BorderPane();
-        root.getStyleClass().add("root-pane");
-        root.setTop(buildHeader());
-        root.setCenter(buildBookCenterPanel());
-        root.setBottom(buildStatusBar());
-
-        Scene scene = new Scene(root, 1060, 700);
-        scene.getStylesheets().add(
-                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
-        refreshSubmissions();
-        );*/
-
         statusBar = buildStatusBar();
         loginRegisterScene = buildLoginRegisterScene();
+        registerScene = buildRegisterScene();
         acceptRejectScene = buildAcceptRejectScene();
 
         stage.setTitle("Task 3 - Librarian Portal");
@@ -95,10 +96,10 @@ public class LibrarianPortalApp extends Application {
     private Scene buildLoginRegisterScene() {
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
-        root.setTop(buildLoginRegisterHeader());
+        root.setCenter(buildLoginHeader());
         root.setBottom(statusBar);
 
-        Scene scene = new Scene(root, 1060, 700);
+        Scene scene = new Scene(root, 900, 600);
         scene.getStylesheets().add(
                 getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
         );
@@ -106,19 +107,42 @@ public class LibrarianPortalApp extends Application {
         return scene;
     }
 
-    private VBox buildLoginRegisterHeader() {
-        VBox wrapper = new VBox(14);
-        wrapper.setPadding(new Insets(18, 18, 8, 18));
+    private Scene buildRegisterScene() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setCenter(buildRegisterHeader());
+        root.setBottom(statusBar);
 
-        Label title = new Label("Librarian Portal");
+        Scene scene = new Scene(root, 1060, 700);
+        scene.getStylesheets().add(
+                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
+        );
+        return scene;
+    }
+
+    private VBox buildLoginHeader() {
+        VBox wrapper = new VBox(20);
+        wrapper.setPadding(new Insets(50));
+        wrapper.setAlignment(Pos.CENTER);
+
+        Label title = new Label("🛡 Librarian Portal");
         title.getStyleClass().add("page-title");
-        Label subtitle = new Label("Task 3 Register, login");
+        Label subtitle = new Label("Sign in with your librarian account.");
         subtitle.getStyleClass().add("page-subtitle");
 
-        HBox cards = new HBox(16, buildRegisterCard(), buildLoginCard());
-        cards.setAlignment(Pos.TOP_LEFT);
+        wrapper.getChildren().addAll(title, subtitle, buildLoginCard());
+        return wrapper;
+    }
 
-        wrapper.getChildren().addAll(title, subtitle, cards);
+    private VBox buildRegisterHeader() {
+        VBox wrapper = new VBox(20);
+        wrapper.setPadding(new Insets(30));
+        wrapper.setAlignment(Pos.TOP_CENTER);
+        Label title = new Label("📝 Librarian Registration");
+        title.getStyleClass().add("page-title");
+        Label subtitle = new Label("Create a librarian account.");
+        subtitle.getStyleClass().add("page-subtitle");
+        wrapper.getChildren().addAll(title, subtitle, buildRegisterCard());
         return wrapper;
     }
 
@@ -156,33 +180,13 @@ public class LibrarianPortalApp extends Application {
         return wrapper;
     }
 
-
-    /*
-    private VBox buildHeader() {
-        VBox wrapper = new VBox(14);
-        wrapper.setPadding(new Insets(18, 18, 8, 18));
-
-        Label title = new Label("Librarian Portal");
-        title.getStyleClass().add("page-title");
-        Label subtitle = new Label("Task 3 light UI - Register, login, browse pending book submissions, and respond to them.");
-        subtitle.getStyleClass().add("page-subtitle");
-        currentUserLabel = new Label("Current user: (none)");
-        currentUserLabel.getStyleClass().add("current-user");
-
-        HBox cards = new HBox(16, buildRegisterCard(), buildLoginCard(), buildApproveRejectCard());
-        cards.setAlignment(Pos.TOP_LEFT);
-
-        wrapper.getChildren().addAll(title, subtitle, currentUserLabel, cards);
-        return wrapper;
-    }
-    */
-
     private VBox buildRegisterCard() {
-        VBox card = new VBox(10);
+        VBox card = new VBox(20);
         card.getStyleClass().add("card");
-        card.setPrefWidth(330);
+        card.setMaxWidth(500);
+        card.setPadding(new Insets(30));
 
-        Label heading = new Label("Register");
+        Label heading = new Label("Create Account");
         heading.getStyleClass().add("card-title");
 
         GridPane grid = new GridPane();
@@ -190,9 +194,15 @@ public class LibrarianPortalApp extends Application {
         grid.setVgap(8);
 
         registerUsernameField = new TextField();
+        registerUsernameField.setPromptText("Choose username");
         registerFullNameField = new TextField();
+        registerFullNameField.setPromptText("Enter full name");
         registerPasswordField = new PasswordField();
+        registerPasswordField.setPromptText("Create password");
+        registerConfirmPasswordField = new PasswordField();
+        registerConfirmPasswordField.setPromptText("Re-enter password");
         registerStaffIDField = new TextField();
+        registerStaffIDField.setPromptText("Employee ID (optional)");
 
         grid.add(new Label("Username"), 0, 0);
         grid.add(registerUsernameField, 1, 0);
@@ -200,44 +210,88 @@ public class LibrarianPortalApp extends Application {
         grid.add(registerFullNameField, 1, 1);
         grid.add(new Label("Password"), 0, 2);
         grid.add(registerPasswordField, 1, 2);
-        grid.add(new Label("Staff ID"), 0, 3);
-        grid.add(registerStaffIDField, 1, 3);
+        grid.add(new Label("Confirm password"), 0, 3);
+        grid.add(registerConfirmPasswordField, 1, 3);
+        grid.add(new Label("Staff ID"), 0, 4);
+        grid.add(registerStaffIDField, 1, 4);
+
+        VBox reqBox = new VBox(4);
+        reqBox.setPadding(new Insets(10));
+        reqBox.setStyle("-fx-background-color: #f8fafc; -fx-background-radius: 8px;");
+        Label reqTitle = new Label("Password Requirements:");
+        reqTitle.setStyle("-fx-font-weight: bold;");
+        Label req1 = new Label("• At least 8 characters long");
+        Label req2 = new Label("• At least one letter");
+        Label req3 = new Label("• At least one number");
+        Label req4 = new Label("• At least one uppercase letter");
+        req1.getStyleClass().add("muted");
+        req2.getStyleClass().add("muted");
+        req3.getStyleClass().add("muted");
+        req4.getStyleClass().add("muted");
+        reqBox.getChildren().addAll(reqTitle, req1, req2, req3, req4);
 
         Button registerBtn = new Button("Create Account");
         registerBtn.getStyleClass().add("primary-btn");
         registerBtn.setOnAction(event -> handleRegister());
+        registerBtn.setPrefWidth(180);
 
-        card.getChildren().addAll(heading, grid, registerBtn);
+        Button backBtn = new Button("Back to Login");
+        backBtn.getStyleClass().add("secondary-btn");
+        backBtn.setOnAction(event -> stage.setScene(loginRegisterScene));
+        backBtn.setPrefWidth(180);
+
+        HBox actions = new HBox(10, registerBtn, backBtn);
+        actions.setAlignment(Pos.CENTER);
+
+        card.getChildren().addAll(heading, grid, reqBox, actions);
         return card;
     }
 
     private VBox buildLoginCard() {
-        VBox card = new VBox(10);
+        VBox card = new VBox(20);
         card.getStyleClass().add("card");
-        card.setPrefWidth(290);
+        card.setMaxWidth(400);
+        card.setPadding(new Insets(30));
 
-        Label heading = new Label("Login");
+        Label heading = new Label("Sign In");
         heading.getStyleClass().add("card-title");
+        heading.setAlignment(Pos.CENTER);
+        heading.setMaxWidth(Double.MAX_VALUE);
 
-        GridPane grid = new GridPane();
-        grid.setHgap(8);
-        grid.setVgap(8);
+        VBox usernameBox = new VBox(5);
+        Label usernameLabel = new Label("Username");
+        usernameLabel.getStyleClass().add("muted");
 
         loginUsernameField = new TextField();
+        loginUsernameField.setPromptText("Enter username");
+        loginUsernameField.getStyleClass().add("text-field");
+
+        usernameBox.getChildren().addAll(usernameLabel, loginUsernameField);
+
+        VBox passwordBox = new VBox(5);
+        Label passwordLabel = new Label("Password");
+        passwordLabel.getStyleClass().add("muted");
         loginPasswordField = new PasswordField();
+        loginPasswordField.setPromptText("Enter password");
+        loginPasswordField.getStyleClass().add("password-field");
 
-        grid.add(new Label("Username"), 0, 0);
-        grid.add(loginUsernameField, 1, 0);
-        grid.add(new Label("Password"), 0, 1);
-        grid.add(loginPasswordField, 1, 1);
+        passwordBox.getChildren().addAll(passwordLabel, loginPasswordField);
 
-        HBox actions = new HBox(8);
-        Button loginBtn = new Button("Login");
+        HBox actions = new HBox(10);
+        Button loginBtn = new Button("Sign In");
         loginBtn.getStyleClass().add("primary-btn");
         loginBtn.setOnAction(event -> handleLogin());
+        loginBtn.setPrefWidth(150);
 
-        actions.getChildren().addAll(loginBtn);
-        card.getChildren().addAll(heading, grid, actions);
+        Button registerBtn = new Button("Register");
+        registerBtn.getStyleClass().add("secondary-btn");
+        registerBtn.setOnAction(event -> stage.setScene(registerScene));
+        registerBtn.setPrefWidth(150);
+
+        actions.setSpacing(15);
+        actions.setAlignment(Pos.CENTER);
+        actions.getChildren().addAll(loginBtn, registerBtn);
+        card.getChildren().addAll(heading, usernameBox, passwordBox, actions);
         return card;
     }
 
@@ -371,34 +425,49 @@ public class LibrarianPortalApp extends Application {
     }
 
     private void handleRegister() {
-        String username = registerUsernameField.getText();
-        String fullName = registerFullNameField.getText();
-        String password = registerPasswordField.getText();
+        String username = registerUsernameField.getText() == null ? "" : registerUsernameField.getText().trim();
+        String fullName = registerFullNameField.getText() == null ? "" : registerFullNameField.getText().trim();
+        String password = registerPasswordField.getText() == null ? "" : registerPasswordField.getText();
+        String confirmPassword = registerConfirmPasswordField.getText() == null ? "" : registerConfirmPasswordField.getText();
         String eId = registerStaffIDField.getText();
 
-        LibrarianPortalService.OperationResult result =
-                portalService.registerLibrarian(username, fullName, password, eId);
+        if (username.isEmpty() || fullName.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()) {
+            setStatus("Registration failed: username, full name, password, and confirm password are required.");
+            return;
+        }
+        if (!password.equals(confirmPassword)) {
+            setStatus("Registration failed: passwords do not match.");
+            return;
+        }
+
+        SharedAuthFacade.AuthResult result =
+                authFacade.register(username, fullName, password, confirmPassword, "Librarian", null, eId);
         setStatus(result.message());
 
         if (result.success()) {
             registerUsernameField.clear();
             registerFullNameField.clear();
             registerPasswordField.clear();
+            registerConfirmPasswordField.clear();
             registerStaffIDField.clear();
+            stage.setScene(loginRegisterScene);
         }
     }
 
     private void handleLogin() {
-        LibrarianPortalService.LoginResult result =
-                portalService.login(loginUsernameField.getText(), loginPasswordField.getText());
+        SharedAuthFacade.AuthResult result =
+                authFacade.login(loginUsernameField.getText(), loginPasswordField.getText(), "Librarian");
         setStatus(result.message());
         if (result.success()) {
-            currentUser = result.user();
+            currentUser = librarianRepository.findByUsername(loginUsernameField.getText().trim()).orElse(null);
+            if (currentUser == null) {
+                setStatus("Login failed: unable to resolve librarian profile.");
+                return;
+            }
             currentUserLabel.setText("Current user: " + currentUser.getUsername());
             loginPasswordField.clear();
+            stage.setScene(acceptRejectScene);
         }
-
-        stage.setScene(acceptRejectScene);
     }
 
     private void handleLogout() {

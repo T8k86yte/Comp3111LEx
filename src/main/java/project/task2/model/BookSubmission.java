@@ -60,6 +60,7 @@ public class BookSubmission {
     public String getAuthorUsername() { return authorUsername; }
     public String getAuthorFullName() { return authorFullName; }
     public String getGenre() { return genre; }
+    public String getGenresAsString() { return genre; }
     public String getDescription() { return description; }
     public String getFilePath() { return filePath; }
     public LocalDateTime getSubmissionDate() { return submissionDate; }
@@ -117,7 +118,8 @@ public class BookSubmission {
 
     // Parse from file string
     public static BookSubmission fromString(String data) {
-        String[] parts = data.split("\\|");
+        // Keep trailing empty columns (e.g., pending records with empty review fields).
+        String[] parts = data.split("\\|", -1);
         if (parts.length >= 12) {
             DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 

@@ -1,9 +1,10 @@
 package project.task3.service;
 
-import project.task1.model.Book;
 import project.task1.repo.BookRepository;
-import project.task1.security.PasswordSecurity;
+import project.task1.repo.StudentStaffRepository;
+import project.shared.SharedAuthFacade;
 import project.task2.model.BookSubmission;
+import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
 import project.task3.repo.LibrarianRepository;
@@ -16,89 +17,45 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class LibrarianPortalService {
-    private static final int MIN_PASSWORD_LENGTH = 8;
-
     private final LibrarianRepository librarianRepository;
+    private final SharedAuthFacade sharedAuthFacade;
     private final BookRepository bookRepository;
     private final SubmissionRepository bookSubmissionRepository;
 
     public LibrarianPortalService(LibrarianRepository librarianRepository, BookRepository bookRepository, SubmissionRepository bookSubmissionRepository) {
         this.librarianRepository = librarianRepository;
+        this.sharedAuthFacade = new SharedAuthFacade(new StudentStaffRepository(), new AuthorRepository(), librarianRepository);
         this.bookRepository = bookRepository;
         this.bookSubmissionRepository = bookSubmissionRepository;
-
-        bookSubmissionRepository.save(new BookSubmission(
-                "Test1",
-                "TestFullName1",
-                "TestUsername1",
-                "TestSummary1",
-                "TestGenre1",
-                "TestFilePath1"
-                )
-        );
-        bookSubmissionRepository.save(new BookSubmission(
-                "Test2",
-                "TestFullName2",
-                "TestUsername2",
-                "TestSummary2",
-                "TestGenre2",
-                "TestFilePath2"
-                )
-        );
     }
 
     public LibrarianPortalService.OperationResult registerLibrarian(String username, String fullname, String rawPassword, String employeeIDtext) {
-        if (username == null || username.isEmpty()) {
-            return OperationResult.failure("Registration failed: username is required.");
-        }
-        if (fullname == null || fullname.isEmpty()) {
-            return OperationResult.failure("Registration failed: full name is required.");
-        }
-        if (rawPassword == null || rawPassword.length() < MIN_PASSWORD_LENGTH) {
-            return OperationResult.failure("Registration failed: password must be at least " + MIN_PASSWORD_LENGTH + " characters.");
-        }
-        if (!rawPassword.matches(".*[A-Za-z].*") || !rawPassword.matches(".*\\d.*")) {
-            return OperationResult.failure("Registration failed: password must include at least one letter and one number.");
-        }
-        if (librarianRepository.existsByUsername(username)) {
-            return OperationResult.failure("Registration failed: username already exists.");
-        }
-        if (employeeIDtext == null || employeeIDtext.isEmpty()) {
-            return OperationResult.failure("Registration failed: employee ID is required.");
-        }
-        int ID = Integer.parseInt(employeeIDtext);
-
-        // Credentials are never stored as plain text; only salt + hash are persisted.
-        String saltBase64 = PasswordSecurity.generateSaltBase64();
-        String hashBase64 = PasswordSecurity.hashPasswordBase64(rawPassword, saltBase64);
-        LibrarianAccount userAccount = new LibrarianAccount(
+        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.register(
                 username,
                 fullname,
-                saltBase64,
-                hashBase64,
-                ID
+                rawPassword,
+                null,
+                "Librarian",
+                null,
+                employeeIDtext
         );
-        librarianRepository.save(userAccount);
-        return OperationResult.success("Registration successful for " + username + ".");
+        if (!authResult.success()) {
+            return OperationResult.failure(authResult.message());
+        }
+        return OperationResult.success(authResult.message());
     }
 
     public LoginResult login(String username, String rawPassword) {
-        if (username == null || username.isEmpty() || rawPassword == null || rawPassword.isEmpty()) {
-            return LoginResult.failure("Login failed: username and password are required.");
+        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.login(username, rawPassword, "Librarian");
+        if (!authResult.success()) {
+            return LoginResult.failure(authResult.message());
         }
-
-        Optional<LibrarianAccount> userOpt = librarianRepository.findByUsername(username);
-        if (userOpt.isEmpty()) {
+        LibrarianAccount user = librarianRepository.findByUsername(authResult.principal().username()).orElse(null);
+        if (user == null) {
             return LoginResult.failure("Login failed: invalid username or password.");
         }
 
-        LibrarianAccount user = userOpt.get();
-        boolean matched = PasswordSecurity.verifyPassword(rawPassword, user.getPasswordSaltBase64(), user.getPasswordHashBase64());
-        if (!matched) {
-            return LoginResult.failure("Login failed: invalid username or password.");
-        }
-
-        return LoginResult.success("Login successful. Welcome, " + user.getFullName() + ".", user);
+        return LoginResult.success(authResult.message(), user);
     }
 
     private static boolean filterBookSubmission(BookSubmission sub,
