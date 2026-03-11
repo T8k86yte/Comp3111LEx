@@ -25,11 +25,16 @@ public class SubmissionRepository {
         }
     }
 
-    private synchronized void loadFromFile() {
+    // Public method to force refresh from file
+    public void refreshFromFile() {
+        loadFromFile();
+    }
+
+    private void loadFromFile() {
+        submissionsById.clear(); // Clear existing data
         try {
             Path filePath = Paths.get(SUBMISSIONS_FILE);
             if (Files.exists(filePath)) {
-                submissionsById.clear();
                 List<String> lines = Files.readAllLines(filePath);
                 for (String line : lines) {
                     if (!line.trim().isEmpty()) {
@@ -46,7 +51,7 @@ public class SubmissionRepository {
         }
     }
 
-    private synchronized void saveToFile() {
+    private void saveToFile() {
         try {
             List<String> lines = new ArrayList<>();
             for (BookSubmission submission : submissionsById.values()) {
@@ -76,35 +81,34 @@ public class SubmissionRepository {
 
     // Find by ID
     public Optional<BookSubmission> findById(String submissionId) {
-        loadFromFile();
         return Optional.ofNullable(submissionsById.get(submissionId));
     }
 
-    // Find all submissions by an author
+    // Find all submissions by an author - REFRESH before searching
     public List<BookSubmission> findByAuthor(String authorUsername) {
-        loadFromFile();
+        refreshFromFile(); // Always get fresh data from file
         return submissionsById.values().stream()
                 .filter(sub -> sub.getAuthorUsername().equals(authorUsername))
                 .collect(Collectors.toList());
     }
 
-    // Find all pending submissions (for librarian)
+    // Find all pending submissions (for librarian) - REFRESH before searching
     public List<BookSubmission> findPendingSubmissions() {
-        loadFromFile();
+        refreshFromFile(); // Always get fresh data from file
         return submissionsById.values().stream()
                 .filter(BookSubmission::isPending)
                 .collect(Collectors.toList());
     }
 
-    // Find all submissions
+    // Find all submissions - REFRESH before searching
     public List<BookSubmission> findAll() {
-        loadFromFile();
+        refreshFromFile(); // Always get fresh data from file
         return new ArrayList<>(submissionsById.values());
     }
 
-    // Get count
+    // Get count - REFRESH before counting
     public int getCount() {
-        loadFromFile();
+        refreshFromFile(); // Always get fresh data from file
         return submissionsById.size();
     }
 }

@@ -5,14 +5,21 @@ import project.task2.model.AuthorAccount;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class AuthorRepository {
     private static final String AUTHORS_FILE = "data/authors.txt";
-    private final Map<String, AuthorAccount> authorsByUsername = new HashMap<>();
+    private final Map<String, AuthorAccount> authorsByUsername = new ConcurrentHashMap<>();
 
     public AuthorRepository() {
+        System.out.println("\n📂 ===== AUTHOR REPOSITORY CREATED =====");
         createDataDirectory();
-        loadFromFile();  // Load existing authors when repository is created
+        loadFromFile();
+        System.out.println("📊 Authors in memory after load: " + authorsByUsername.size());
+        if (authorsByUsername.size() > 0) {
+            System.out.println("📋 Authors: " + authorsByUsername.keySet());
+        }
+        System.out.println("========================================\n");
     }
 
     private void createDataDirectory() {
@@ -20,23 +27,23 @@ public class AuthorRepository {
             Path dataDir = Paths.get("data");
             if (!Files.exists(dataDir)) {
                 Files.createDirectories(dataDir);
-                System.out.println("Created data directory");
+                System.out.println("✅ Created data directory");
             }
         } catch (IOException e) {
-            System.err.println("Error creating data directory: " + e.getMessage());
+            System.err.println("❌ Error creating data directory: " + e.getMessage());
         }
     }
 
-    // add the new user data to repository
     public void save(AuthorAccount author) {
-        // Add to in-memory map
+        System.out.println("\n💾 ===== SAVING AUTHOR =====");
+        System.out.println("Saving: " + author.getUsername());
+        System.out.println("Before save - Authors in memory: " + authorsByUsername.keySet());
+        
         authorsByUsername.put(author.getUsername(), author);
-        // Save ALL authors to file
+        
+        System.out.println("After save - Authors in memory: " + authorsByUsername.keySet());
         saveAllToFile();
-        System.out.println("Author saved: " + author.getUsername());
     }
-
-
 
     private void saveAllToFile() {
         try {
@@ -46,11 +53,16 @@ public class AuthorRepository {
             }
             
             Path filePath = Paths.get(AUTHORS_FILE);
-            Files.write(filePath, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            System.out.println("📝 Writing " + lines.size() + " authors to file:");
+            for (String line : lines) {
+                System.out.println("   " + line);
+            }
             
-            System.out.println("Saved " + lines.size() + " authors to " + AUTHORS_FILE);
+            Files.write(filePath, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            System.out.println("✅ Saved " + lines.size() + " authors to file");
+            System.out.println("==========================\n");
         } catch (IOException e) {
-            System.err.println("Error saving authors to file: " + e.getMessage());
+            System.err.println("❌ Error saving authors: " + e.getMessage());
         }
     }
 
@@ -59,26 +71,24 @@ public class AuthorRepository {
             Path filePath = Paths.get(AUTHORS_FILE);
             if (Files.exists(filePath)) {
                 List<String> lines = Files.readAllLines(filePath);
-                int loadedCount = 0;
+                System.out.println("📖 Reading from file, found " + lines.size() + " lines");
                 
                 for (String line : lines) {
                     if (!line.trim().isEmpty()) {
-                        // Parse the line back into an AuthorAccount object
                         AuthorAccount author = AuthorAccount.fromString(line);
                         if (author != null) {
-                            // IMPORTANT: Add to the map!
                             authorsByUsername.put(author.getUsername(), author);
-                            loadedCount++;
-                            System.out.println("Loaded author: " + author.getUsername());
+                            System.out.println("   ✅ Added to map: " + author.getUsername());
+                        } else {
+                            System.out.println("   ❌ Failed to parse line");
                         }
                     }
                 }
-                System.out.println("Loaded " + loadedCount + " authors from " + AUTHORS_FILE);
             } else {
-                System.out.println("No existing authors file found, starting fresh");
+                System.out.println("📁 No existing file found");
             }
         } catch (IOException e) {
-            System.err.println("Error loading authors from file: " + e.getMessage());
+            System.err.println("❌ Error loading authors: " + e.getMessage());
         }
     }
 
@@ -91,18 +101,17 @@ public class AuthorRepository {
     }
 
     public Optional<AuthorAccount> findByUsername(String username) {
-        return Optional.ofNullable(authorsByUsername.get(username));
+        System.out.println("🔍 Looking for: " + username);
+        AuthorAccount author = authorsByUsername.get(username);
+        if (author != null) {
+            System.out.println("   ✅ Found: " + author.getUsername());
+        } else {
+            System.out.println("   ❌ Not found");
+        }
+        return Optional.ofNullable(author);
     }
 
     public int getCount() {
         return authorsByUsername.size();
-    }
-
-    // For debugging - show all authors in memory
-    public void printAllAuthors() {
-        System.out.println("\n📚 Authors in memory (" + authorsByUsername.size() + "):");
-        for (AuthorAccount author : authorsByUsername.values()) {
-            System.out.println("  • " + author.getUsername() + " | " + author.getFullName());
-        }
     }
 }

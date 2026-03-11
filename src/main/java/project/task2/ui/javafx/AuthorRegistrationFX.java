@@ -1,34 +1,35 @@
 package project.task2.ui.javafx;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
-import project.shared.SharedAuthFacade;
-import project.task1.repo.StudentStaffRepository;
-import project.task2.repo.AuthorRepository;
+import javafx.stage.WindowEvent;
 import project.task2.service.AuthorPortalService;
-import project.task3.repo.LibrarianRepository;
 
 public class AuthorRegistrationFX extends Application {
     private AuthorPortalService authorService;
-    private SharedAuthFacade authFacade;
     private Stage primaryStage;
 
     @Override
     public void start(Stage primaryStage) {
-        AuthorRepository authorRepository = new AuthorRepository();
-        this.authorService = new AuthorPortalService(authorRepository);
-        this.authFacade = new SharedAuthFacade(
-                new StudentStaffRepository(),
-                authorRepository,
-                new LibrarianRepository()
-        );
+        this.authorService = new AuthorPortalService();
         this.primaryStage = primaryStage;
+        
+        // Handle window close event
+        primaryStage.setOnCloseRequest(this::handleWindowClose);
+        
         showRegistrationScreen();
+    }
+
+    private void handleWindowClose(WindowEvent event) {
+        System.out.println("🚪 Closing Author Registration...");
+        Platform.exit();
+        System.exit(0);
     }
 
     private void showRegistrationScreen() {
@@ -54,23 +55,18 @@ public class AuthorRegistrationFX extends Application {
         regCard.setMaxWidth(500);
         regCard.setPadding(new Insets(30));
 
-        // Username field
         VBox usernameBox = createInputField("Username", "Choose a username (3-20 chars, letters/numbers/underscore)");
         TextField usernameField = (TextField) usernameBox.getChildren().get(1);
 
-        // Full name field
         VBox fullNameBox = createInputField("Full Name", "Enter your full name");
         TextField fullNameField = (TextField) fullNameBox.getChildren().get(1);
 
-        // Password field
         VBox passwordBox = createPasswordField("Password", "Create a strong password");
         PasswordField passwordField = (PasswordField) passwordBox.getChildren().get(1);
 
-        // Confirm password field
         VBox confirmBox = createPasswordField("Confirm Password", "Re-enter your password");
         PasswordField confirmField = (PasswordField) confirmBox.getChildren().get(1);
 
-        // Bio field
         VBox bioBox = new VBox(5);
         Label bioLabel = new Label("Bio (Optional)");
         bioLabel.getStyleClass().add("muted");
@@ -80,7 +76,6 @@ public class AuthorRegistrationFX extends Application {
         bioArea.getStyleClass().add("text-area");
         bioBox.getChildren().addAll(bioLabel, bioArea);
 
-        // Password requirements
         VBox reqBox = new VBox(5);
         reqBox.setPadding(new Insets(10));
         reqBox.setStyle("-fx-background-color: #f8fafc; -fx-background-radius: 8px;");
@@ -100,7 +95,6 @@ public class AuthorRegistrationFX extends Application {
         
         reqBox.getChildren().addAll(reqTitle, req1, req2, req3, req4);
 
-        // Buttons
         HBox buttonBox = new HBox(15);
         buttonBox.setAlignment(Pos.CENTER);
 
@@ -124,7 +118,6 @@ public class AuthorRegistrationFX extends Application {
         centerContent.getChildren().addAll(titleLabel, subtitleLabel, regCard);
         root.setCenter(centerContent);
 
-        // Register button action
         registerBtn.setOnAction(e -> {
             String username = usernameField.getText().trim();
             String fullName = fullNameField.getText().trim();
@@ -132,43 +125,22 @@ public class AuthorRegistrationFX extends Application {
             String confirm = confirmField.getText();
             String bio = bioArea.getText().trim();
 
-            if (username.isEmpty() || fullName.isEmpty() || password.isEmpty() || confirm.isEmpty()) {
-                showMessage(
-                    messageLabel,
-                    "Registration failed: username, full name, password, and confirm password are required.",
-                    "status-rejected"
-                );
-                return;
-            }
-            if (!password.equals(confirm)) {
-                showMessage(messageLabel, "Registration failed: passwords do not match.", "status-rejected");
-                return;
-            }
-
-            SharedAuthFacade.AuthResult result = authFacade.register(
-                username,
-                fullName,
-                password,
-                confirm,
-                "Author",
-                bio,
-                null
+            AuthorPortalService.RegistrationResult result = authorService.registerAuthor(
+                username, fullName, password, confirm, bio
             );
 
-            if (result.success()) {
-                showMessage(messageLabel, result.message(), "status-approved");
-                // Clear fields
+            if (result.isSuccess()) {
+                showMessage(messageLabel, result.getMessage(), "status-approved");
                 usernameField.clear();
                 fullNameField.clear();
                 passwordField.clear();
                 confirmField.clear();
                 bioArea.clear();
             } else {
-                showMessage(messageLabel, result.message(), "status-rejected");
+                showMessage(messageLabel, result.getMessage(), "status-rejected");
             }
         });
 
-        // Back button action
         backBtn.setOnAction(e -> {
             AuthorLoginFX loginUI = new AuthorLoginFX();
             try {
@@ -213,6 +185,11 @@ public class AuthorRegistrationFX extends Application {
         label.setText(message);
         label.getStyleClass().setAll("status", styleClass);
         label.setVisible(true);
+    }
+
+    @Override
+    public void stop() {
+        System.out.println("🛑 Author Registration stopped");
     }
 
     public static void main(String[] args) {

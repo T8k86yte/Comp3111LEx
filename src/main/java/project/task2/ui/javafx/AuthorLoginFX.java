@@ -1,35 +1,36 @@
 package project.task2.ui.javafx;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
-import project.shared.SharedAuthFacade;
-import project.task1.repo.StudentStaffRepository;
+import javafx.stage.WindowEvent;
 import project.task2.service.AuthorPortalService;
 import project.task2.model.AuthorAccount;
-import project.task2.repo.AuthorRepository;
-import project.task3.repo.LibrarianRepository;
 
 public class AuthorLoginFX extends Application {
     private AuthorPortalService authorService;
-    private SharedAuthFacade authFacade;
     private Stage primaryStage;
 
     @Override
     public void start(Stage primaryStage) {
-        AuthorRepository authorRepository = new AuthorRepository();
-        this.authorService = new AuthorPortalService(authorRepository);
-        this.authFacade = new SharedAuthFacade(
-                new StudentStaffRepository(),
-                authorRepository,
-                new LibrarianRepository()
-        );
+        this.authorService = new AuthorPortalService();
         this.primaryStage = primaryStage;
+        
+        // Handle window close event
+        primaryStage.setOnCloseRequest(this::handleWindowClose);
+        
         showLoginScreen();
+    }
+
+    private void handleWindowClose(WindowEvent event) {
+        System.out.println("🚪 Closing Author Login...");
+        Platform.exit();
+        System.exit(0);
     }
 
     private void showLoginScreen() {
@@ -54,7 +55,6 @@ public class AuthorLoginFX extends Application {
         Label cardTitle = new Label("Author Login");
         cardTitle.getStyleClass().add("card-title");
 
-        // Username field
         VBox usernameBox = new VBox(5);
         Label usernameLabel = new Label("Username");
         usernameLabel.getStyleClass().add("muted");
@@ -63,7 +63,6 @@ public class AuthorLoginFX extends Application {
         usernameField.getStyleClass().add("text-field");
         usernameBox.getChildren().addAll(usernameLabel, usernameField);
 
-        // Password field
         VBox passwordBox = new VBox(5);
         Label passwordLabel = new Label("Password");
         passwordLabel.getStyleClass().add("muted");
@@ -72,7 +71,6 @@ public class AuthorLoginFX extends Application {
         passwordField.getStyleClass().add("password-field");
         passwordBox.getChildren().addAll(passwordLabel, passwordField);
 
-        // Buttons
         HBox buttonBox = new HBox(15);
         buttonBox.setAlignment(Pos.CENTER);
 
@@ -86,7 +84,6 @@ public class AuthorLoginFX extends Application {
 
         buttonBox.getChildren().addAll(loginBtn, registerBtn);
 
-        // Message label
         Label messageLabel = new Label();
         messageLabel.setWrapText(true);
         messageLabel.setVisible(false);
@@ -95,7 +92,6 @@ public class AuthorLoginFX extends Application {
         centerContent.getChildren().addAll(titleLabel, subtitleLabel, loginCard);
         root.setCenter(centerContent);
 
-        // Login button action
         loginBtn.setOnAction(e -> {
             String username = usernameField.getText().trim();
             String password = passwordField.getText();
@@ -105,22 +101,16 @@ public class AuthorLoginFX extends Application {
                 return;
             }
 
-            SharedAuthFacade.AuthResult result = authFacade.login(username, password, "Author");
+            AuthorPortalService.LoginResult result = authorService.login(username, password);
             
-            if (result.success()) {
-                showMessage(messageLabel, result.message(), "status-approved");
-                AuthorAccount author = authorService.getAuthorByUsername(username);
-                if (author == null) {
-                    showMessage(messageLabel, "Login failed: unable to resolve author profile.", "status-rejected");
-                    return;
-                }
-                openDashboard(author);
+            if (result.isSuccess()) {
+                showMessage(messageLabel, "Login successful!", "status-approved");
+                openDashboard(result.getAuthor());
             } else {
-                showMessage(messageLabel, result.message(), "status-rejected");
+                showMessage(messageLabel, result.getMessage(), "status-rejected");
             }
         });
 
-        // Register button action
         registerBtn.setOnAction(e -> {
             AuthorRegistrationFX regUI = new AuthorRegistrationFX();
             try {
@@ -153,6 +143,11 @@ public class AuthorLoginFX extends Application {
         label.setText(message);
         label.getStyleClass().setAll("status", styleClass);
         label.setVisible(true);
+    }
+
+    @Override
+    public void stop() {
+        System.out.println("🛑 Author Login stopped");
     }
 
     public static void main(String[] args) {
