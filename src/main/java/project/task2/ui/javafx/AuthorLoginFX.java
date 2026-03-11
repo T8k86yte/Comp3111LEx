@@ -1,12 +1,14 @@
 package project.task2.ui.javafx;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 import project.task2.service.AuthorPortalService;
 import project.task2.model.AuthorAccount;
 
@@ -18,7 +20,17 @@ public class AuthorLoginFX extends Application {
     public void start(Stage primaryStage) {
         this.authorService = new AuthorPortalService();
         this.primaryStage = primaryStage;
+        
+        // Handle window close event
+        primaryStage.setOnCloseRequest(this::handleWindowClose);
+        
         showLoginScreen();
+    }
+
+    private void handleWindowClose(WindowEvent event) {
+        System.out.println("🚪 Closing Author Login...");
+        Platform.exit();
+        System.exit(0);
     }
 
     private void showLoginScreen() {
@@ -43,7 +55,6 @@ public class AuthorLoginFX extends Application {
         Label cardTitle = new Label("Author Login");
         cardTitle.getStyleClass().add("card-title");
 
-        // Username field
         VBox usernameBox = new VBox(5);
         Label usernameLabel = new Label("Username");
         usernameLabel.getStyleClass().add("muted");
@@ -52,7 +63,6 @@ public class AuthorLoginFX extends Application {
         usernameField.getStyleClass().add("text-field");
         usernameBox.getChildren().addAll(usernameLabel, usernameField);
 
-        // Password field
         VBox passwordBox = new VBox(5);
         Label passwordLabel = new Label("Password");
         passwordLabel.getStyleClass().add("muted");
@@ -61,7 +71,6 @@ public class AuthorLoginFX extends Application {
         passwordField.getStyleClass().add("password-field");
         passwordBox.getChildren().addAll(passwordLabel, passwordField);
 
-        // Buttons
         HBox buttonBox = new HBox(15);
         buttonBox.setAlignment(Pos.CENTER);
 
@@ -75,7 +84,6 @@ public class AuthorLoginFX extends Application {
 
         buttonBox.getChildren().addAll(loginBtn, registerBtn);
 
-        // Message label
         Label messageLabel = new Label();
         messageLabel.setWrapText(true);
         messageLabel.setVisible(false);
@@ -84,7 +92,6 @@ public class AuthorLoginFX extends Application {
         centerContent.getChildren().addAll(titleLabel, subtitleLabel, loginCard);
         root.setCenter(centerContent);
 
-        // Login button action
         loginBtn.setOnAction(e -> {
             String username = usernameField.getText().trim();
             String password = passwordField.getText();
@@ -100,11 +107,10 @@ public class AuthorLoginFX extends Application {
                 showMessage(messageLabel, "Login successful!", "status-approved");
                 openDashboard(result.getAuthor());
             } else {
-                showMessage(messageLabel,result.getMessage(), "status-rejected");
+                showMessage(messageLabel, result.getMessage(), "status-rejected");
             }
         });
 
-        // Register button action
         registerBtn.setOnAction(e -> {
             AuthorRegistrationFX regUI = new AuthorRegistrationFX();
             try {
@@ -137,6 +143,11 @@ public class AuthorLoginFX extends Application {
         label.setText(message);
         label.getStyleClass().setAll("status", styleClass);
         label.setVisible(true);
+    }
+
+    @Override
+    public void stop() {
+        System.out.println("🛑 Author Login stopped");
     }
 
     public static void main(String[] args) {

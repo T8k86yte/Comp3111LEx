@@ -14,42 +14,45 @@ public class AuthorAccount extends UserAccount {
         this.bio = bio != null ? bio : "";
     }
 
-    // Author-specific getter
     public String getBio() {
         return bio;
     }
 
-    // Get the password (salt) of the author
     public String getPasswordSalt() {
         return getPasswordSaltBase64();
     }
-    // get the password (hash) of author
+
     public String getPasswordHash() {
         return getPasswordHashBase64();
     }
 
-    // tostring function that collect all user data, for repository usage
     @Override
     public String toString() {
+        // Always include bio, even if empty
         return String.join("|",
             getUsername(),
             getFullName(),
             getPasswordSaltBase64(),
             getPasswordHashBase64(),
             "AUTHOR",
-            bio
+            bio  // This will be empty string if no bio
         );
     }
-    // fromstring function that decode user data from repository
+
     public static AuthorAccount fromString(String data) {
-        String[] parts = data.split("\\|");
+        if (data == null || data.trim().isEmpty()) {
+            return null;
+        }
+        
+        String[] parts = data.split("\\|", -1); // -1 keeps empty trailing fields
+        
         if (parts.length >= 6) {
             return new AuthorAccount(
-                parts[0],  // username
-                parts[1],  // fullName
-                parts[2],  // passwordSaltBase64
-                parts[3],  // passwordHashBase64
-                parts[5]   // bio
+                parts[0].trim(),  // username
+                parts[1].trim(),  // fullName
+                parts[2].trim(),  // passwordSaltBase64
+                parts[3].trim(),  // passwordHashBase64
+                parts[5].trim()   // bio (may be empty)
             );
         }
         return null;
