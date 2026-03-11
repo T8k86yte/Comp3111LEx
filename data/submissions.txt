@@ -1,8 +1,11 @@
 SUB1773121014433|Test2|TestFullName2|TestUsername2|TestSummary2|TestGenre2|TestFilePath2|2026-03-10T13:36:54.4339675|APPROVED||2026-03-10T13:37:29.6346869|L
 SUB1773121184985|Test2|TestFullName2|TestUsername2|TestSummary2|TestGenre2|TestFilePath2|2026-03-10T13:39:44.9856394|REJECTED|TestReason|2026-03-10T13:40:24.2498811|L
 SUB1773121314576|Test1|TestFullName1|TestUsername1|TestSummary1|TestGenre1|TestFilePath1|2026-03-10T13:41:54.5788476|REJECTED||2026-03-10T13:42:08.6802759|L
+SUB1773205697118|Old Man and the Sea|Ernest|Ernest Hemminway|Fiction|Old man and the sea|C:\Users\zyang\Desktop\Lab2Assignment.pdf|2026-03-11T13:08:17.1219606|REJECTED||2026-03-11T13:11:05.2847603|Tony
 SUB1773121014431|Test1|TestFullName1|TestUsername1|TestSummary1|TestGenre1|TestFilePath1|2026-03-10T13:36:54.4328714|APPROVED||2026-03-10T13:37:35.9631182|L
 SUB1773121184983|Test1|TestFullName1|TestUsername1|TestSummary1|TestGenre1|TestFilePath1|2026-03-10T13:39:44.9856394|REJECTED||2026-03-10T13:40:30.4450741|L
 SUB1773108899865|Test1|TestFullName1|TestUsername1|TestSummary1|TestGenre1|TestFilePath1|2026-03-10T10:14:59.8675582|REJECTED||2026-03-10T10:15:35.3688349|L
+SUB1773205825938|Old Man and the Sea|Ernest|Ernest Hemminway|Fiction|fishing story|C:\COMP3211\hw1\comp3211-pa1.pdf|2026-03-11T13:10:25.9385847|APPROVED||2026-03-11T13:11:16.8000987|Tony
 SUB1773108899868|Test2|TestFullName2|TestUsername2|TestSummary2|TestGenre2|TestFilePath2|2026-03-10T10:14:59.8685549|APPROVED||2026-03-10T10:15:40.3764621|L
+SUB1773229201344|To kill the mocking bird|Ernest|Ernest Hemminway|Fiction|jijijijji|C:\Users\zyang\Desktop\Lab2Assignment.pdf|2026-03-11T19:40:01.3459906|PENDING|||
 SUB1773202338086|BaiLuYuan|Dun|Mao Dun|Fiction|Story of teenagers living in the 80's north western village in China|C:\Users\zyang\Desktop\Lab2Assignment.pdf|2026-03-11T12:12:18.0897722|APPROVED||2026-03-11T12:16:21.3440489|Tony
