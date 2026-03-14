@@ -21,16 +21,17 @@ public class AuthorLoginFX extends Application {
         this.authorService = new AuthorPortalService();
         this.primaryStage = primaryStage;
         
-        // Handle window close event
+        // FIX: When X is clicked, only close this window
+        // If this is the last window, the app will exit automatically
         primaryStage.setOnCloseRequest(this::handleWindowClose);
         
         showLoginScreen();
     }
 
     private void handleWindowClose(WindowEvent event) {
-        System.out.println("🚪 Closing Author Login...");
-        Platform.exit();
-        System.exit(0);
+        System.out.println("🚪 Closing Author Login window...");
+        // Let the window close naturally
+        // Platform.exit() is NOT called here
     }
 
     private void showLoginScreen() {
@@ -115,7 +116,7 @@ public class AuthorLoginFX extends Application {
             AuthorRegistrationFX regUI = new AuthorRegistrationFX();
             try {
                 regUI.start(new Stage());
-                primaryStage.close();
+                primaryStage.close(); // Close login window when opening registration
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
@@ -133,7 +134,7 @@ public class AuthorLoginFX extends Application {
         AuthorDashboardFX dashboard = new AuthorDashboardFX(author);
         try {
             dashboard.start(new Stage());
-            primaryStage.close();
+            primaryStage.close(); // Close login window when opening dashboard
         } catch (Exception e) {
             e.printStackTrace();
         }

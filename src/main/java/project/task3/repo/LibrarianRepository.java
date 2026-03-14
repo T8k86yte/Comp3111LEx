@@ -1,5 +1,6 @@
 package project.task3.repo;
 
+import project.task1.model.StudentStaffAccount;
 import project.task3.model.LibrarianAccount;
 
 import java.io.IOException;
@@ -14,7 +15,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class LibrarianRepository {
-    private static final String LIBRARIAN_FILE = "data/librarians.txt";
+    private static final String LIBRARIAN_FILE = "data/studentstaffs.txt";
     private final Map<String, LibrarianAccount> librarianByUsername = new ConcurrentHashMap<>();
 
     public LibrarianRepository() {
@@ -41,15 +42,13 @@ public class LibrarianRepository {
                     }
                 }
                 System.out.println("Loaded " + librarianByUsername.size() + " librarians from file.");
-            } else {
-                System.out.println("No existing librarian files were found.");
             }
         } catch (IOException e) {
             System.err.println("Error loading librarians: " + e.getMessage());
         }
     }
 
-    private void saveLibrarians() {
+    private void saveStudentStaffs() {
         try {
             Path path = Paths.get(LIBRARIAN_FILE);
             List<String> lines = new ArrayList<>();
@@ -69,7 +68,6 @@ public class LibrarianRepository {
 
     public void save(LibrarianAccount userAccount) {
         librarianByUsername.put(userAccount.getUsername(), userAccount);
-        saveLibrarians();//Save all the librarians to file each time it is updated.
     }
 
     public Optional<LibrarianAccount> findByUsername(String username) {

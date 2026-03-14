@@ -1,5 +1,8 @@
 package project.task2.model;
 
+import project.task1.model.UserAccount;
+import project.task1.model.UserRole;
+
 public class AuthorAccount extends UserAccount {
     private final String bio;
 
@@ -18,41 +21,27 @@ public class AuthorAccount extends UserAccount {
         return bio;
     }
 
-    public String getPasswordSalt() {
-        return getPasswordSaltBase64();
-    }
-
-    public String getPasswordHash() {
-        return getPasswordHashBase64();
-    }
-
     @Override
     public String toString() {
-        // Always include bio, even if empty
         return String.join("|",
             getUsername(),
             getFullName(),
             getPasswordSaltBase64(),
             getPasswordHashBase64(),
             "AUTHOR",
-            bio  // This will be empty string if no bio
+            bio
         );
     }
 
     public static AuthorAccount fromString(String data) {
-        if (data == null || data.trim().isEmpty()) {
-            return null;
-        }
-        
-        String[] parts = data.split("\\|", -1); // -1 keeps empty trailing fields
-        
+        String[] parts = data.split("\\|");
         if (parts.length >= 6) {
             return new AuthorAccount(
-                parts[0].trim(),  // username
-                parts[1].trim(),  // fullName
-                parts[2].trim(),  // passwordSaltBase64
-                parts[3].trim(),  // passwordHashBase64
-                parts[5].trim()   // bio (may be empty)
+                parts[0],
+                parts[1],
+                parts[2],
+                parts[3],
+                parts[5]
             );
         }
         return null;

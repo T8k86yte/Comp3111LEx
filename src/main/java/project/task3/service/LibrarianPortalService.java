@@ -1,130 +1,62 @@
 package project.task3.service;
 
+import project.task1.model.StudentStaffAccount;
 import project.task1.repo.BookRepository;
-import project.task1.repo.StudentStaffRepository;
-import project.shared.SharedAuthFacade;
-import project.task2.model.BookSubmission;
-import project.task2.repo.AuthorRepository;
-import project.task2.repo.SubmissionRepository;
+import project.task1.security.PasswordSecurity;
+import project.task1.service.StudentStaffPortalService;
 import project.task3.model.LibrarianAccount;
 import project.task3.repo.LibrarianRepository;
 
-import java.util.regex.Pattern;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class LibrarianPortalService {
-    private final LibrarianRepository librarianRepository;
-    private final SharedAuthFacade sharedAuthFacade;
-    private final BookRepository bookRepository;
-    private final SubmissionRepository bookSubmissionRepository;
+    private static final int MIN_PASSWORD_LENGTH = 8;
 
-    public LibrarianPortalService(LibrarianRepository librarianRepository, BookRepository bookRepository, SubmissionRepository bookSubmissionRepository) {
+    private final LibrarianRepository librarianRepository;
+    private final BookRepository bookRepository;
+
+    public LibrarianPortalService(LibrarianRepository librarianRepository, BookRepository bookRepository) {
         this.librarianRepository = librarianRepository;
-        this.sharedAuthFacade = new SharedAuthFacade(new StudentStaffRepository(), new AuthorRepository(), librarianRepository);
         this.bookRepository = bookRepository;
-        this.bookSubmissionRepository = bookSubmissionRepository;
     }
 
     public LibrarianPortalService.OperationResult registerLibrarian(String username, String fullname, String rawPassword, String employeeIDtext) {
-        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.register(
+        if (username == null || username.isEmpty()) {
+            return OperationResult.failure("Registration failed: username is required.");
+        }
+        if (fullname == null || fullname.isEmpty()) {
+            return OperationResult.failure("Registration failed: full name is required.");
+        }
+        if (rawPassword == null || rawPassword.length() < MIN_PASSWORD_LENGTH) {
+            return OperationResult.failure("Registration failed: password must be at least " + MIN_PASSWORD_LENGTH + " characters.");
+        }
+        if (!rawPassword.matches(".*[A-Za-z].*") || !rawPassword.matches(".*\\d.*")) {
+            return OperationResult.failure("Registration failed: password must include at least one letter and one number.");
+        }
+        if (librarianRepository.existsByUsername(username)) {
+            return OperationResult.failure("Registration failed: username already exists.");
+        }
+        if (employeeIDtext == null || employeeIDtext.isEmpty()) {
+            return OperationResult.failure("Registration failed: employee ID is required.");
+        }
+        int ID = Integer.parseInt(employeeIDtext);
+
+        // Credentials are never stored as plain text; only salt + hash are persisted.
+        String saltBase64 = PasswordSecurity.generateSaltBase64();
+        String hashBase64 = PasswordSecurity.hashPasswordBase64(rawPassword, saltBase64);
+        LibrarianAccount userAccount = new LibrarianAccount(
                 username,
                 fullname,
-                rawPassword,
-                null,
-                "Librarian",
-                null,
-                employeeIDtext
+                saltBase64,
+                hashBase64,
+                ID
         );
-        if (!authResult.success()) {
-            return OperationResult.failure(authResult.message());
-        }
-        return OperationResult.success(authResult.message());
+        librarianRepository.save(userAccount);
+        return OperationResult.success("Registration successful for " + username + ".");
     }
 
-    public LoginResult login(String username, String rawPassword) {
-        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.login(username, rawPassword, "Librarian");
-        if (!authResult.success()) {
-            return LoginResult.failure(authResult.message());
-        }
-        LibrarianAccount user = librarianRepository.findByUsername(authResult.principal().username()).orElse(null);
-        if (user == null) {
-            return LoginResult.failure("Login failed: invalid username or password.");
-        }
-
-        return LoginResult.success(authResult.message(), user);
-    }
-
-    private static boolean filterBookSubmission(BookSubmission sub,
-                                                Pattern titleFilter,
-                                                Pattern authorUsernameFilter,
-                                                Pattern genreFilter,
-                                                LocalDateTime submissionMin,
-                                                LocalDateTime submissionMax,
-                                                String statusFilter) {
-        if (!titleFilter.matcher(sub.getTitle()).matches()) return false;
-        if (!authorUsernameFilter.matcher(sub.getAuthorUsername()).matches()) return false;
-        if (!genreFilter.matcher(sub.getGenre()).matches()) return false;
-        if (submissionMin != null && sub.getSubmissionDate().isBefore(submissionMin)) return false;
-        if (submissionMax != null && sub.getSubmissionDate().isAfter(submissionMax)) return false;
-        return statusFilter.equals("ALL") || sub.getStatus().equals(statusFilter);
-    }
-
-    public List<BookSubmission> getBookSubmissionScreenData(String titleFilter,
-                                                            String authorUsernameFilter,
-                                                            String genreFilter,
-                                                            LocalDateTime submissionMin,
-                                                            LocalDateTime submissionMax,
-                                                            String statusFilter) {
-        Pattern titleP = Pattern.compile("[\\s\\S]*" + titleFilter + "[\\s\\S]*", Pattern.CASE_INSENSITIVE);
-        Pattern authorUsernameP = Pattern.compile("[\\s\\S]*" + authorUsernameFilter + "[\\s\\S]*", Pattern.CASE_INSENSITIVE);
-        Pattern genreP = Pattern.compile("[\\s\\S]*" + genreFilter + "[\\s\\S]*", Pattern.CASE_INSENSITIVE);
-        return bookSubmissionRepository.findAll()
-                .stream()
-                .filter(s -> filterBookSubmission(s, titleP, authorUsernameP, genreP, submissionMin, submissionMax, statusFilter))
-                .collect(Collectors.toList());
-    }
-    public List<BookSubmission> getBookSubmissionScreenData() {
-        return bookSubmissionRepository.findAll()
-                .stream()
-                .filter(BookSubmission::isPending)
-                .collect(Collectors.toList());
-    }
-
-    public OperationResult validateBookSubmissionId(String subId) {
-        if (bookSubmissionRepository.findById(subId).isEmpty()) return OperationResult.failure("Invalid book submission Id.");
-        else return OperationResult.success("");
-    }
-
-    public OperationResult approveBookSubmission(String subId, LibrarianAccount user) {
-        Optional<BookSubmission> sub = bookSubmissionRepository.findById(subId);
-        if (sub.isEmpty()) return OperationResult.failure("Approve failed: Invalid submission ID.");
-        if (user == null) return OperationResult.failure("Approve failed: No user logged in.");
-
-        BookSubmission s = sub.get();
-        s.approve(user.getUsername());
-        bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), s.getGenre());//Note that description is just an alias of summary for book
-        bookSubmissionRepository.update(s);//Changes should be saved once there are updates
-        return OperationResult.success("Approve successful: \"" + sub.get().getTitle() + "\" is approved and created.");
-    }
-
-    public OperationResult rejectBookSubmission(String subId, LibrarianAccount user, String reason) {
-        Optional<BookSubmission> sub = bookSubmissionRepository.findById(subId);
-        if (sub.isEmpty()) return OperationResult.failure("Approve failed: Invalid submission ID.");
-        if (user == null) return OperationResult.failure("Approve failed: No user logged in.");
-
-        BookSubmission s = sub.get();
-        s.reject(user.getUsername(), reason);
-        bookSubmissionRepository.update(s);
-        return OperationResult.success("Reject successful: \"" + sub.get().getTitle() + "\" is rejected.");
-    }
-
-    public String getConfirmDetail(String subId) {
-        BookSubmission sub = bookSubmissionRepository.findById(subId).get();
-        return "Title: " + sub.getTitle() + "\nAuthor Username: "+ sub.getAuthorUsername() + "\nDescription: " + sub.getDescription() + "\nSubmission Time: " + sub.getSubmissionDate() + "\n";
+    private static String safeTrim(String value) {
+        return value == null ? "" : value.trim();
     }
 
     public record OperationResult(boolean success, String message) {
@@ -137,13 +69,13 @@ public class LibrarianPortalService {
         }
     }
 
-    public record LoginResult(boolean success, String message, LibrarianAccount user) {
-        public static LoginResult success(String message, LibrarianAccount user) {
-            return new LoginResult(true, message, user);
+    public record LoginResult(boolean success, String message, StudentStaffAccount user) {
+        public static StudentStaffPortalService.LoginResult success(String message, StudentStaffAccount user) {
+            return new StudentStaffPortalService.LoginResult(true, message, user);
         }
 
-        public static LoginResult failure(String message) {
-            return new LoginResult(false, message, null);
+        public static StudentStaffPortalService.LoginResult failure(String message) {
+            return new StudentStaffPortalService.LoginResult(false, message, null);
         }
     }
 }

@@ -69,6 +69,7 @@ public class AuthorDashboardFX extends Application {
         primaryStage.setTitle("Author Dashboard");
         primaryStage.setScene(scene);
         
+        // FIX: When X is clicked, only close this window, not the whole app
         primaryStage.setOnCloseRequest(this::handleWindowClose);
         
         primaryStage.show();
@@ -77,8 +78,10 @@ public class AuthorDashboardFX extends Application {
     }
 
     private void handleWindowClose(WindowEvent event) {
-        System.out.println("🚪 Closing Author Dashboard...");
+        System.out.println("🚪 Closing Author Dashboard window...");
+        // Stop the timer but don't exit the app
         stopRefreshTimer();
+        // Just let the window close naturally - no Platform.exit()
     }
 
     private void stopRefreshTimer() {
@@ -90,7 +93,7 @@ public class AuthorDashboardFX extends Application {
     }
 
     private void startDashboardAutoRefresh() {
-        stopRefreshTimer(); // Stop any existing timer
+        stopRefreshTimer();
         refreshTimer = new Timer(true);
         refreshTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -194,7 +197,6 @@ public class AuthorDashboardFX extends Application {
             PublishBookFX publishUI = new PublishBookFX(currentAuthor);
             publishUI.show();
             
-            // Schedule a stats refresh after a short delay
             new Timer().schedule(new TimerTask() {
                 @Override
                 public void run() {
@@ -279,9 +281,11 @@ public class AuthorDashboardFX extends Application {
 
         refreshSubmissions();
 
+        // FIX: When X is clicked on submissions window, just close it
         submissionsStage.setOnCloseRequest(e -> {
             submissionsStage = null;
             refreshDashboardStats();
+            // Don't consume the event - let it close naturally
         });
 
         Scene scene = new Scene(root, 600, 500);
@@ -371,18 +375,14 @@ public class AuthorDashboardFX extends Application {
     private void logout() {
         System.out.println("🚪 Logging out: " + currentAuthor.getUsername());
         
-        // Stop the refresh timer
         stopRefreshTimer();
         
-        // Close any open submissions window
         if (submissionsStage != null && submissionsStage.isShowing()) {
             submissionsStage.close();
         }
         
-        // Close dashboard and open login
         primaryStage.close();
         
-        // Open login screen
         AuthorLoginFX loginUI = new AuthorLoginFX();
         try {
             loginUI.start(new Stage());
