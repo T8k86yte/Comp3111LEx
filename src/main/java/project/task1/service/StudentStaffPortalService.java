@@ -9,7 +9,17 @@ import project.shared.SharedAuthFacade;
 import project.task2.repo.AuthorRepository;
 import project.task3.repo.LibrarianRepository;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Base64;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -17,6 +27,8 @@ import java.util.stream.Collectors;
 public class StudentStaffPortalService {
     private static final int MAX_BORROWED_BOOKS = 5;
     private static final int DEFAULT_BORROW_DAYS = 14;
+    private static final String BORROW_HISTORY_FILE = "data/borrow_history.txt";
+    private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     private final StudentStaffRepository studentstaffRepository;
     private final BookRepository bookRepository;
@@ -156,6 +168,7 @@ public class StudentStaffPortalService {
             return OperationResult.failure("Borrow failed: book is no longer available.");
         }
 
+        recordBorrowHistory(normalizedBorrower, book.getId(), book.getTitle());
         return OperationResult.success("Borrow successful: \"" + book.getTitle() + "\" has been borrowed.");
     }
 
@@ -198,6 +211,66 @@ public class StudentStaffPortalService {
                 .filter(book -> !book.isAvailable())
                 .filter(book -> username.equals(book.getBorrowedByUsername()))
                 .count();
+    }
+
+    public List<String> getBorrowHistory(String username) {
+        String normalizedUser = safeTrim(username);
+        if (normalizedUser.isEmpty()) {
+            return List.of();
+        }
+        Path path = Paths.get(BORROW_HISTORY_FILE);
+        if (!Files.exists(path)) {
+            return List.of();
+        }
+        try {
+            List<String> lines = Files.readAllLines(path);
+            List<String> history = new ArrayList<>();
+            for (String line : lines) {
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 4) {
+                    continue;
+                }
+                String rowUser = decode(parts[0]);
+                if (!normalizedUser.equals(rowUser)) {
+                    continue;
+                }
+                String bookId = decode(parts[1]);
+                String bookTitle = decode(parts[2]);
+                LocalDateTime time = LocalDateTime.parse(parts[3], HISTORY_TIME_FORMAT);
+                history.add(time.toLocalDate() + " " + time.toLocalTime().withNano(0) + " - " + bookId + " - " + bookTitle);
+            }
+            return history;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private void recordBorrowHistory(String username, String bookId, String bookTitle) {
+        try {
+            Files.createDirectories(Paths.get("data"));
+            String line = String.join("|",
+                    encode(username),
+                    encode(bookId),
+                    encode(bookTitle),
+                    LocalDateTime.now().format(HISTORY_TIME_FORMAT)
+            );
+            Files.write(
+                    Paths.get(BORROW_HISTORY_FILE),
+                    List.of(line),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND
+            );
+        } catch (IOException ignored) {
+            // Avoid blocking the borrow operation if history persistence fails.
+        }
+    }
+
+    private static String encode(String value) {
+        return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String decode(String value) {
+        return new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8);
     }
 
     public record OperationResult(boolean success, String message) {

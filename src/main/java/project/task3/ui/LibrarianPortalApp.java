@@ -57,6 +57,7 @@ public class LibrarianPortalApp extends Application {
     private TextField registerFullNameField;
     private PasswordField registerPasswordField;
     private PasswordField registerConfirmPasswordField;
+    private Label registerPasswordHintLabel;
     private TextField registerStaffIDField;
 
     private TextField loginUsernameField;
@@ -201,6 +202,8 @@ public class LibrarianPortalApp extends Application {
         registerPasswordField.setPromptText("Create password");
         registerConfirmPasswordField = new PasswordField();
         registerConfirmPasswordField.setPromptText("Re-enter password");
+        registerPasswordHintLabel = new Label();
+        registerPasswordHintLabel.getStyleClass().add("muted");
         registerStaffIDField = new TextField();
         registerStaffIDField.setPromptText("Employee ID (optional)");
 
@@ -229,6 +232,9 @@ public class LibrarianPortalApp extends Application {
         req3.getStyleClass().add("muted");
         req4.getStyleClass().add("muted");
         reqBox.getChildren().addAll(reqTitle, req1, req2, req3, req4);
+        registerPasswordField.textProperty().addListener((obs, oldValue, newValue) -> updateRegisterPasswordHint());
+        registerConfirmPasswordField.textProperty().addListener((obs, oldValue, newValue) -> updateRegisterPasswordHint());
+        updateRegisterPasswordHint();
 
         Button registerBtn = new Button("Create Account");
         registerBtn.getStyleClass().add("primary-btn");
@@ -243,7 +249,7 @@ public class LibrarianPortalApp extends Application {
         HBox actions = new HBox(10, registerBtn, backBtn);
         actions.setAlignment(Pos.CENTER);
 
-        card.getChildren().addAll(heading, grid, reqBox, actions);
+        card.getChildren().addAll(heading, grid, registerPasswordHintLabel, reqBox, actions);
         return card;
     }
 
@@ -558,5 +564,34 @@ public class LibrarianPortalApp extends Application {
 
     private void setStatus(String message) {
         statusLabel.setText(message);
+    }
+
+    private void updateRegisterPasswordHint() {
+        if (registerPasswordHintLabel == null) {
+            return;
+        }
+        String password = registerPasswordField == null ? "" : registerPasswordField.getText();
+        String confirm = registerConfirmPasswordField == null ? "" : registerConfirmPasswordField.getText();
+        if (password == null || password.isEmpty()) {
+            registerPasswordHintLabel.setText("Password is required.");
+            registerPasswordHintLabel.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 11px;");
+            return;
+        }
+        boolean strong = password.length() >= 8
+                && password.matches(".*[A-Za-z].*")
+                && password.matches(".*\\d.*")
+                && password.matches(".*[A-Z].*");
+        if (!strong) {
+            registerPasswordHintLabel.setText("Weak password: use at least 8 chars with letter, number, and uppercase.");
+            registerPasswordHintLabel.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 11px;");
+            return;
+        }
+        if (!confirm.isEmpty() && !password.equals(confirm)) {
+            registerPasswordHintLabel.setText("Passwords do not match.");
+            registerPasswordHintLabel.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 11px;");
+            return;
+        }
+        registerPasswordHintLabel.setText("Strong password.");
+        registerPasswordHintLabel.setStyle("-fx-text-fill: #16a34a; -fx-font-size: 11px;");
     }
 }
