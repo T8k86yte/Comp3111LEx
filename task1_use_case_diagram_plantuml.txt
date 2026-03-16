@@ -1,0 +1,55 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "User\n(Student/Staff)" as User
+
+rectangle "Task 1: Student/Staff Portal" {
+  package "Account Access" {
+    usecase "Register Account" as UC_Register
+    usecase "Login" as UC_Login
+    usecase "Logout" as UC_Logout
+    usecase "Validate Registration" as UC_ValidateRegister
+    usecase "Validate Login" as UC_ValidateLogin
+  }
+
+  package "Book Browsing" {
+    usecase "View Book List" as UC_ViewBooks
+    usecase "Read Full Summary" as UC_ReadSummary
+    usecase "Get Recommendations" as UC_Recommend
+  }
+
+  package "Borrow / Return" {
+    usecase "Borrow Book(s)" as UC_Borrow
+    usecase "Return Book(s)" as UC_Return
+    usecase "Borrow by Selection or ID" as UC_BorrowModes
+    usecase "Return by Selection or ID" as UC_ReturnModes
+    usecase "Show Borrow Confirmation" as UC_BorrowConfirm
+    usecase "Enforce Borrow Limit\n(Max 5)" as UC_BorrowLimit
+  }
+
+  package "History" {
+    usecase "View Borrow History" as UC_ViewHistory
+    usecase "Update Borrow History" as UC_UpdateHistory
+  }
+}
+
+User --> UC_Register
+User --> UC_Login
+User --> UC_Logout
+User --> UC_ViewBooks
+User --> UC_ReadSummary
+User --> UC_Recommend
+User --> UC_Borrow
+User --> UC_Return
+User --> UC_ViewHistory
+
+UC_Register .> UC_ValidateRegister : include
+UC_Login .> UC_ValidateLogin : include
+UC_Borrow .> UC_BorrowModes : include
+UC_Return .> UC_ReturnModes : include
+UC_Borrow .> UC_BorrowConfirm : include
+UC_Borrow .> UC_BorrowLimit : include
+UC_Borrow .> UC_UpdateHistory : include
+UC_ViewBooks .> UC_ReadSummary : extend
+@enduml
