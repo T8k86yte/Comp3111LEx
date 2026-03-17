@@ -25,7 +25,13 @@ public class SubmissionRepository {
         }
     }
 
+    // Public method to force refresh from file
+    public void refreshFromFile() {
+        loadFromFile();
+    }
+
     private void loadFromFile() {
+        submissionsById.clear(); // Clear existing data
         try {
             Path filePath = Paths.get(SUBMISSIONS_FILE);
             if (Files.exists(filePath)) {
@@ -78,27 +84,31 @@ public class SubmissionRepository {
         return Optional.ofNullable(submissionsById.get(submissionId));
     }
 
-    // Find all submissions by an author
+    // Find all submissions by an author - REFRESH before searching
     public List<BookSubmission> findByAuthor(String authorUsername) {
+        refreshFromFile(); // Always get fresh data from file
         return submissionsById.values().stream()
                 .filter(sub -> sub.getAuthorUsername().equals(authorUsername))
                 .collect(Collectors.toList());
     }
 
-    // Find all pending submissions (for librarian)
+    // Find all pending submissions (for librarian) - REFRESH before searching
     public List<BookSubmission> findPendingSubmissions() {
+        refreshFromFile(); // Always get fresh data from file
         return submissionsById.values().stream()
                 .filter(BookSubmission::isPending)
                 .collect(Collectors.toList());
     }
 
-    // Find all submissions
+    // Find all submissions - REFRESH before searching
     public List<BookSubmission> findAll() {
+        refreshFromFile(); // Always get fresh data from file
         return new ArrayList<>(submissionsById.values());
     }
 
-    // Get count
+    // Get count - REFRESH before counting
     public int getCount() {
+        refreshFromFile(); // Always get fresh data from file
         return submissionsById.size();
     }
 }

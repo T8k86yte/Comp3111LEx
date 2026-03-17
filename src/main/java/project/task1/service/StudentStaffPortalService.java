@@ -3,29 +3,36 @@ package project.task1.service;
 import project.task1.model.Book;
 import project.task1.model.StudentStaffAccount;
 import project.task1.model.UserAccount;
-import project.task1.model.UserRole;
 import project.task1.repo.BookRepository;
 import project.task1.repo.StudentStaffRepository;
-import project.task1.security.PasswordSecurity;
-import project.task2.model.AuthorAccount;
+import project.shared.SharedAuthFacade;
 import project.task2.repo.AuthorRepository;
-import project.task3.model.LibrarianAccount;
 import project.task3.repo.LibrarianRepository;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Base64;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class StudentStaffPortalService {
-    private static final int MIN_PASSWORD_LENGTH = 8;
     private static final int MAX_BORROWED_BOOKS = 5;
     private static final int DEFAULT_BORROW_DAYS = 14;
+    private static final String BORROW_HISTORY_FILE = "data/borrow_history.txt";
+    private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     private final StudentStaffRepository studentstaffRepository;
     private final BookRepository bookRepository;
-    private final AuthorRepository authorRepository;
-    private final LibrarianRepository librarianRepository;
+    private final SharedAuthFacade sharedAuthFacade;
 
     public StudentStaffPortalService(StudentStaffRepository studentstaffRepository, BookRepository bookRepository) {
         this(studentstaffRepository, bookRepository, new AuthorRepository(), new LibrarianRepository());
@@ -39,8 +46,11 @@ public class StudentStaffPortalService {
     ) {
         this.studentstaffRepository = studentstaffRepository;
         this.bookRepository = bookRepository;
-        this.authorRepository = authorRepository;
-        this.librarianRepository = librarianRepository;
+        this.sharedAuthFacade = new SharedAuthFacade(
+                studentstaffRepository,
+                authorRepository,
+                librarianRepository
+        );
     }
 
     public OperationResult registerStaffStudent(String username, String fullName, String rawPassword, String roleText) {
@@ -48,55 +58,23 @@ public class StudentStaffPortalService {
     }
 
     public OperationResult registerWithRoleSelection(String username, String fullName, String rawPassword, String roleText) {
-        String normalizedUsername = safeTrim(username);
-        String normalizedFullName = safeTrim(fullName);
-        String normalizedRoleText = safeTrim(roleText).toUpperCase();
-
-        if (normalizedUsername.isEmpty()) {
-            return OperationResult.failure("Registration failed: username is required.");
-        }
-        if (normalizedFullName.isEmpty()) {
-            return OperationResult.failure("Registration failed: full name is required.");
-        }
-        if (rawPassword == null || rawPassword.isBlank()) {
-            return OperationResult.failure("Registration failed: password is required.");
-        }
-
-        PasswordStrength passwordStrength = evaluatePasswordStrength(rawPassword);
-        if (passwordStrength == PasswordStrength.WEAK) {
-            return OperationResult.failure(
-                    "Registration failed: weak password. Use at least " + MIN_PASSWORD_LENGTH
-                            + " chars with letters and numbers."
-            );
-        }
-
-        if (existsByUsernameAcrossUserTypes(normalizedUsername)) {
-            return OperationResult.failure("Registration failed: username already exists across user types.");
-        }
-
-        Optional<UserRole> userRole = parseRole(normalizedRoleText);
-        if (userRole.isEmpty()) {
-            return OperationResult.failure("Registration failed: role must be Student, Staff, Author, or Librarian.");
-        }
-
-        if (userRole.get() == UserRole.AUTHOR) {
-            return OperationResult.failure("Registration failed: Author registration is handled in Task 2.");
-        }
-        if (userRole.get() == UserRole.LIBRARIAN) {
-            return OperationResult.failure("Registration failed: Librarian registration is handled in Task 3.");
-        }
-
-        String saltBase64 = PasswordSecurity.generateSaltBase64();
-        String hashBase64 = PasswordSecurity.hashPasswordBase64(rawPassword, saltBase64);
-        StudentStaffAccount userAccount = new StudentStaffAccount(
-                normalizedUsername,
-                normalizedFullName,
-                saltBase64,
-                hashBase64,
-                userRole.get()
+        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.register(
+                username,
+                fullName,
+                rawPassword,
+                null,
+                roleText,
+                null,
+                null
         );
-        studentstaffRepository.save(userAccount);
-        return OperationResult.success("Registration successful for " + normalizedUsername + ".");
+        if (!authResult.success()) {
+            return OperationResult.failure(authResult.message());
+        }
+        if (!"STUDENT".equalsIgnoreCase(authResult.principal().role())
+                && !"STAFF".equalsIgnoreCase(authResult.principal().role())) {
+            return OperationResult.failure("Registration failed: Task 1 only supports Student and Staff.");
+        }
+        return OperationResult.success(authResult.message());
     }
 
     public LoginResult login(String username, String rawPassword) {
@@ -104,36 +82,19 @@ public class StudentStaffPortalService {
     }
 
     public LoginResult login(String username, String rawPassword, String roleText) {
-        String normalizedUsername = safeTrim(username);
-        String normalizedRoleText = safeTrim(roleText).toUpperCase();
-        if (normalizedUsername.isEmpty() || rawPassword == null || rawPassword.isEmpty()) {
-            return LoginResult.failure("Login failed: username and password are required.");
+        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.login(username, rawPassword, roleText);
+        if (!authResult.success()) {
+            return LoginResult.failure(authResult.message());
         }
-
-        Optional<UserRole> selectedRoleOpt = parseRole(normalizedRoleText);
-        if (selectedRoleOpt.isEmpty()) {
-            return LoginResult.failure("Login failed: role must be Student, Staff, Author, or Librarian.");
+        String role = authResult.principal().role();
+        if (!"STUDENT".equalsIgnoreCase(role) && !"STAFF".equalsIgnoreCase(role)) {
+            return LoginResult.failure("Login failed: Task 1 only supports Student and Staff.");
         }
-        UserRole selectedRole = selectedRoleOpt.get();
-
-        Optional<? extends UserAccount> userOpt = findAccountByRole(selectedRole, normalizedUsername);
-        if (userOpt.isEmpty()) {
-            Optional<UserRole> existingRole = findExistingRoleByUsername(normalizedUsername);
-            if (existingRole.isPresent()) {
-                return LoginResult.failure("Login failed: username belongs to " + existingRole.get().name() + " account.");
-            }
+        Optional<StudentStaffAccount> account = studentstaffRepository.findByUsername(authResult.principal().username());
+        if (account.isEmpty()) {
             return LoginResult.failure("Login failed: invalid username or password.");
         }
-
-        UserAccount user = userOpt.get();
-        boolean matched = PasswordSecurity.verifyPassword(rawPassword, user.getPasswordSaltBase64(), user.getPasswordHashBase64());
-        if (!matched) {
-            return LoginResult.failure("Login failed: invalid username or password.");
-        }
-        if (user.getRole() != selectedRole) {
-            return LoginResult.failure("Login failed: selected role does not match this username.");
-        }
-        return LoginResult.success("Login successful. Welcome, " + user.getFullName() + ".", user);
+        return LoginResult.success(authResult.message(), account.get());
     }
 
     public List<Book> getBookScreenData() {
@@ -207,6 +168,7 @@ public class StudentStaffPortalService {
             return OperationResult.failure("Borrow failed: book is no longer available.");
         }
 
+        recordBorrowHistory(normalizedBorrower, book.getId(), book.getTitle());
         return OperationResult.success("Borrow successful: \"" + book.getTitle() + "\" has been borrowed.");
     }
 
@@ -243,52 +205,6 @@ public class StudentStaffPortalService {
         return value == null ? "" : value.trim();
     }
 
-    private static Optional<UserRole> parseRole(String normalizedRole) {
-        if ("STUDENT".equals(normalizedRole)) {
-            return Optional.of(UserRole.STUDENT);
-        }
-        if ("STAFF".equals(normalizedRole)) {
-            return Optional.of(UserRole.STAFF);
-        }
-        if ("AUTHOR".equals(normalizedRole)) {
-            return Optional.of(UserRole.AUTHOR);
-        }
-        if ("LIBRARIAN".equals(normalizedRole)) {
-            return Optional.of(UserRole.LIBRARIAN);
-        }
-        return Optional.empty();
-    }
-
-    private Optional<? extends UserAccount> findAccountByRole(UserRole role, String username) {
-        return switch (role) {
-            case STUDENT, STAFF -> studentstaffRepository.findByUsername(username);
-            case AUTHOR -> authorRepository.findByUsername(username);
-            case LIBRARIAN -> librarianRepository.findByUsername(username);
-        };
-    }
-
-    private Optional<UserRole> findExistingRoleByUsername(String username) {
-        Optional<StudentStaffAccount> ss = studentstaffRepository.findByUsername(username);
-        if (ss.isPresent()) {
-            return Optional.of(ss.get().getRole());
-        }
-        Optional<AuthorAccount> author = authorRepository.findByUsername(username);
-        if (author.isPresent()) {
-            return Optional.of(UserRole.AUTHOR);
-        }
-        Optional<LibrarianAccount> librarian = librarianRepository.findByUsername(username);
-        if (librarian.isPresent()) {
-            return Optional.of(UserRole.LIBRARIAN);
-        }
-        return Optional.empty();
-    }
-
-    private boolean existsByUsernameAcrossUserTypes(String username) {
-        return studentstaffRepository.existsByUsername(username)
-                || authorRepository.existsByUsername(username)
-                || librarianRepository.existsByUsername(username);
-    }
-
     private long getCurrentBorrowedCount(String username) {
         return bookRepository.findAll()
                 .stream()
@@ -297,22 +213,64 @@ public class StudentStaffPortalService {
                 .count();
     }
 
-    private static PasswordStrength evaluatePasswordStrength(String rawPassword) {
-        if (rawPassword == null || rawPassword.isBlank()) {
-            return PasswordStrength.EMPTY;
+    public List<String> getBorrowHistory(String username) {
+        String normalizedUser = safeTrim(username);
+        if (normalizedUser.isEmpty()) {
+            return List.of();
         }
-        if (rawPassword.length() < MIN_PASSWORD_LENGTH) {
-            return PasswordStrength.WEAK;
+        Path path = Paths.get(BORROW_HISTORY_FILE);
+        if (!Files.exists(path)) {
+            return List.of();
         }
-        boolean hasLetter = rawPassword.matches(".*[A-Za-z].*");
-        boolean hasNumber = rawPassword.matches(".*\\d.*");
-        return (hasLetter && hasNumber) ? PasswordStrength.STRONG : PasswordStrength.WEAK;
+        try {
+            List<String> lines = Files.readAllLines(path);
+            List<String> history = new ArrayList<>();
+            for (String line : lines) {
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 4) {
+                    continue;
+                }
+                String rowUser = decode(parts[0]);
+                if (!normalizedUser.equals(rowUser)) {
+                    continue;
+                }
+                String bookId = decode(parts[1]);
+                String bookTitle = decode(parts[2]);
+                LocalDateTime time = LocalDateTime.parse(parts[3], HISTORY_TIME_FORMAT);
+                history.add(time.toLocalDate() + " " + time.toLocalTime().withNano(0) + " - " + bookId + " - " + bookTitle);
+            }
+            return history;
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
-    private enum PasswordStrength {
-        EMPTY,
-        WEAK,
-        STRONG
+    private void recordBorrowHistory(String username, String bookId, String bookTitle) {
+        try {
+            Files.createDirectories(Paths.get("data"));
+            String line = String.join("|",
+                    encode(username),
+                    encode(bookId),
+                    encode(bookTitle),
+                    LocalDateTime.now().format(HISTORY_TIME_FORMAT)
+            );
+            Files.write(
+                    Paths.get(BORROW_HISTORY_FILE),
+                    List.of(line),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND
+            );
+        } catch (IOException ignored) {
+            // Avoid blocking the borrow operation if history persistence fails.
+        }
+    }
+
+    private static String encode(String value) {
+        return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String decode(String value) {
+        return new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8);
     }
 
     public record OperationResult(boolean success, String message) {

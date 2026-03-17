@@ -1,7 +1,5 @@
 package project.task3.repo;
 
-import project.task1.model.StudentStaffAccount;
-import project.task2.model.AuthorAccount;
 import project.task3.model.LibrarianAccount;
 
 import java.io.IOException;

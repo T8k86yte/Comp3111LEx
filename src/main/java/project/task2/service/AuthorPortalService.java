@@ -1,8 +1,10 @@
 package project.task2.service;
 
 import project.task2.model.AuthorAccount;
+import project.task1.repo.StudentStaffRepository;
+import project.task3.repo.LibrarianRepository;
+import project.shared.SharedAuthFacade;
 import project.task2.repo.AuthorRepository;
-import project.task2.utils.PasswordUtils;
 
 import project.task2.model.BookSubmission;
 import project.task2.repo.SubmissionRepository;
@@ -10,21 +12,31 @@ import project.task2.repo.DraftRepository;
 import project.task2.utils.FileHandler;
 
 import java.util.List;
-import java.util.Arrays;
 
 public class AuthorPortalService {
     private final AuthorRepository authorRepository;
+    private final SharedAuthFacade sharedAuthFacade;
     private final SubmissionRepository submissionRepository;
     private final DraftRepository draftRepository;
 
     public AuthorPortalService() {
         this.authorRepository = new AuthorRepository();
+        this.sharedAuthFacade = new SharedAuthFacade(
+                new StudentStaffRepository(),
+                authorRepository,
+                new LibrarianRepository()
+        );
         this.submissionRepository = new SubmissionRepository();
         this.draftRepository = new DraftRepository();
     }
 
     public AuthorPortalService(AuthorRepository authorRepository) {
         this.authorRepository = authorRepository;
+        this.sharedAuthFacade = new SharedAuthFacade(
+                new StudentStaffRepository(),
+                authorRepository,
+                new LibrarianRepository()
+        );
         this.submissionRepository = new SubmissionRepository();
         this.draftRepository = new DraftRepository();
     }
@@ -33,102 +45,40 @@ public class AuthorPortalService {
     public RegistrationResult registerAuthor(String username, String fullName, 
                                             String password, String confirmPassword,
                                             String bio) {
-        
-        // Validation
-        if (isBlank(username)) {
-            return RegistrationResult.failure("Username is required.");
-        }
-        
-        if (isBlank(fullName)) {
-            return RegistrationResult.failure("Full name is required.");
-        }
-        
-        if (isBlank(password)) {
-            return RegistrationResult.failure("Password is required.");
-        }
-
+        // Keep author-specific input validation in service.
         if (!isValidUsername(username)) {
             return RegistrationResult.failure("Username must be at least 3 characters and can only contain letters, numbers, and underscores.");
         }
-
-        if (authorRepository.existsByUsername(username.trim())) {
-            return RegistrationResult.failure("Username '" + username + "' is already taken.");
-        }
-
-        // Use PasswordUtils for password validation
-        if (!PasswordUtils.isStrongPassword(password)) {
-            return RegistrationResult.failure(PasswordUtils.getPasswordRequirements());
-        }
-
-        if (!password.equals(confirmPassword)) {
-            return RegistrationResult.failure("Passwords do not match.");
-        }
-
         if (bio != null && bio.length() > 500) {
             return RegistrationResult.failure("Bio is too long. Maximum 500 characters allowed.");
         }
 
-        try {
-            // PROPER HASHING: Generate salt and hash using PasswordUtils
-            String salt = PasswordUtils.generateSalt();
-            String hash = PasswordUtils.hashPassword(password, salt);
-
-            AuthorAccount author = new AuthorAccount(
-                username.trim(),
-                fullName.trim(),
-                salt,
-                hash,
-                bio != null ? bio.trim() : ""
-            );
-
-            authorRepository.save(author);
-
-            return RegistrationResult.success(
-                "Registration successful! Welcome, " + fullName + "!"
-            );
-
-        } catch (Exception e) {
-            return RegistrationResult.failure("Registration failed: " + e.getMessage());
+        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.register(
+                username,
+                fullName,
+                password,
+                confirmPassword,
+                "Author",
+                bio,
+                null
+        );
+        if (!authResult.success()) {
+            return RegistrationResult.failure(authResult.message());
         }
+        return RegistrationResult.success(authResult.message());
     }
 
     // ========== AUTHORLOGIN ==========
     public LoginResult login(String username, String password) {
-        // Validation
-        if (isBlank(username)) {
-            return LoginResult.failure("Username is required.");
+        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.login(username, password, "Author");
+        if (!authResult.success()) {
+            return LoginResult.failure(authResult.message());
         }
-        
-        if (isBlank(password)) {
-            return LoginResult.failure("Password is required.");
-        }
-
-        // Find author by username
-        var authorOpt = authorRepository.findByUsername(username.trim());
-        
-        if (authorOpt.isEmpty()) {
-            // Use same message for security (don't reveal if username exists)
+        AuthorAccount author = authorRepository.findByUsername(authResult.principal().username()).orElse(null);
+        if (author == null) {
             return LoginResult.failure("Invalid username or password.");
         }
-
-        AuthorAccount author = authorOpt.get();
-        
-        // PROPER VERIFICATION: Use PasswordUtils to verify
-        boolean passwordMatches = PasswordUtils.verifyPassword(
-            password,
-            author.getPasswordSalt(),
-            author.getPasswordHash()
-        );
-
-        if (!passwordMatches) {
-            return LoginResult.failure("Invalid username or password.");
-        }
-
-        // Login successful
-        return LoginResult.success(
-            "Login successful! Welcome back, " + author.getFullName() + "!",
-            author
-        );
+        return LoginResult.success(authResult.message(), author);
     }
 
     // ========== DRAFT METHODS ==========
@@ -288,13 +238,10 @@ public class AuthorPortalService {
         }
 
         try {
-            // Parse genres (comma-separated string to list)
-            List<String> genres = Arrays.asList(genresStr.split(","));
-            
-            // Create submission with multiple genres
+            // Persist selected genres as a comma-separated string.
             BookSubmission submission = new BookSubmission(
                 title, authorUsername, authorFullName, 
-                genres, description, filePath
+                genresStr, description, filePath
             );
 
             // Save to repository
