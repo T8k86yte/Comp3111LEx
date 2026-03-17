@@ -27,6 +27,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import project.task1.model.Book;
 import project.task1.repo.InMemoryBookRepository;
@@ -36,6 +37,10 @@ import project.shared.SharedAuthFacade;
 import project.task2.repo.AuthorRepository;
 import project.task3.repo.LibrarianRepository;
 
+import java.awt.Desktop;
+import java.io.File;
+import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -79,6 +84,15 @@ public class StudentStaffPortalApp extends Application {
     private ListView<Book> returnBookListView;
     private VBox recommendationBox;
     private ListView<String> borrowHistoryList;
+    private TableView<StudentStaffPortalService.BorrowRecordView> borrowedRecordTable;
+    private TextField bookmarkField;
+    private TextArea highlightField;
+    private Label readingInfoLabel;
+    private TextField profileFullNameField;
+    private PasswordField profilePasswordField;
+    private PasswordField profileConfirmPasswordField;
+    private Label profilePasswordHintLabel;
+    private ListView<String> notificationList;
 
     @Override
     public void start(Stage stage) {
@@ -250,19 +264,28 @@ public class StudentStaffPortalApp extends Application {
         Button booksBtn = new Button("Book List");
         Button borrowBtn = new Button("Borrow");
         Button returnBtn = new Button("Return");
+        Button borrowedBtn = new Button("Borrowed Books");
         Button recBtn = new Button("Recommendations");
         Button historyBtn = new Button("Borrow History");
+        Button profileBtn = new Button("Profile");
+        Button noticeBtn = new Button("Notifications");
         booksBtn.getStyleClass().add("secondary-btn");
         borrowBtn.getStyleClass().add("secondary-btn");
         returnBtn.getStyleClass().add("secondary-btn");
+        borrowedBtn.getStyleClass().add("secondary-btn");
         recBtn.getStyleClass().add("secondary-btn");
         historyBtn.getStyleClass().add("secondary-btn");
+        profileBtn.getStyleClass().add("secondary-btn");
+        noticeBtn.getStyleClass().add("secondary-btn");
         booksBtn.setMaxWidth(Double.MAX_VALUE);
         borrowBtn.setMaxWidth(Double.MAX_VALUE);
         returnBtn.setMaxWidth(Double.MAX_VALUE);
+        borrowedBtn.setMaxWidth(Double.MAX_VALUE);
         recBtn.setMaxWidth(Double.MAX_VALUE);
         historyBtn.setMaxWidth(Double.MAX_VALUE);
-        nav.getChildren().addAll(booksBtn, borrowBtn, returnBtn, recBtn, historyBtn);
+        profileBtn.setMaxWidth(Double.MAX_VALUE);
+        noticeBtn.setMaxWidth(Double.MAX_VALUE);
+        nav.getChildren().addAll(booksBtn, borrowBtn, returnBtn, borrowedBtn, recBtn, historyBtn, profileBtn, noticeBtn);
 
         contentPane = new StackPane();
         contentPane.setPadding(new Insets(0, 0, 0, 12));
@@ -270,8 +293,11 @@ public class StudentStaffPortalApp extends Application {
         booksBtn.setOnAction(e -> showBooksView());
         borrowBtn.setOnAction(e -> showBorrowView());
         returnBtn.setOnAction(e -> showReturnView());
+        borrowedBtn.setOnAction(e -> showBorrowedBooksView());
         recBtn.setOnAction(e -> showRecommendationView());
         historyBtn.setOnAction(e -> showBorrowHistoryView());
+        profileBtn.setOnAction(e -> showProfileView());
+        noticeBtn.setOnAction(e -> showNotificationView());
 
         HBox center = new HBox(nav, contentPane);
         HBox.setHgrow(contentPane, Priority.ALWAYS);
@@ -482,6 +508,120 @@ public class StudentStaffPortalApp extends Application {
         return card;
     }
 
+    private VBox buildBorrowedBooksView() {
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        Label heading = new Label("Borrowed Book Screen");
+        heading.getStyleClass().add("card-title");
+        Label hint = new Label("Read PDF, save bookmark/highlight, and return borrowed books.");
+        hint.getStyleClass().add("muted");
+
+        borrowedRecordTable = new TableView<>();
+        borrowedRecordTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        borrowedRecordTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+
+        TableColumn<StudentStaffPortalService.BorrowRecordView, String> idCol = new TableColumn<>("Book ID");
+        idCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().bookId()));
+        TableColumn<StudentStaffPortalService.BorrowRecordView, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().bookTitle()));
+        TableColumn<StudentStaffPortalService.BorrowRecordView, String> borrowDateCol = new TableColumn<>("Borrow Date");
+        borrowDateCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().borrowDate().toString()));
+        TableColumn<StudentStaffPortalService.BorrowRecordView, String> dueDateCol = new TableColumn<>("Due Date");
+        dueDateCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().dueDate().toString()));
+        TableColumn<StudentStaffPortalService.BorrowRecordView, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().status()));
+        borrowedRecordTable.getColumns().addAll(idCol, titleCol, borrowDateCol, dueDateCol, statusCol);
+
+        bookmarkField = new TextField();
+        bookmarkField.setPromptText("Bookmark (e.g., page 42 / chapter marker)");
+        highlightField = new TextArea();
+        highlightField.setPromptText("Highlight note text");
+        highlightField.setPrefRowCount(3);
+        readingInfoLabel = new Label("Select one borrowed book to manage PDF/bookmark/highlight.");
+        readingInfoLabel.getStyleClass().add("muted");
+
+        Button openPdfBtn = new Button("Open/Link PDF");
+        openPdfBtn.getStyleClass().add("secondary-btn");
+        openPdfBtn.setOnAction(e -> handleOpenPdfForBorrowedBook());
+        Button bookmarkBtn = new Button("Save Bookmark");
+        bookmarkBtn.getStyleClass().add("secondary-btn");
+        bookmarkBtn.setOnAction(e -> handleSaveBookmarkForBorrowedBook());
+        Button highlightBtn = new Button("Save Highlight");
+        highlightBtn.getStyleClass().add("secondary-btn");
+        highlightBtn.setOnAction(e -> handleSaveHighlightForBorrowedBook());
+        Button returnSelectedBtn = new Button("Return Selected");
+        returnSelectedBtn.getStyleClass().add("primary-btn");
+        returnSelectedBtn.setOnAction(e -> handleReturnSelectedBorrowedRecords());
+
+        borrowedRecordTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, newValue) -> {
+            if (newValue == null || currentUser == null) {
+                return;
+            }
+            StudentStaffPortalService.ReadingProgressView reading = portalService.getReadingProgress(currentUser.username(), newValue.bookId());
+            bookmarkField.setText(reading.bookmark());
+            readingInfoLabel.setText(reading.pdfPath().isBlank()
+                    ? "No PDF linked yet for " + newValue.bookId() + "."
+                    : "PDF linked: " + reading.pdfPath());
+        });
+
+        HBox actions = new HBox(10, openPdfBtn, bookmarkBtn, highlightBtn, returnSelectedBtn);
+        actions.setAlignment(Pos.CENTER_LEFT);
+        VBox.setVgrow(borrowedRecordTable, Priority.ALWAYS);
+        card.getChildren().addAll(heading, hint, borrowedRecordTable, readingInfoLabel, bookmarkField, highlightField, actions);
+        return card;
+    }
+
+    private VBox buildProfileView() {
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        Label heading = new Label("Manage Profile");
+        heading.getStyleClass().add("card-title");
+        Label hint = new Label("Update full name and password.");
+        hint.getStyleClass().add("muted");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setVgap(8);
+        profileFullNameField = new TextField();
+        profilePasswordField = new PasswordField();
+        profileConfirmPasswordField = new PasswordField();
+        profilePasswordHintLabel = new Label();
+        profilePasswordHintLabel.getStyleClass().add("muted");
+        profilePasswordField.textProperty().addListener((obs, oldValue, newValue) -> updateProfilePasswordHint());
+        profileConfirmPasswordField.textProperty().addListener((obs, oldValue, newValue) -> updateProfilePasswordHint());
+
+        grid.add(new Label("Full Name"), 0, 0);
+        grid.add(profileFullNameField, 1, 0);
+        grid.add(new Label("New Password"), 0, 1);
+        grid.add(profilePasswordField, 1, 1);
+        grid.add(new Label("Confirm Password"), 0, 2);
+        grid.add(profileConfirmPasswordField, 1, 2);
+
+        if (currentUser != null) {
+            profileFullNameField.setText(currentUser.fullName());
+        }
+        updateProfilePasswordHint();
+
+        Button updateBtn = new Button("Update Profile");
+        updateBtn.getStyleClass().add("primary-btn");
+        updateBtn.setOnAction(e -> handleProfileUpdate());
+        card.getChildren().addAll(heading, hint, grid, profilePasswordHintLabel, updateBtn);
+        return card;
+    }
+
+    private VBox buildNotificationView() {
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        Label heading = new Label("Notification Board");
+        heading.getStyleClass().add("card-title");
+        Label hint = new Label("Timestamped and categorized notifications.");
+        hint.getStyleClass().add("muted");
+        notificationList = new ListView<>();
+        VBox.setVgrow(notificationList, Priority.ALWAYS);
+        card.getChildren().addAll(heading, hint, notificationList);
+        return card;
+    }
+
     private HBox buildStatusBar() {
         HBox statusBar = new HBox();
         statusBar.setPadding(new Insets(10, 18, 12, 18));
@@ -514,6 +654,20 @@ public class StudentStaffPortalApp extends Application {
     private void showBorrowHistoryView() {
         contentPane.getChildren().setAll(buildBorrowHistoryView());
         refreshBorrowHistory();
+    }
+
+    private void showBorrowedBooksView() {
+        contentPane.getChildren().setAll(buildBorrowedBooksView());
+        refreshBorrowedBookRecords();
+    }
+
+    private void showProfileView() {
+        contentPane.getChildren().setAll(buildProfileView());
+    }
+
+    private void showNotificationView() {
+        contentPane.getChildren().setAll(buildNotificationView());
+        refreshNotifications();
     }
 
     private void handleStudentRegister() {
@@ -555,6 +709,7 @@ public class StudentStaffPortalApp extends Application {
     }
 
     private void handleStudentLogin() {
+        portalService.autoReturnExpiredBooks();
         SharedAuthFacade.AuthResult result =
                 authFacade.login(loginUsernameField.getText(), loginPasswordField.getText(), "Student");
         if (!result.success()) {
@@ -576,6 +731,7 @@ public class StudentStaffPortalApp extends Application {
         loginPasswordField.clear();
         root.setCenter(studentDashboard);
         showBooksView();
+        refreshNotifications();
         showInfoPopup("Login", "Welcome", result.message());
     }
 
@@ -792,6 +948,166 @@ public class StudentStaffPortalApp extends Application {
         showErrorPopup("Return Failed", "No selected books were returned.", String.join("\n", failures));
     }
 
+    private void handleOpenPdfForBorrowedBook() {
+        StudentStaffPortalService.BorrowRecordView selected = getSingleSelectedBorrowedRecord();
+        if (selected == null || currentUser == null) {
+            return;
+        }
+        String existingPath = portalService.getBorrowedBookPdfPath(currentUser.username(), selected.bookId());
+        File pdfFile;
+        if (existingPath == null || existingPath.isBlank()) {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Select PDF for " + selected.bookTitle());
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files", "*.pdf"));
+            pdfFile = chooser.showOpenDialog(root.getScene().getWindow());
+            if (pdfFile == null) {
+                return;
+            }
+            StudentStaffPortalService.OperationResult linkResult =
+                    portalService.setBorrowedBookPdfPath(currentUser.username(), selected.bookId(), pdfFile.getAbsolutePath());
+            if (!linkResult.success()) {
+                showErrorPopup("PDF Link Failed", "Could not save PDF path.", linkResult.message());
+                return;
+            }
+        } else {
+            pdfFile = new File(existingPath);
+        }
+
+        if (!pdfFile.exists()) {
+            showErrorPopup("Open PDF Failed", "PDF file not found.", "Linked path does not exist. Re-link the PDF.");
+            return;
+        }
+        if (!Desktop.isDesktopSupported()) {
+            showErrorPopup("Open PDF Failed", "Desktop open is unsupported.", "This machine cannot open PDF files from Java desktop API.");
+            return;
+        }
+        try {
+            Desktop.getDesktop().open(pdfFile);
+            readingInfoLabel.setText("Opened PDF: " + pdfFile.getAbsolutePath());
+        } catch (IOException e) {
+            showErrorPopup("Open PDF Failed", "Cannot open PDF.", e.getMessage());
+        }
+    }
+
+    private void handleSaveBookmarkForBorrowedBook() {
+        StudentStaffPortalService.BorrowRecordView selected = getSingleSelectedBorrowedRecord();
+        if (selected == null || currentUser == null) {
+            return;
+        }
+        String value = bookmarkField == null ? "" : bookmarkField.getText().trim();
+        if (value.isEmpty()) {
+            showErrorPopup("Bookmark", "Bookmark is empty.", "Enter a bookmark value first.");
+            return;
+        }
+        StudentStaffPortalService.OperationResult result =
+                portalService.saveBookmark(currentUser.username(), selected.bookId(), value);
+        if (result.success()) {
+            showInfoPopup("Bookmark", "Saved", "Bookmark saved for " + selected.bookId() + ".");
+        } else {
+            showErrorPopup("Bookmark", "Save failed.", result.message());
+        }
+    }
+
+    private void handleSaveHighlightForBorrowedBook() {
+        StudentStaffPortalService.BorrowRecordView selected = getSingleSelectedBorrowedRecord();
+        if (selected == null || currentUser == null) {
+            return;
+        }
+        String value = highlightField == null ? "" : highlightField.getText().trim();
+        if (value.isEmpty()) {
+            showErrorPopup("Highlight", "Highlight text is empty.", "Enter text to highlight first.");
+            return;
+        }
+        StudentStaffPortalService.OperationResult result =
+                portalService.saveHighlight(currentUser.username(), selected.bookId(), value);
+        if (result.success()) {
+            showInfoPopup("Highlight", "Saved", "Highlight note saved for " + selected.bookId() + ".");
+            highlightField.clear();
+        } else {
+            showErrorPopup("Highlight", "Save failed.", result.message());
+        }
+    }
+
+    private void handleReturnSelectedBorrowedRecords() {
+        if (currentUser == null || borrowedRecordTable == null) {
+            showErrorPopup("Return Failed", "Borrowed book screen is not open.", "Open Borrowed Books first.");
+            return;
+        }
+        List<StudentStaffPortalService.BorrowRecordView> selected = borrowedRecordTable.getSelectionModel().getSelectedItems();
+        if (selected == null || selected.isEmpty()) {
+            showErrorPopup("Return Failed", "No books selected.", "Select one or more borrowed books.");
+            return;
+        }
+
+        int okCount = 0;
+        List<String> failures = new java.util.ArrayList<>();
+        for (StudentStaffPortalService.BorrowRecordView row : selected) {
+            StudentStaffPortalService.OperationResult result = portalService.returnBook(currentUser.username(), row.bookId());
+            if (result.success()) {
+                okCount++;
+            } else {
+                failures.add(row.bookId() + ": " + result.message());
+            }
+        }
+        refreshBooks();
+        refreshReturnBooks();
+        refreshBorrowedBookRecords();
+        refreshRecommendations();
+        if (okCount > 0 && failures.isEmpty()) {
+            showInfoPopup("Return", "Return successful", "Successfully returned " + okCount + " book(s).");
+            return;
+        }
+        if (okCount > 0) {
+            showErrorPopup("Return Partial Success", "Returned " + okCount + " book(s).", String.join("\n", failures));
+            return;
+        }
+        showErrorPopup("Return Failed", "No selected books were returned.", String.join("\n", failures));
+    }
+
+    private void handleProfileUpdate() {
+        if (currentUser == null) {
+            showErrorPopup("Profile Update", "User not logged in.", "Please log in first.");
+            return;
+        }
+        StudentStaffPortalService.OperationResult result = portalService.updateProfile(
+                currentUser.username(),
+                profileFullNameField == null ? "" : profileFullNameField.getText(),
+                profilePasswordField == null ? "" : profilePasswordField.getText(),
+                profileConfirmPasswordField == null ? "" : profileConfirmPasswordField.getText()
+        );
+        setStatus(result.message());
+        if (!result.success()) {
+            showErrorPopup("Profile Update Failed", "Unable to update profile.", result.message());
+            return;
+        }
+        currentUser = new SharedAuthFacade.UserPrincipal(
+                currentUser.username(),
+                profileFullNameField.getText().trim(),
+                currentUser.role()
+        );
+        currentUserLabel.setText("Current user: " + currentUser.username() + " (" + currentUser.role() + ")");
+        if (profilePasswordField != null) {
+            profilePasswordField.clear();
+        }
+        if (profileConfirmPasswordField != null) {
+            profileConfirmPasswordField.clear();
+        }
+        showInfoPopup("Profile Update", "Success", result.message());
+    }
+
+    private StudentStaffPortalService.BorrowRecordView getSingleSelectedBorrowedRecord() {
+        if (borrowedRecordTable == null) {
+            showErrorPopup("Borrowed Books", "Borrowed book screen is not open.", "Open Borrowed Books first.");
+            return null;
+        }
+        StudentStaffPortalService.BorrowRecordView selected = borrowedRecordTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showErrorPopup("Borrowed Books", "No book selected.", "Select a single borrowed book first.");
+            return null;
+        }
+        return selected;
+    }
+
     private void refreshBooks() {
         if (bookTable == null) {
             if (contentPane != null) {
@@ -834,6 +1150,16 @@ public class StudentStaffPortalApp extends Application {
         borrowHistoryList.setItems(FXCollections.observableArrayList(history));
     }
 
+    private void refreshBorrowedBookRecords() {
+        if (borrowedRecordTable == null || currentUser == null) {
+            return;
+        }
+        portalService.autoReturnExpiredBooks();
+        borrowedRecordTable.setItems(FXCollections.observableArrayList(
+                portalService.getBorrowedBookRecords(currentUser.username())
+        ));
+    }
+
     private void refreshReturnBooks() {
         if (returnBookListView == null || currentUser == null) {
             return;
@@ -844,6 +1170,21 @@ public class StudentStaffPortalApp extends Application {
                 .filter(book -> currentUser.username().equals(book.getBorrowedByUsername()))
                 .toList();
         returnBookListView.setItems(FXCollections.observableArrayList(borrowedByCurrentUser));
+    }
+
+    private void refreshNotifications() {
+        if (notificationList == null || currentUser == null) {
+            return;
+        }
+        List<String> rows = portalService.getNotificationBoard(currentUser.username())
+                .stream()
+                .map(n -> formatNotificationRow(n.timestamp(), n.category(), n.message()))
+                .collect(java.util.stream.Collectors.toList());
+        if (rows.isEmpty()) {
+            notificationList.setItems(FXCollections.observableArrayList("No notifications."));
+            return;
+        }
+        notificationList.setItems(FXCollections.observableArrayList(rows));
     }
 
     private void updateStudentPasswordHint() {
@@ -873,6 +1214,40 @@ public class StudentStaffPortalApp extends Application {
         }
         registerPasswordHintLabel.setText("Strong password.");
         registerPasswordHintLabel.setStyle("-fx-text-fill: #16a34a; -fx-font-size: 11px;");
+    }
+
+    private void updateProfilePasswordHint() {
+        if (profilePasswordHintLabel == null) {
+            return;
+        }
+        String password = profilePasswordField == null ? "" : profilePasswordField.getText();
+        String confirm = profileConfirmPasswordField == null ? "" : profileConfirmPasswordField.getText();
+        if (password == null || password.isEmpty()) {
+            profilePasswordHintLabel.setText("Leave password fields blank to keep current password.");
+            profilePasswordHintLabel.setStyle("-fx-text-fill: #64748b; -fx-font-size: 11px;");
+            return;
+        }
+        boolean strong = password.length() >= 8
+                && password.matches(".*[A-Za-z].*")
+                && password.matches(".*\\d.*")
+                && password.matches(".*[A-Z].*");
+        if (!strong) {
+            profilePasswordHintLabel.setText("Weak password: use at least 8 chars with letter, number, and uppercase.");
+            profilePasswordHintLabel.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 11px;");
+            return;
+        }
+        if (!confirm.isEmpty() && !password.equals(confirm)) {
+            profilePasswordHintLabel.setText("Passwords do not match.");
+            profilePasswordHintLabel.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 11px;");
+            return;
+        }
+        profilePasswordHintLabel.setText("Strong password.");
+        profilePasswordHintLabel.setStyle("-fx-text-fill: #16a34a; -fx-font-size: 11px;");
+    }
+
+    private String formatNotificationRow(LocalDateTime timestamp, String category, String message) {
+        return "[" + timestamp.toLocalDate() + " " + timestamp.toLocalTime().withNano(0) + "] "
+                + "[" + category + "] " + message;
     }
 
     private void showInfoPopup(String title, String header, String content) {
