@@ -1,5 +1,6 @@
 package project.task2.repo;
 
+import project.task1.model.StudentStaffAccount;
 import project.task2.model.AuthorAccount;
 
 import java.io.*;
@@ -113,5 +114,9 @@ public class AuthorRepository {
 
     public int getCount() {
         return authorsByUsername.size();
+    }
+
+    public List<AuthorAccount> getAllUsers() {
+        return authorsByUsername.values().stream().toList();
     }
 }

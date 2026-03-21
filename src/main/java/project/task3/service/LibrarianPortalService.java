@@ -1,10 +1,13 @@
 package project.task3.service;
 
 import project.task1.model.StudentStaffAccount;
+import project.task1.model.UserAccount;
+import project.task1.model.UserRole;
 import project.task1.repo.BookRepository;
 import project.task1.repo.StudentStaffRepository;
 import project.shared.SharedAuthFacade;
 import project.task1.service.StudentStaffPortalService;
+import project.task2.model.AuthorAccount;
 import project.task2.model.BookSubmission;
 import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
@@ -26,16 +29,22 @@ import java.util.stream.Collectors;
 
 public class LibrarianPortalService {
     private final LibrarianRepository librarianRepository;
+    private final StudentStaffRepository studentStaffRepository;
+    private final AuthorRepository authorRepository;
     private final SharedAuthFacade sharedAuthFacade;
     private final BookRepository bookRepository;
     private final SubmissionRepository bookSubmissionRepository;
 
+    private static final String TASK1_NOTIFICATIONS_FILE = "data/task1/notifications.txt";
+    private static final String TASK2_NOTIFICATIONS_FILE = "data/task2/notifications.txt";
     private static final String TASK3_NOTIFICATIONS_FILE = "data/task3/notifications.txt";
     private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
-    public LibrarianPortalService(LibrarianRepository librarianRepository, BookRepository bookRepository, SubmissionRepository bookSubmissionRepository) {
+    public LibrarianPortalService(LibrarianRepository librarianRepository, StudentStaffRepository studentStaffRepository, AuthorRepository authorRepository, BookRepository bookRepository, SubmissionRepository bookSubmissionRepository) {
         this.librarianRepository = librarianRepository;
-        this.sharedAuthFacade = new SharedAuthFacade(new StudentStaffRepository(), new AuthorRepository(), librarianRepository);
+        this.studentStaffRepository = studentStaffRepository;
+        this.authorRepository = authorRepository;
+        this.sharedAuthFacade = new SharedAuthFacade(studentStaffRepository, authorRepository, librarianRepository);
         this.bookRepository = bookRepository;
         this.bookSubmissionRepository = bookSubmissionRepository;
     }
@@ -105,6 +114,23 @@ public class LibrarianPortalService {
                 .collect(Collectors.toList());
     }
 
+    public List<UserAccount> getUsersScreenData(String type) {
+        switch (type) {
+            case "Student/Staff":
+                return new ArrayList<UserAccount>(studentStaffRepository.getAllUsers());
+            case "Author":
+                return new ArrayList<UserAccount>(authorRepository.getAllUsers());
+            case "Librarian":
+                return new ArrayList<UserAccount>(librarianRepository.getAllUsers());
+            case "All":
+                ArrayList<UserAccount> l = new ArrayList<>(studentStaffRepository.getAllUsers());
+                l.addAll(authorRepository.getAllUsers());
+                l.addAll(librarianRepository.getAllUsers());
+                return l;
+        }
+        return new ArrayList<>();
+    }
+
     public OperationResult validateBookSubmissionId(String subId) {
         if (bookSubmissionRepository.findById(subId).isEmpty()) return OperationResult.failure("Invalid book submission Id.");
         else return OperationResult.success("");
@@ -119,6 +145,8 @@ public class LibrarianPortalService {
         s.approve(user.getUsername());
         bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), s.getGenre());//Note that description is just an alias of summary for book
         bookSubmissionRepository.update(s);//Changes should be saved once there are updates
+
+        appendNotificationTo(s.getAuthorUsername(), "ANNOUNCEMENT", "Your Book Submission \"" + s.getTitle() + "\" was approved.", UserRole.AUTHOR);//Send notification to the author
         return OperationResult.success("Approve successful: \"" + sub.get().getTitle() + "\" is approved and created.");
     }
     public OperationResult approveBookSubmission(String subId, String Username) {
@@ -135,6 +163,8 @@ public class LibrarianPortalService {
         BookSubmission s = sub.get();
         s.reject(user.getUsername(), reason);
         bookSubmissionRepository.update(s);
+
+        appendNotificationTo(s.getAuthorUsername(), "ANNOUNCEMENT", "Your Book Submission \"" + s.getTitle() + "\" was rejected.\nRejection reason:" + reason, UserRole.AUTHOR);//Send notification to the author
         return OperationResult.success("Reject successful: \"" + sub.get().getTitle() + "\" is rejected.");
     }
     public OperationResult rejectBookSubmission(String subId, String Username, String reason) {
@@ -183,6 +213,131 @@ public class LibrarianPortalService {
         ));
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
         return OperationResult.success("Profile updated successfully.");
+    }
+
+    public OperationResult editUserAccount(String username, String newFullName, String newPassword, String confirmNewPassword) {
+        String normalizedUsername = safeTrim(username);
+        String normalizedFullName = safeTrim(newFullName);
+        String pwd = newPassword == null ? "" : newPassword;
+        String confirm = confirmNewPassword == null ? "" : confirmNewPassword;
+
+        if (normalizedUsername.isEmpty()) return OperationResult.failure("Edit failed: invalid username.");
+
+        UserAccount user;
+        Optional<StudentStaffAccount> userStudentStaff = Optional.empty();
+        Optional<AuthorAccount> userAuthor = Optional.empty();
+        Optional<LibrarianAccount> userLibrarian = Optional.empty();
+        UserRole role;
+        do
+        {
+            userStudentStaff = studentStaffRepository.findByUsername(normalizedUsername);
+            if (userStudentStaff.isPresent()) {
+                role = UserRole.STUDENT;//Use STUDENT to represent both student and staff here
+                user = userStudentStaff.get();
+                break;
+            }
+
+            userAuthor = authorRepository.findByUsername(normalizedUsername);
+            if (userAuthor.isPresent()) {
+                role = UserRole.AUTHOR;//Use STUDENT to represent both student and staff here
+                user = userAuthor.get();
+                break;
+            }
+
+            userLibrarian = librarianRepository.findByUsername(normalizedUsername);
+            if (userLibrarian.isPresent()) {
+                role = UserRole.LIBRARIAN;//Use STUDENT to represent both student and staff here
+                user = userLibrarian.get();
+                break;
+            }
+
+            return OperationResult.failure("Edit failed: account not found.");
+        } while (false);
+
+        if (normalizedFullName.isEmpty()) return OperationResult.failure("Edit failed: full name is required.");
+
+        String salt = user.getPasswordSaltBase64();
+        String hash = user.getPasswordHashBase64();
+        if (!pwd.isBlank() || !confirm.isBlank()) {
+            if (!pwd.equals(confirm)) return OperationResult.failure("Edit failed: passwords do not match.");
+            if (!isStrongPassword(pwd)) return OperationResult.failure("Edit failed: weak password.");
+            salt = project.task1.security.PasswordSecurity.generateSaltBase64();
+            hash = project.task1.security.PasswordSecurity.hashPasswordBase64(pwd, salt);
+        }
+
+        switch (role) {
+            case STUDENT:
+                studentStaffRepository.save(new StudentStaffAccount(
+                        user.getUsername(),
+                        normalizedFullName,
+                        salt,
+                        hash,
+                        userStudentStaff.get().getRole()
+                ));
+                break;
+            case AUTHOR:
+                authorRepository.save(new AuthorAccount(
+                        user.getUsername(),
+                        normalizedFullName,
+                        salt,
+                        hash,
+                        userAuthor.get().getBio()
+                ));
+                break;
+            case LIBRARIAN:
+                librarianRepository.save(new LibrarianAccount(
+                        user.getUsername(),
+                        normalizedFullName,
+                        salt,
+                        hash,
+                        userLibrarian.get().getEmployeeID()
+                ));
+                break;
+        }
+        appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your profile was edited.", role);
+
+        return OperationResult.success("Successfully edited target user account.");
+    }
+    public String getUserEditConfirmDetail(String username, String newFullName) {
+        String normalizedUsername = safeTrim(username);
+
+        UserAccount user;
+        do
+        {
+            Optional<StudentStaffAccount> userStudentStaff = studentStaffRepository.findByUsername(normalizedUsername);
+            if (userStudentStaff.isPresent()) {
+                user = userStudentStaff.get();
+                break;
+            }
+
+            Optional<AuthorAccount> userAuthor = authorRepository.findByUsername(normalizedUsername);
+            if (userAuthor.isPresent()) {
+                user = userAuthor.get();
+                break;
+            }
+
+            Optional<LibrarianAccount> userLibrarian = librarianRepository.findByUsername(normalizedUsername);
+            if (userLibrarian.isPresent()) {
+                user = userLibrarian.get();
+                break;
+            }
+
+            return "";
+        } while (false);
+
+        return "Username: " + user.getUsername() + "\nFull Name: "+ user.getFullName() + " -> " + newFullName + "\nRole: " + user.getRole();
+    }
+    public OperationResult validateUsername(String username) {//Validate username used for editing
+        String normalizedUsername = safeTrim(username);
+        do
+        {
+            if (studentStaffRepository.findByUsername(normalizedUsername).isPresent()) break;
+            if (authorRepository.findByUsername(normalizedUsername).isPresent()) break;
+            if (librarianRepository.findByUsername(normalizedUsername).isPresent()) break;
+
+            return OperationResult.failure("User does not exist.");
+        } while (false);
+        return OperationResult.success("");
     }
 
     public String getConfirmDetail(String subId) {
@@ -253,6 +408,40 @@ public class LibrarianPortalService {
             );
             Files.write(
                     Paths.get(TASK3_NOTIFICATIONS_FILE),
+                    List.of(line),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND
+            );
+        } catch (IOException ignored) {
+        }
+    }
+
+    private void appendNotificationTo(String username, String category, String message, UserRole role) {
+        String file = "";
+        String folder = "";
+        switch (role) {
+            case STUDENT, STAFF:
+                file = TASK1_NOTIFICATIONS_FILE;
+                folder = "data/task1";
+                break;
+            case AUTHOR:
+                file = TASK2_NOTIFICATIONS_FILE;
+                folder = "data/task2";
+                break;
+            case LIBRARIAN:
+                file = TASK3_NOTIFICATIONS_FILE;
+                folder = "data/task3";
+        }
+        try {
+            Files.createDirectories(Paths.get(folder));
+            String line = String.join("|",
+                    encode(username),
+                    encode(category),
+                    encode(message),
+                    LocalDateTime.now().format(HISTORY_TIME_FORMAT)
+            );
+            Files.write(
+                    Paths.get(file),
                     List.of(line),
                     StandardOpenOption.CREATE,
                     StandardOpenOption.APPEND
