@@ -13,6 +13,7 @@ import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import project.shared.SharedAuthFacade;
 import project.task1.repo.StudentStaffRepository;
+import project.task1.service.StudentStaffPortalService;
 import project.task2.model.BookSubmission;
 import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
@@ -22,6 +23,7 @@ import project.task3.repo.LibrarianRepository;
 import project.task3.service.LibrarianPortalService;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,15 +32,15 @@ public class LibrarianPortalApp extends Application {
     private final LibrarianRepository librarianRepository;
     private final SharedAuthFacade authFacade;
 
-    private LibrarianAccount currentUser;
+    private SharedAuthFacade.UserPrincipal currentUser;
 
     private Stage stage;
     private Scene loginRegisterScene;
     private Scene registerScene;
     private Scene acceptRejectScene;
-    private HBox statusBar;
+    private Scene profileScene;
+    private Scene notificationScene;
 
-    private Label statusLabel;
     private Label currentUserLabel;
     private TableView<BookSubmission> bookSubmissionTable;
 
@@ -52,6 +54,7 @@ public class LibrarianPortalApp extends Application {
     private TextField approveSubmissionIdField;
     private ComboBox<String> actionBox;
     private TextField rejectReasonField;
+    private Label approveStatusLabel;
 
     private TextField registerUsernameField;
     private TextField registerFullNameField;
@@ -59,9 +62,21 @@ public class LibrarianPortalApp extends Application {
     private PasswordField registerConfirmPasswordField;
     private Label registerPasswordHintLabel;
     private TextField registerStaffIDField;
+    private Label registerStatusLabel;
 
     private TextField loginUsernameField;
     private PasswordField loginPasswordField;
+    private Label loginStatusLabel;
+
+    private TextField profileFullNameField;
+    private TextField profilePasswordField;
+    private TextField profileConfirmPasswordField;
+    private TextField profileStaffIDField;
+    private Label profilePasswordHintLabel;
+    private Label profileStatusLabel;
+
+    private ListView<String> notificationList;
+    private Label notificationStatusLabel;
 
     public LibrarianPortalApp() {
         librarianRepository = new LibrarianRepository();
@@ -79,10 +94,11 @@ public class LibrarianPortalApp extends Application {
 
     @Override
     public void start(Stage stage) {
-        statusBar = buildStatusBar();
         loginRegisterScene = buildLoginRegisterScene();
         registerScene = buildRegisterScene();
         acceptRejectScene = buildAcceptRejectScene();
+        profileScene = buildProfileScene();
+        notificationScene = buildNotificattionScene();
 
         stage.setTitle("Task 3 - Librarian Portal");
         stage.setScene(loginRegisterScene);
@@ -98,7 +114,8 @@ public class LibrarianPortalApp extends Application {
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
         root.setCenter(buildLoginHeader());
-        root.setBottom(statusBar);
+        loginStatusLabel = new Label();
+        root.setBottom(buildStatusBar(loginStatusLabel));
 
         Scene scene = new Scene(root, 900, 600);
         scene.getStylesheets().add(
@@ -112,7 +129,8 @@ public class LibrarianPortalApp extends Application {
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
         root.setCenter(buildRegisterHeader());
-        root.setBottom(statusBar);
+        registerStatusLabel = new Label();
+        root.setBottom(buildStatusBar(registerStatusLabel));
 
         Scene scene = new Scene(root, 1060, 700);
         scene.getStylesheets().add(
@@ -120,6 +138,57 @@ public class LibrarianPortalApp extends Application {
         );
         return scene;
     }
+
+    private Scene buildAcceptRejectScene() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setTop(new HBox(18, buildSceneSelector(0)));
+        root.setCenter(buildBookCenterPanel());
+        approveStatusLabel = new Label();
+        root.setBottom(buildStatusBar(approveStatusLabel));
+
+        Scene scene = new Scene(root, 1060, 700);
+        scene.getStylesheets().add(
+                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
+        );
+
+        refreshSubmissions();
+
+        return scene;
+    }
+
+    private Scene buildProfileScene() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setTop(new HBox(18, buildSceneSelector(1)));
+        root.setCenter(buildProfileCard());
+        profileStatusLabel = new Label();
+        root.setBottom(buildStatusBar(profileStatusLabel));
+
+        Scene scene = new Scene(root, 1060, 700);
+        scene.getStylesheets().add(
+                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
+        );
+
+        return scene;
+    }
+
+    private Scene buildNotificattionScene() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setTop(new HBox(18, buildSceneSelector(2)));
+        root.setCenter(buildNotificationCard());
+        notificationStatusLabel = new Label();
+        root.setBottom(buildStatusBar(notificationStatusLabel));
+
+        Scene scene = new Scene(root, 1060, 700);
+        scene.getStylesheets().add(
+                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
+        );
+
+        return scene;
+    }
+
 
     private VBox buildLoginHeader() {
         VBox wrapper = new VBox(20);
@@ -147,27 +216,61 @@ public class LibrarianPortalApp extends Application {
         return wrapper;
     }
 
+    private VBox buildProfileCard() {
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        Label heading = new Label("Manage Profile");
+        heading.getStyleClass().add("card-title");
+        Label hint = new Label("Update full name and password.");
+        hint.getStyleClass().add("muted");
 
-    private Scene buildAcceptRejectScene() {
-        BorderPane root = new BorderPane();
-        root.getStyleClass().add("root-pane");
-        root.setTop(buildAcceptRejectHeader());
-        root.setCenter(buildBookCenterPanel());
-        root.setBottom(statusBar);
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setVgap(8);
+        profileFullNameField = new TextField();
+        profilePasswordField = new PasswordField();
+        profileConfirmPasswordField = new PasswordField();
+        profileStaffIDField = new TextField();
+        profilePasswordHintLabel = new Label();
+        profilePasswordHintLabel.getStyleClass().add("muted");
+        profilePasswordField.textProperty().addListener((obs, oldValue, newValue) -> updateProfilePasswordHint());
+        profileConfirmPasswordField.textProperty().addListener((obs, oldValue, newValue) -> updateProfilePasswordHint());
 
-        Scene scene = new Scene(root, 1060, 700);
-        scene.getStylesheets().add(
-                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
-        );
+        grid.add(new Label("Full Name"), 0, 0);
+        grid.add(profileFullNameField, 1, 0);
+        grid.add(new Label("New Password"), 0, 1);
+        grid.add(profilePasswordField, 1, 1);
+        grid.add(new Label("Confirm Password"), 0, 2);
+        grid.add(profileConfirmPasswordField, 1, 2);
 
-        refreshSubmissions();
+        if (currentUser != null) {
+            profileFullNameField.setText(currentUser.fullName());
+        }
+        updateProfilePasswordHint();
 
-        return scene;
+        Button updateBtn = new Button("Update Profile");
+        updateBtn.getStyleClass().add("primary-btn");
+        updateBtn.setOnAction(e -> handleProfileUpdate());
+        card.getChildren().addAll(heading, hint, grid, profilePasswordHintLabel, updateBtn);
+        return card;
+    }
+
+    private VBox buildNotificationCard() {
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        Label heading = new Label("Notification Board");
+        heading.getStyleClass().add("card-title");
+        Label hint = new Label("Timestamped and categorized notifications.");
+        hint.getStyleClass().add("muted");
+        notificationList = new ListView<>();
+        VBox.setVgrow(notificationList, Priority.ALWAYS);
+        card.getChildren().addAll(heading, hint, notificationList);
+        return card;
     }
 
     private VBox buildAcceptRejectHeader() {
         VBox wrapper = new VBox(14);
-        wrapper.setPadding(new Insets(18, 18, 8, 18));
+        wrapper.setPadding(new Insets(0, 18, 8, 18));
 
         Label title = new Label("Librarian Portal");
         title.getStyleClass().add("page-title");
@@ -317,11 +420,7 @@ public class LibrarianPortalApp extends Application {
         acceptRejectBtn.getStyleClass().add("primary-btn");
         acceptRejectBtn.setOnAction(event -> handleApproveReject());
 
-        Button logoutBtn = new Button("Logout");
-        logoutBtn.getStyleClass().add("secondary-btn");
-        logoutBtn.setOnAction(event -> handleLogout());
-
-        actions.getChildren().addAll(acceptRejectBtn, logoutBtn);
+        actions.getChildren().add(acceptRejectBtn);
 
         HBox fields = new HBox(10);
 
@@ -417,18 +516,52 @@ public class LibrarianPortalApp extends Application {
         filters2.getChildren().add(refreshBtn);
 
         VBox.setVgrow(bookSubmissionTable, Priority.ALWAYS);
-        wrapper.getChildren().addAll(new Label("Filters: "), filters1, filters2, heading, bookSubmissionTable);
+        wrapper.getChildren().addAll(buildAcceptRejectHeader(), new Label("Filters: "), filters1, filters2, heading, bookSubmissionTable);
         return wrapper;
     }
 
-    private HBox buildStatusBar() {
+    private HBox buildStatusBar(Label s) {
         HBox statusBar = new HBox();
         statusBar.setPadding(new Insets(10, 18, 12, 18));
-        statusLabel = new Label();
-        statusLabel.getStyleClass().add("status");
-        statusBar.getChildren().add(statusLabel);
+        s.getStyleClass().add("status");
+        statusBar.getChildren().add(s);
         return statusBar;
     }
+
+    private HBox buildSceneSelector(int disable) {
+        HBox selector = new HBox();
+        selector.setPadding(new Insets(10, 18, 12, 18));
+
+        Button acceptReject = new Button("Manage Book Submission");
+        Button profile = new Button("Manage Personal Profile");
+        Button notification = new Button("Notifications");
+        Button logoutBtn = new Button("Logout");
+
+        acceptReject.getStyleClass().add("primary-btn");
+        acceptReject.setOnAction(event -> stage.setScene(acceptRejectScene));
+        acceptReject.setPrefWidth(240);
+        profile.getStyleClass().add("primary-btn");
+        profile.setOnAction(event -> stage.setScene(profileScene));
+        profile.setPrefWidth(240);
+        notification.getStyleClass().add("primary-btn");
+        notification.setOnAction(event -> { stage.setScene(notificationScene); refreshNotifications(); });
+        notification.setPrefWidth(180);
+        logoutBtn.getStyleClass().add("secondary-btn");
+        logoutBtn.setOnAction(event -> handleLogout());
+
+        switch (disable) {
+            case 0: acceptReject.setDisable(true);
+            break;
+            case 1: profile.setDisable(true);
+            break;
+            case 2: notification.setDisable(true);
+        }
+
+        selector.getChildren().addAll(acceptReject, profile, notification, logoutBtn);
+
+        return selector;
+    }
+
 
     private void handleRegister() {
         String username = registerUsernameField.getText() == null ? "" : registerUsernameField.getText().trim();
@@ -463,17 +596,22 @@ public class LibrarianPortalApp extends Application {
     private void handleLogin() {
         SharedAuthFacade.AuthResult result =
                 authFacade.login(loginUsernameField.getText(), loginPasswordField.getText(), "Librarian");
+
         setStatus(result.message());
-        if (result.success()) {
-            currentUser = librarianRepository.findByUsername(loginUsernameField.getText().trim()).orElse(null);
-            if (currentUser == null) {
-                setStatus("Login failed: unable to resolve librarian profile.");
-                return;
-            }
-            currentUserLabel.setText("Current user: " + currentUser.getUsername());
-            loginPasswordField.clear();
-            stage.setScene(acceptRejectScene);
+        if (!result.success()) {
+            showErrorPopup("Login Failed", "Invalid credentials.", result.message());
+            return;
         }
+        currentUser = result.principal();
+        if (!"LIBRARIAN".equalsIgnoreCase(currentUser.role())) {
+            currentUser = null;
+            showErrorPopup("Login Failed", "Unsupported role.", "This dashboard is only for librarian users.");
+            return;
+        }
+        currentUserLabel.setText("Current user: " + currentUser.username() + " (" + currentUser.role() + ")");
+        loginPasswordField.clear();
+        stage.setScene(acceptRejectScene);
+        showInfoPopup("Login", "Welcome", result.message());
     }
 
     private void handleLogout() {
@@ -481,7 +619,7 @@ public class LibrarianPortalApp extends Application {
             setStatus("No user is currently logged in.");
             return;
         }
-        String username = currentUser.getUsername();
+        String username = currentUser.username();
         currentUser = null;
         currentUserLabel.setText("Current user: (none)");
         setStatus("Logged out: " + username);
@@ -515,7 +653,7 @@ public class LibrarianPortalApp extends Application {
         Optional<ButtonType> alertr = alert.showAndWait();
         if (alertr.get() != ButtonType.OK) return;
 
-        result = portalService.approveBookSubmission(subId, currentUser);
+        result = portalService.approveBookSubmission(subId, currentUser.username());
         setStatus(result.message());
         if (result.success()) {
             refreshSubmissions();
@@ -546,7 +684,7 @@ public class LibrarianPortalApp extends Application {
         Optional<ButtonType> alertr = alert.showAndWait();
         if (alertr.get() != ButtonType.OK) return;
 
-        result = portalService.rejectBookSubmission(subId, currentUser, rReason);
+        result = portalService.rejectBookSubmission(subId, currentUser.username(), rReason);
         setStatus(result.message());
         if (result.success()) {
             refreshSubmissions();
@@ -555,6 +693,42 @@ public class LibrarianPortalApp extends Application {
         }
     }
 
+    private void handleProfileUpdate() {
+        if (currentUser == null) {
+            showErrorPopup("Profile Update", "User not logged in.", "Please log in first.");
+            return;
+        }
+        LibrarianPortalService.OperationResult result = portalService.updateProfile(
+                currentUser.username(),
+                profileFullNameField == null ? "" : profileFullNameField.getText(),
+                profilePasswordField == null ? "" : profilePasswordField.getText(),
+                profileConfirmPasswordField == null ? "" : profileConfirmPasswordField.getText(),
+                profileStaffIDField == null ? "" : profileStaffIDField.getText()
+        );
+        setStatus(result.message());
+        if (!result.success()) {
+            showErrorPopup("Profile Update Failed", "Unable to update profile.", result.message());
+            return;
+        }
+        currentUser = new SharedAuthFacade.UserPrincipal(
+                currentUser.username(),
+                profileFullNameField.getText().trim(),
+                currentUser.role()
+        );
+        currentUserLabel.setText("Current user: " + currentUser.username() + " (" + currentUser.role() + ")");
+        if (profilePasswordField != null) {
+            profilePasswordField.clear();
+        }
+        if (profileConfirmPasswordField != null) {
+            profileConfirmPasswordField.clear();
+        }
+        if (profileStaffIDField != null) {
+            profileStaffIDField.clear();
+        }
+        showInfoPopup("Profile Update", "Success", result.message());
+    }
+
+
     private void refreshSubmissions() {
         LocalDate mind = tableSubmissionMin.getValue();
         LocalDate maxd = tableSubmissionMax.getValue();
@@ -562,19 +736,47 @@ public class LibrarianPortalApp extends Application {
         bookSubmissionTable.setItems(FXCollections.observableArrayList(l));
     }
 
+    private void refreshNotifications() {
+        if (notificationList == null || currentUser == null) return;
+        List<String> rows = portalService.getNotificationBoard(currentUser.username())
+                .stream()
+                .map(n -> formatNotificationRow(n.timestamp(), n.category(), n.message()))
+                .collect(java.util.stream.Collectors.toList());
+        if (rows.isEmpty()) {
+            notificationList.setItems(FXCollections.observableArrayList("No notifications."));
+            return;
+        }
+        notificationList.setItems(FXCollections.observableArrayList(rows));
+    }
+
+    private String formatNotificationRow(LocalDateTime timestamp, String category, String message) {
+        return "[" + timestamp.toLocalDate() + " " + timestamp.toLocalTime().withNano(0) + "] "
+                + "[" + category + "] " + message;
+    }
+
     private void setStatus(String message) {
-        statusLabel.setText(message);
+        registerStatusLabel.setText(message);
+        loginStatusLabel.setText(message);
+        approveStatusLabel.setText(message);
+        profileStatusLabel.setText(message);
+        notificationStatusLabel.setText(message);
     }
 
     private void updateRegisterPasswordHint() {
-        if (registerPasswordHintLabel == null) {
-            return;
-        }
-        String password = registerPasswordField == null ? "" : registerPasswordField.getText();
-        String confirm = registerConfirmPasswordField == null ? "" : registerConfirmPasswordField.getText();
+        updatePasswordHint(registerPasswordField, registerConfirmPasswordField, registerPasswordHintLabel);
+    }
+
+    private void updateProfilePasswordHint() {
+        updatePasswordHint(profilePasswordField, profileConfirmPasswordField, profilePasswordHintLabel);
+    }
+
+    static private void updatePasswordHint(TextField passwordField, TextField confirmPasswordField, Label hint) {
+        if (hint == null) return;
+        String password = passwordField == null ? "" : passwordField.getText();
+        String confirm = confirmPasswordField == null ? "" : confirmPasswordField.getText();
         if (password == null || password.isEmpty()) {
-            registerPasswordHintLabel.setText("Password is required.");
-            registerPasswordHintLabel.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 11px;");
+            hint.setText("Leave password fields blank to keep current password.");
+            hint.setStyle("-fx-text-fill: #64748b; -fx-font-size: 11px;");
             return;
         }
         boolean strong = password.length() >= 8
@@ -582,16 +784,32 @@ public class LibrarianPortalApp extends Application {
                 && password.matches(".*\\d.*")
                 && password.matches(".*[A-Z].*");
         if (!strong) {
-            registerPasswordHintLabel.setText("Weak password: use at least 8 chars with letter, number, and uppercase.");
-            registerPasswordHintLabel.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 11px;");
+            hint.setText("Weak password: use at least 8 chars with letter, number, and uppercase.");
+            hint.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 11px;");
             return;
         }
         if (!confirm.isEmpty() && !password.equals(confirm)) {
-            registerPasswordHintLabel.setText("Passwords do not match.");
-            registerPasswordHintLabel.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 11px;");
+            hint.setText("Passwords do not match.");
+            hint.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 11px;");
             return;
         }
-        registerPasswordHintLabel.setText("Strong password.");
-        registerPasswordHintLabel.setStyle("-fx-text-fill: #16a34a; -fx-font-size: 11px;");
+        hint.setText("Strong password.");
+        hint.setStyle("-fx-text-fill: #16a34a; -fx-font-size: 11px;");
+    }
+
+    private void showInfoPopup(String title, String header, String content) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
+        alert.setContentText(content);
+        alert.showAndWait();
+    }
+
+    private void showErrorPopup(String title, String header, String content) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
+        alert.setContentText(content);
+        alert.showAndWait();
     }
 }
