@@ -14,6 +14,7 @@ import javafx.stage.Stage;
 import project.shared.SharedAuthFacade;
 import project.task1.repo.StudentStaffRepository;
 import project.task1.service.StudentStaffPortalService;
+import project.task1.model.UserAccount;
 import project.task2.model.BookSubmission;
 import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
@@ -29,7 +30,6 @@ import java.util.Optional;
 
 public class LibrarianPortalApp extends Application {
     private final LibrarianPortalService portalService;
-    private final LibrarianRepository librarianRepository;
     private final SharedAuthFacade authFacade;
 
     private SharedAuthFacade.UserPrincipal currentUser;
@@ -40,6 +40,7 @@ public class LibrarianPortalApp extends Application {
     private Scene acceptRejectScene;
     private Scene profileScene;
     private Scene notificationScene;
+    private Scene manageUsersScene;
 
     private Label currentUserLabel;
     private TableView<BookSubmission> bookSubmissionTable;
@@ -75,19 +76,31 @@ public class LibrarianPortalApp extends Application {
     private Label profilePasswordHintLabel;
     private Label profileStatusLabel;
 
+    private ComboBox<String> manageUsersType;
+    private TextField manageUsersSelectedName;
+    private TextField manageUsersNewFullName;
+    private PasswordField manageUsersNewPassword;
+    private PasswordField manageUsersNewPasswordConfirm;
+    private TableView<UserAccount> allUsersTable;
+    private Label manageUsersStatusLabel;
+
     private ListView<String> notificationList;
     private Label notificationStatusLabel;
 
     public LibrarianPortalApp() {
-        librarianRepository = new LibrarianRepository();
+        LibrarianRepository librarianRepository = new LibrarianRepository();
+        StudentStaffRepository studentStaffRepository = new StudentStaffRepository();
+        AuthorRepository authorRepository = new AuthorRepository();
         portalService = new LibrarianPortalService(
                 librarianRepository,
+                studentStaffRepository,
+                authorRepository,
                 new InMemoryBookRepository(),
                 new SubmissionRepository()
         );
         authFacade = new SharedAuthFacade(
-                new StudentStaffRepository(),
-                new AuthorRepository(),
+                studentStaffRepository,
+                authorRepository,
                 librarianRepository
         );
     }
@@ -99,6 +112,7 @@ public class LibrarianPortalApp extends Application {
         acceptRejectScene = buildAcceptRejectScene();
         profileScene = buildProfileScene();
         notificationScene = buildNotificattionScene();
+        manageUsersScene = buildManageUsersScene();
 
         stage.setTitle("Task 3 - Librarian Portal");
         stage.setScene(loginRegisterScene);
@@ -180,6 +194,22 @@ public class LibrarianPortalApp extends Application {
         root.setCenter(buildNotificationCard());
         notificationStatusLabel = new Label();
         root.setBottom(buildStatusBar(notificationStatusLabel));
+
+        Scene scene = new Scene(root, 1060, 700);
+        scene.getStylesheets().add(
+                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
+        );
+
+        return scene;
+    }
+
+    private Scene buildManageUsersScene() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setTop(new HBox(18, buildSceneSelector(3)));
+        root.setCenter(buildManageUsersView());
+        manageUsersStatusLabel = new Label();
+        root.setBottom(buildStatusBar(manageUsersStatusLabel));
 
         Scene scene = new Scene(root, 1060, 700);
         scene.getStylesheets().add(
@@ -520,6 +550,73 @@ public class LibrarianPortalApp extends Application {
         return wrapper;
     }
 
+    private VBox buildManageUsersView() {
+        VBox wrapper = new VBox(10);
+        wrapper.setPadding(new Insets(8, 18, 18, 18));
+        Label heading = new Label("Users");
+        heading.getStyleClass().add("section-title");
+
+        allUsersTable = new TableView<>();
+        allUsersTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+
+        TableColumn<UserAccount, String> usernameCol = new TableColumn<>("Username");
+        usernameCol.setCellValueFactory(new PropertyValueFactory<>("username"));
+
+        TableColumn<UserAccount, String> fullNameCol = new TableColumn<>("Full Name");
+        fullNameCol.setCellValueFactory(new PropertyValueFactory<>("fullName"));
+
+        TableColumn<UserAccount, String> roleCol = new TableColumn<>("Role");
+        roleCol.setCellValueFactory(new PropertyValueFactory<>("role"));
+
+        allUsersTable.getColumns().addAll(usernameCol, fullNameCol, roleCol);
+
+        allUsersTable.getSelectionModel().selectedItemProperty().addListener((obs, oldUser, newUser) -> {
+            if (newUser != null) manageUsersSelectedName.setText(newUser.getUsername());
+        });
+
+
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        card.setPrefWidth(320);
+
+        Label cardHeading = new Label("Manage Users");
+        cardHeading.getStyleClass().add("card-title");
+        Label hint = new Label("Select a user in the table,\n or type the username below.");
+        hint.getStyleClass().add("muted");
+
+        HBox fields = new HBox(10);
+        manageUsersType = new ComboBox<>(FXCollections.observableArrayList("Student/Staff", "Author", "Librarian", "All"));
+        manageUsersType.setValue("All");
+        manageUsersType.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
+            @Override
+            public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
+                refreshEditUsers();
+            }
+        });
+        manageUsersSelectedName = new TextField();
+        manageUsersSelectedName.setPromptText("Username");
+        manageUsersNewFullName = new TextField();
+        manageUsersNewFullName.setPromptText("New Full Name");
+        manageUsersNewPassword = new PasswordField();
+        manageUsersNewPassword.setPromptText("New Password (leave blanked if unchanged)");
+        manageUsersNewPasswordConfirm = new PasswordField();
+        manageUsersNewPasswordConfirm.setPromptText("Confirm New Password");
+        fields.getChildren().addAll(manageUsersType, manageUsersSelectedName, manageUsersNewFullName, manageUsersNewPassword, manageUsersNewPasswordConfirm);
+
+        HBox actions = new HBox(10);
+        Button applyBtn = new Button("Apply Changes");
+        applyBtn.getStyleClass().add("primary-btn");
+        applyBtn.setOnAction(event -> handleUserEdit());
+        actions.getChildren().add(applyBtn);
+
+        card.getChildren().addAll(heading, hint, fields, actions);
+
+        VBox.setVgrow(bookSubmissionTable, Priority.ALWAYS);
+        wrapper.getChildren().addAll(card, heading, allUsersTable);
+
+        return wrapper;
+    }
+
     private HBox buildStatusBar(Label s) {
         HBox statusBar = new HBox();
         statusBar.setPadding(new Insets(10, 18, 12, 18));
@@ -535,6 +632,7 @@ public class LibrarianPortalApp extends Application {
         Button acceptReject = new Button("Manage Book Submission");
         Button profile = new Button("Manage Personal Profile");
         Button notification = new Button("Notifications");
+        Button manageUsers = new Button("Manage Users");
         Button logoutBtn = new Button("Logout");
 
         acceptReject.getStyleClass().add("primary-btn");
@@ -546,6 +644,9 @@ public class LibrarianPortalApp extends Application {
         notification.getStyleClass().add("primary-btn");
         notification.setOnAction(event -> { stage.setScene(notificationScene); refreshNotifications(); });
         notification.setPrefWidth(180);
+        manageUsers.getStyleClass().add("primary-btn");
+        manageUsers.setOnAction(event -> { stage.setScene(manageUsersScene); refreshEditUsers(); });
+        manageUsers.setPrefWidth(180);
         logoutBtn.getStyleClass().add("secondary-btn");
         logoutBtn.setOnAction(event -> handleLogout());
 
@@ -555,9 +656,11 @@ public class LibrarianPortalApp extends Application {
             case 1: profile.setDisable(true);
             break;
             case 2: notification.setDisable(true);
+            break;
+            case 3: manageUsers.setDisable(true);
         }
 
-        selector.getChildren().addAll(acceptReject, profile, notification, logoutBtn);
+        selector.getChildren().addAll(acceptReject, profile, notification, manageUsers, logoutBtn);
 
         return selector;
     }
@@ -616,7 +719,7 @@ public class LibrarianPortalApp extends Application {
 
     private void handleLogout() {
         if (currentUser == null) {
-            setStatus("No user is currently logged in.");
+            showErrorPopup("Logout", "No logged in users found", "No user is logged in currently.");
             return;
         }
         String username = currentUser.username();
@@ -634,24 +737,22 @@ public class LibrarianPortalApp extends Application {
 
     private void handleApprove() {
         if (currentUser == null) {
-            setStatus("Action failed: please login first.");
+            showErrorPopup("Approve Submission", "User not logged in", "Please log in first.");
             return;
         }
 
         String subId = approveSubmissionIdField.getText();
         LibrarianPortalService.OperationResult result = portalService.validateBookSubmissionId(subId);
         if (!result.success()) {
-            setStatus(result.message());
+            showErrorPopup("Approve Submission", "Action failed", result.message());
             return;
         }
 
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Confirm Approval");
-        alert.setHeaderText("Approve this book submission?");
-        alert.setContentText(portalService.getConfirmDetail(subId));
-
-        Optional<ButtonType> alertr = alert.showAndWait();
-        if (alertr.get() != ButtonType.OK) return;
+        if (!showConfirmPopup(
+                "Confirm Approval",
+                "Approve this book submission?",
+                portalService.getConfirmDetail(subId)
+        )) return;
 
         result = portalService.approveBookSubmission(subId, currentUser.username());
         setStatus(result.message());
@@ -663,26 +764,24 @@ public class LibrarianPortalApp extends Application {
 
     private void handleReject() {
         if (currentUser == null) {
-            setStatus("Action failed: please login first.");
+            showErrorPopup("Reject Submission", "User not logged in", "Please log in first.");
             return;
         }
 
         String subId = approveSubmissionIdField.getText();
         LibrarianPortalService.OperationResult result = portalService.validateBookSubmissionId(subId);
         if (!result.success()) {
-            setStatus(result.message());
+            showErrorPopup("Reject Submission", "Action failed", result.message());
             return;
         }
 
         String rReason = rejectReasonField.getText();
 
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Confirm Rejection");
-        alert.setHeaderText("Reject this book submission?");
-        alert.setContentText(portalService.getConfirmDetail(subId) + "Rejection reason: " + (rReason.isEmpty() ? "Empty" : rReason) + "\n");
-
-        Optional<ButtonType> alertr = alert.showAndWait();
-        if (alertr.get() != ButtonType.OK) return;
+        if (!showConfirmPopup(
+                "Confirm Rejection",
+                "Reject this book submission?",
+                portalService.getConfirmDetail(subId) + "Rejection reason: " + (rReason.isEmpty() ? "Empty" : rReason) + "\n"
+        )) return;
 
         result = portalService.rejectBookSubmission(subId, currentUser.username(), rReason);
         setStatus(result.message());
@@ -728,6 +827,45 @@ public class LibrarianPortalApp extends Application {
         showInfoPopup("Profile Update", "Success", result.message());
     }
 
+    private void handleUserEdit() {
+        if (currentUser == null) {
+            showErrorPopup("Edit User", "No user logged in.", "Please log in first.");
+            return;
+        }
+
+        String name = manageUsersSelectedName.getText();
+        LibrarianPortalService.OperationResult result = portalService.validateUsername(name);
+        if (!result.success()) {
+            showErrorPopup("Edit User", "Action failed", result.message());
+            return;
+        }
+
+        if (!showConfirmPopup(
+                "Edit User",
+                "Edit this user?",
+                portalService.getUserEditConfirmDetail(name, manageUsersNewFullName.getText())
+        )) return;
+
+        result = portalService.editUserAccount(name, manageUsersNewFullName.getText(), manageUsersNewPassword.getText(), manageUsersNewPasswordConfirm.getText());
+        if (!result.success()) {
+            showErrorPopup("Edit User", "Action failed", result.message());
+            return;
+        }
+        else {
+            setStatus(result.message());
+            refreshEditUsers();
+            manageUsersNewFullName.clear();
+            manageUsersNewPassword.clear();
+            manageUsersNewPasswordConfirm.clear();
+        }
+
+        return;
+    }
+
+
+    private void refreshEditUsers() {
+        allUsersTable.setItems(FXCollections.observableArrayList(portalService.getUsersScreenData(manageUsersType.getValue())));
+    }
 
     private void refreshSubmissions() {
         LocalDate mind = tableSubmissionMin.getValue();
@@ -760,6 +898,7 @@ public class LibrarianPortalApp extends Application {
         approveStatusLabel.setText(message);
         profileStatusLabel.setText(message);
         notificationStatusLabel.setText(message);
+        manageUsersStatusLabel.setText(message);
     }
 
     private void updateRegisterPasswordHint() {
@@ -811,5 +950,14 @@ public class LibrarianPortalApp extends Application {
         alert.setHeaderText(header);
         alert.setContentText(content);
         alert.showAndWait();
+    }
+
+    private boolean showConfirmPopup(String title, String header, String content) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
+        alert.setContentText(content);
+
+        return alert.showAndWait().get() == ButtonType.OK;
     }
 }

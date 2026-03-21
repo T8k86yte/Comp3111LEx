@@ -1,5 +1,6 @@
 package project.task2.repo;
 
+import project.task1.model.StudentStaffAccount;
 import project.task2.model.AuthorAccount;
 import project.task2.database.DatabaseConnection;
 
@@ -110,5 +111,9 @@ public class AuthorRepository {
             System.err.println("❌ Task2: Error counting authors: " + e.getMessage());
         }
         return 0;
+    }
+
+    public List<AuthorAccount> getAllUsers() {
+        return authorsByUsername.values().stream().toList();
     }
 }

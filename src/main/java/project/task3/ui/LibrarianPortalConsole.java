@@ -2,7 +2,9 @@ package project.task3.ui;
 
 import project.task1.model.Book;
 import project.task1.repo.InMemoryBookRepository;
+import project.task1.repo.StudentStaffRepository;
 import project.task2.model.BookSubmission;
+import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
 import project.task3.repo.LibrarianRepository;
 import project.task3.service.LibrarianPortalService;
@@ -19,6 +21,8 @@ public class LibrarianPortalConsole {
     public LibrarianPortalConsole() {
         this.portalService = new LibrarianPortalService(
                 new LibrarianRepository(),
+                new StudentStaffRepository(),
+                new AuthorRepository(),
                 new InMemoryBookRepository(),
                 new SubmissionRepository()
         );
