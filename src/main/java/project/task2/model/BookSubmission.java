@@ -11,15 +11,17 @@ public class BookSubmission {
     private final String title;
     private final String authorUsername;
     private final String authorFullName;
-    private List<String> genres;  // Changed to List for multiple genres
+    private List<String> genres;
     private final String description;
     private final String filePath;
     private final LocalDateTime submissionDate;
-    private String status; // PENDING, APPROVED, REJECTED, DRAFT
+    private String status;
     private String rejectionReason;
     private LocalDateTime reviewedDate;
     private String reviewedBy;
-    private boolean isDraft; // For auto-save feature
+    private boolean isDraft;
+    private LocalDateTime lastEdited;
+    private int editCount;
 
     // Constructor for new submissions
     public BookSubmission(String title, String authorUsername, String authorFullName,
@@ -34,23 +36,15 @@ public class BookSubmission {
         this.submissionDate = LocalDateTime.now();
         this.status = "PENDING";
         this.isDraft = false;
+        this.editCount = 0;
     }
 
-    // Constructor for drafts
-    public static BookSubmission createDraft(String authorUsername, String authorFullName) {
-        BookSubmission draft = new BookSubmission("", authorUsername, authorFullName, 
-                                                   new ArrayList<>(), "", "");
-        draft.status = "DRAFT";
-        draft.isDraft = true;
-        return draft;
-    }
-
-    // Constructor for loading from file
+    // Constructor for loading from file (with all fields)
     public BookSubmission(String submissionId, String title, String authorUsername,
                          String authorFullName, String genresStr, String description,
                          String filePath, LocalDateTime submissionDate, String status,
                          String rejectionReason, LocalDateTime reviewedDate, String reviewedBy,
-                         boolean isDraft) {
+                         boolean isDraft, int editCount) {
         this.submissionId = submissionId;
         this.title = title;
         this.authorUsername = authorUsername;
@@ -64,6 +58,7 @@ public class BookSubmission {
         this.reviewedDate = reviewedDate;
         this.reviewedBy = reviewedBy;
         this.isDraft = isDraft;
+        this.editCount = editCount;
     }
 
     private String generateSubmissionId() {
@@ -96,6 +91,15 @@ public class BookSubmission {
     public LocalDateTime getReviewedDate() { return reviewedDate; }
     public String getReviewedBy() { return reviewedBy; }
     public boolean isDraft() { return isDraft; }
+    public int getEditCount() { return editCount; }
+    public LocalDateTime getLastEdited() { return lastEdited; }
+
+    // Setters for editing
+    public void setGenres(List<String> newGenres) {
+        this.genres = newGenres;
+        this.lastEdited = LocalDateTime.now();
+        this.editCount++;
+    }
 
     // Status setters
     public void approve(String librarianUsername) {
@@ -110,12 +114,6 @@ public class BookSubmission {
         this.rejectionReason = reason;
         this.reviewedDate = LocalDateTime.now();
         this.reviewedBy = librarianUsername;
-        this.isDraft = false;
-    }
-
-    // Convert draft to submission
-    public void submitForApproval() {
-        this.status = "PENDING";
         this.isDraft = false;
     }
 
@@ -149,13 +147,15 @@ public class BookSubmission {
             rejectionReason != null ? rejectionReason : "",
             reviewedDate != null ? reviewedDate.format(formatter) : "",
             reviewedBy != null ? reviewedBy : "",
-            String.valueOf(isDraft)
+            String.valueOf(isDraft),
+            String.valueOf(editCount),
+            lastEdited != null ? lastEdited.format(formatter) : ""
         );
     }
 
     // Parse from file string
     public static BookSubmission fromString(String data) {
-        String[] parts = data.split("\\|");
+        String[] parts = data.split("\\|", -1);
         if (parts.length >= 13) {
             DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
             
@@ -163,13 +163,15 @@ public class BookSubmission {
             LocalDateTime reviewedDate = parts[10].isEmpty() ? null : 
                 LocalDateTime.parse(parts[10], formatter);
             boolean isDraft = Boolean.parseBoolean(parts[12]);
+            int editCount = parts.length > 13 ? Integer.parseInt(parts[13]) : 0;
             
             return new BookSubmission(
                 parts[0], parts[1], parts[2], parts[3], parts[4], 
                 parts[5], parts[6], submissionDate, parts[8],
                 parts[9].isEmpty() ? null : parts[9],
                 reviewedDate, parts[11].isEmpty() ? null : parts[11],
-                isDraft
+                isDraft,
+                editCount
             );
         }
         return null;

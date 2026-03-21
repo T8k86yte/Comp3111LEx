@@ -1,7 +1,6 @@
 package project.task2.ui.javafx;
 
 import javafx.application.Application;
-import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -19,17 +18,16 @@ public class AuthorRegistrationFX extends Application {
     public void start(Stage primaryStage) {
         this.authorService = new AuthorPortalService();
         this.primaryStage = primaryStage;
-        
-        // Handle window close event
+
+        // FIX: When X is clicked, only close this window
         primaryStage.setOnCloseRequest(this::handleWindowClose);
-        
+
         showRegistrationScreen();
     }
 
     private void handleWindowClose(WindowEvent event) {
-        System.out.println("🚪 Closing Author Registration...");
-        Platform.exit();
-        System.exit(0);
+        System.out.println("🚪 Closing Author Registration window...");
+        // Let the window close naturally
     }
 
     private void showRegistrationScreen() {
@@ -145,7 +143,7 @@ public class AuthorRegistrationFX extends Application {
             AuthorLoginFX loginUI = new AuthorLoginFX();
             try {
                 loginUI.start(new Stage());
-                primaryStage.close();
+                primaryStage.close(); // Close registration window when going back to login
             } catch (Exception ex) {
                 ex.printStackTrace();
             }

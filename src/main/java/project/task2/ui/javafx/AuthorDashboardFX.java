@@ -63,7 +63,7 @@ public class AuthorDashboardFX extends Application {
         centerContent.getChildren().addAll(titleLabel, statsBox, refreshDashboardBtn, menuGrid);
         root.setCenter(centerContent);
 
-        Scene scene = new Scene(root, 1000, 650);
+        Scene scene = new Scene(root, 1100, 650);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         primaryStage.setTitle("Author Dashboard");
@@ -77,7 +77,7 @@ public class AuthorDashboardFX extends Application {
     }
 
     private void handleWindowClose(WindowEvent event) {
-        System.out.println("🚪 Closing Author Dashboard...");
+        System.out.println("🚪 Closing Author Dashboard window...");
         stopRefreshTimer();
     }
 
@@ -90,7 +90,7 @@ public class AuthorDashboardFX extends Application {
     }
 
     private void startDashboardAutoRefresh() {
-        stopRefreshTimer(); // Stop any existing timer
+        stopRefreshTimer();
         refreshTimer = new Timer(true);
         refreshTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -186,15 +186,18 @@ public class AuthorDashboardFX extends Application {
         menuGrid.setVgap(20);
         menuGrid.setAlignment(Pos.CENTER);
 
+        // Row 1
         Button publishBtn = createMenuButton("📚 Publish Book", "Submit a new book for review");
         Button viewBtn = createMenuButton("📋 My Submissions", "View your book submissions");
+        Button booksBtn = createMenuButton("📖 My Books", "View, edit, or delete your books");
+
+        // Row 2
         Button profileBtn = createMenuButton("👤 Profile", "View your profile information");
 
         publishBtn.setOnAction(e -> {
             PublishBookFX publishUI = new PublishBookFX(currentAuthor);
             publishUI.show();
             
-            // Schedule a stats refresh after a short delay
             new Timer().schedule(new TimerTask() {
                 @Override
                 public void run() {
@@ -206,11 +209,19 @@ public class AuthorDashboardFX extends Application {
         });
 
         viewBtn.setOnAction(e -> showSubmissions());
+        
+        booksBtn.setOnAction(e -> {
+            PublishedBookScreenFX bookScreen = new PublishedBookScreenFX(currentAuthor);
+            bookScreen.show();
+        });
+        
         profileBtn.setOnAction(e -> showProfile());
 
+        // Add buttons to grid (3 columns, 2 rows)
         menuGrid.add(publishBtn, 0, 0);
         menuGrid.add(viewBtn, 1, 0);
-        menuGrid.add(profileBtn, 2, 0);
+        menuGrid.add(booksBtn, 2, 0);
+        menuGrid.add(profileBtn, 1, 1);
 
         return menuGrid;
     }
@@ -370,19 +381,15 @@ public class AuthorDashboardFX extends Application {
 
     private void logout() {
         System.out.println("🚪 Logging out: " + currentAuthor.getUsername());
-        
-        // Stop the refresh timer
+
         stopRefreshTimer();
-        
-        // Close any open submissions window
+
         if (submissionsStage != null && submissionsStage.isShowing()) {
             submissionsStage.close();
         }
-        
-        // Close dashboard and open login
+
         primaryStage.close();
-        
-        // Open login screen
+
         AuthorLoginFX loginUI = new AuthorLoginFX();
         try {
             loginUI.start(new Stage());
