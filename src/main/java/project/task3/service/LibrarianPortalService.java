@@ -3,6 +3,7 @@ package project.task3.service;
 import project.task1.model.StudentStaffAccount;
 import project.task1.model.UserAccount;
 import project.task1.model.UserRole;
+import project.task1.model.Book;
 import project.task1.repo.BookRepository;
 import project.task1.repo.StudentStaffRepository;
 import project.shared.SharedAuthFacade;
@@ -26,6 +27,7 @@ import java.util.regex.Pattern;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
+import java.time.chrono.*;
 
 public class LibrarianPortalService {
     private final LibrarianRepository librarianRepository;
@@ -129,6 +131,38 @@ public class LibrarianPortalService {
                 return l;
         }
         return new ArrayList<>();
+    }
+
+    private static boolean filterBorrowedBook(Book book,
+                                              Pattern titleFilter,
+                                              Pattern authorUsernameFilter,
+                                              ChronoLocalDate publishedMin,
+                                              ChronoLocalDate publishedMax,
+                                              Pattern summaryFilter,
+                                              Pattern borrowedByFilter) {
+        if (book.isAvailable()) return false;
+        if (!titleFilter.matcher(book.getTitle()).matches()) return false;
+        if (!authorUsernameFilter.matcher(book.getAuthor()).matches()) return false;
+        if (publishedMin != null && book.getPublishDate().isBefore(publishedMin)) return false;
+        if (publishedMax != null && book.getPublishDate().isAfter(publishedMax)) return false;
+        if (!summaryFilter.matcher(book.getSummary()).matches()) return false;
+        return borrowedByFilter.matcher(book.getBorrowedByUsername()).matches();
+    }
+
+    public List<Book> getBorrowedBooksScreenData(String titleFilter,
+                                                 String authorUsernameFilter,
+                                                 LocalDate publishedMin,
+                                                 LocalDate publishedMax,
+                                                 String summaryFilter,
+                                                 String borrowedByFilter) {
+        Pattern titleP = Pattern.compile("[\\s\\S]*" + titleFilter + "[\\s\\S]*", Pattern.CASE_INSENSITIVE);
+        Pattern authorUsernameP = Pattern.compile("[\\s\\S]*" + authorUsernameFilter + "[\\s\\S]*", Pattern.CASE_INSENSITIVE);
+        Pattern summaryP = Pattern.compile("[\\s\\S]*" + summaryFilter + "[\\s\\S]*", Pattern.CASE_INSENSITIVE);
+        Pattern borrowedByP = Pattern.compile("[\\s\\S]*" + borrowedByFilter + "[\\s\\S]*", Pattern.CASE_INSENSITIVE);
+        return bookRepository.findAll()
+                .stream()
+                .filter(s -> filterBorrowedBook(s, titleP, authorUsernameP, publishedMin, publishedMax, summaryP, borrowedByP))
+                .collect(Collectors.toList());
     }
 
     public OperationResult validateBookSubmissionId(String subId) {
