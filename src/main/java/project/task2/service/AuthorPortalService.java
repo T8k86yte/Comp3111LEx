@@ -6,6 +6,8 @@ import project.task2.utils.PasswordUtils;
 import project.task2.model.BookSubmission;
 import project.task2.repo.SubmissionRepository;
 import project.task2.repo.DraftRepository;
+import project.task2.repo.NotificationRepository;
+import project.task2.model.Notification;
 import project.task2.utils.FileHandler;
 
 import java.util.List;
@@ -15,11 +17,13 @@ public class AuthorPortalService {
     private final AuthorRepository authorRepository;
     private final SubmissionRepository submissionRepository;
     private final DraftRepository draftRepository;
+    private final NotificationRepository notificationRepository;
 
     public AuthorPortalService() {
         this.authorRepository = new AuthorRepository();
         this.submissionRepository = new SubmissionRepository();
         this.draftRepository = new DraftRepository();
+        this.notificationRepository = new NotificationRepository();
     }
 
     // ========== REGISTRATION ==========
@@ -176,6 +180,13 @@ public class AuthorPortalService {
             submissionRepository.save(submission);
             clearDraft(authorUsername);
 
+            // Send notification about pending submission
+            sendNotification(authorUsername, 
+                "Book Submitted: " + title,
+                "Your book '" + title + "' has been submitted and is pending review.",
+                "BOOK_PENDING",
+                submission.getSubmissionId());
+
             return SubmissionResult.success(
                 "Book '" + title + "' submitted successfully!\n" +
                 "Submission ID: " + submission.getSubmissionId()
@@ -190,7 +201,7 @@ public class AuthorPortalService {
         return submissionRepository.findByAuthor(authorUsername);
     }
 
-    // ========== PHASE 2: BOOK EDITING & DELETION ==========
+    // ========== BOOK EDITING & DELETION ==========
     public boolean updateSubmission(BookSubmission submission) {
         try {
             submissionRepository.update(submission);
@@ -211,16 +222,42 @@ public class AuthorPortalService {
         }
     }
 
-    // ========== PHASE 2: PROFILE MANAGEMENT ==========
+    // ========== PROFILE MANAGEMENT ==========
     public AuthorAccount updateProfile(AuthorAccount author) {
         try {
             authorRepository.update(author);
-            // Fetch the updated author from database to ensure we have the latest data
             return authorRepository.findByUsername(author.getUsername()).orElse(author);
         } catch (Exception e) {
             System.err.println("❌ Task2: Error updating profile: " + e.getMessage());
             return null;
         }
+    }
+
+    // ========== NOTIFICATION METHODS ==========
+    public void sendNotification(String authorUsername, String title, String message, 
+                                  String type, String relatedSubmissionId) {
+        Notification notification = new Notification(authorUsername, title, message, type, relatedSubmissionId);
+        notificationRepository.save(notification);
+    }
+
+    public List<Notification> getNotifications(String authorUsername) {
+        return notificationRepository.findByAuthor(authorUsername);
+    }
+
+    public List<Notification> getUnreadNotifications(String authorUsername) {
+        return notificationRepository.findUnreadByAuthor(authorUsername);
+    }
+
+    public int getUnreadNotificationCount(String authorUsername) {
+        return notificationRepository.getUnreadCount(authorUsername);
+    }
+
+    public void markNotificationAsRead(String notificationId) {
+        notificationRepository.markAsRead(notificationId);
+    }
+
+    public void markAllNotificationsAsRead(String authorUsername) {
+        notificationRepository.markAllAsRead(authorUsername);
     }
 
     // ========== VALIDATION HELPER METHODS ==========

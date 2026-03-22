@@ -77,10 +77,26 @@ public class DatabaseConnection {
             )
             """;
 
+        // Notifications table
+        String createNotificationsTable = """
+            CREATE TABLE IF NOT EXISTS notifications (
+                notification_id TEXT PRIMARY KEY,
+                author_username TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                type TEXT NOT NULL,
+                is_read INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                related_submission_id TEXT,
+                FOREIGN KEY (author_username) REFERENCES authors(username) ON DELETE CASCADE
+            )
+            """;
+
         try (Statement stmt = connection.createStatement()) {
             stmt.execute(createAuthorsTable);
             stmt.execute(createSubmissionsTable);
             stmt.execute(createDraftsTable);
+            stmt.execute(createNotificationsTable);
             
             System.out.println("✅ Task2: Database tables created/verified");
             
@@ -90,22 +106,18 @@ public class DatabaseConnection {
     }
 
     private static void upgradeTables() {
-        // Add last_edited column if it doesn't exist
         try {
             String addLastEdited = "ALTER TABLE submissions ADD COLUMN last_edited TEXT";
             connection.createStatement().execute(addLastEdited);
-            System.out.println("✅ Task2: Added last_edited column");
         } catch (SQLException e) {
-            // Column already exists, ignore
+            // Column already exists
         }
         
-        // Add edit_count column if it doesn't exist
         try {
             String addEditCount = "ALTER TABLE submissions ADD COLUMN edit_count INTEGER DEFAULT 0";
             connection.createStatement().execute(addEditCount);
-            System.out.println("✅ Task2: Added edit_count column");
         } catch (SQLException e) {
-            // Column already exists, ignore
+            // Column already exists
         }
     }
 

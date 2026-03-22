@@ -26,6 +26,7 @@ public class AuthorDashboardFX extends Application {
     private Stage submissionsStage;
     private VBox submissionsContainer;
     private Label statusLabel;
+    private Label notificationBadge;
     
     private HBox statsBox;
 
@@ -74,6 +75,7 @@ public class AuthorDashboardFX extends Application {
         primaryStage.show();
 
         startDashboardAutoRefresh();
+        updateNotificationBadge();
     }
 
     private void handleWindowClose(WindowEvent event) {
@@ -96,7 +98,10 @@ public class AuthorDashboardFX extends Application {
             @Override
             public void run() {
                 if (primaryStage != null && primaryStage.isShowing()) {
-                    Platform.runLater(() -> refreshDashboardStats());
+                    Platform.runLater(() -> {
+                        refreshDashboardStats();
+                        updateNotificationBadge();
+                    });
                 } else {
                     stopRefreshTimer();
                 }
@@ -123,6 +128,18 @@ public class AuthorDashboardFX extends Application {
                 );
             }
         });
+    }
+
+    private void updateNotificationBadge() {
+        int unreadCount = authorService.getUnreadNotificationCount(currentAuthor.getUsername());
+        if (notificationBadge != null) {
+            if (unreadCount > 0) {
+                notificationBadge.setText(String.valueOf(unreadCount));
+                notificationBadge.setVisible(true);
+            } else {
+                notificationBadge.setVisible(false);
+            }
+        }
     }
 
     private HBox createTopBar() {
@@ -186,10 +203,27 @@ public class AuthorDashboardFX extends Application {
         menuGrid.setVgap(20);
         menuGrid.setAlignment(Pos.CENTER);
 
+        // Row 1
         Button publishBtn = createMenuButton("📚 Publish Book", "Submit a new book for review");
         Button viewBtn = createMenuButton("📋 My Submissions", "View your book submissions");
         Button booksBtn = createMenuButton("📖 My Books", "View, edit, or delete your books");
+
+        // Row 2
         Button profileBtn = createMenuButton("👤 Profile", "Manage your profile information");
+        Button notifBtn = createMenuButton("🔔 Notifications", "View your notifications");
+        
+        // Create notification badge
+        notificationBadge = new Label();
+        notificationBadge.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-font-weight: bold; " +
+                                   "-fx-padding: 2px 6px; -fx-background-radius: 10px; -fx-font-size: 10px;");
+        notificationBadge.setVisible(false);
+        
+        // Stack the notification button with badge
+        StackPane notifStack = new StackPane();
+        notifStack.getChildren().addAll(notifBtn, notificationBadge);
+        StackPane.setAlignment(notificationBadge, Pos.TOP_RIGHT);
+        notificationBadge.setTranslateX(5);
+        notificationBadge.setTranslateY(-5);
 
         publishBtn.setOnAction(e -> {
             PublishBookFX publishUI = new PublishBookFX(currentAuthor);
@@ -212,23 +246,41 @@ public class AuthorDashboardFX extends Application {
             bookScreen.show();
         });
         
-        // Updated profile button to open ProfileManagementFX
-        
-    profileBtn.setOnAction(e -> {
-        ProfileManagementFX profileScreen = new ProfileManagementFX(currentAuthor, updatedAuthor -> {
-        // Update the currentAuthor reference in dashboard
-            this.currentAuthor = updatedAuthor;
-        // Refresh the welcome label
-        // You may also want to refresh stats or other UI elements
-            System.out.println("✅ Dashboard updated with new profile info");
+        profileBtn.setOnAction(e -> {
+            ProfileManagementFX profileScreen = new ProfileManagementFX(currentAuthor, updatedAuthor -> {
+                this.currentAuthor = updatedAuthor;
+                Platform.runLater(() -> {
+                    // Update welcome label
+                    HBox topBar = (HBox) primaryStage.getScene().getRoot().lookup(".top-bar");
+                    if (topBar != null) {
+                        Label welcomeLabel = (Label) topBar.getChildren().get(0);
+                        if (welcomeLabel != null) {
+                            welcomeLabel.setText("Welcome, " + updatedAuthor.getFullName());
+                        }
+                    }
+                });
+            });
+            profileScreen.show();
         });
-        profileScreen.show();
-    });
+        
+        notifBtn.setOnAction(e -> {
+            NotificationBoardFX notifBoard = new NotificationBoardFX(currentAuthor);
+            notifBoard.show();
+            // Update badge after closing notification board
+            new Timer().schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    Platform.runLater(() -> updateNotificationBadge());
+                }
+            }, 1000);
+        });
 
+        // Add buttons to grid (3 columns, 2 rows)
         menuGrid.add(publishBtn, 0, 0);
         menuGrid.add(viewBtn, 1, 0);
         menuGrid.add(booksBtn, 2, 0);
-        menuGrid.add(profileBtn, 1, 1);
+        menuGrid.add(profileBtn, 0, 1);
+        menuGrid.add(notifStack, 1, 1);
 
         return menuGrid;
     }
