@@ -12,6 +12,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import project.shared.SharedAuthFacade;
+import project.task1.model.Book;
 import project.task1.repo.StudentStaffRepository;
 import project.task1.service.StudentStaffPortalService;
 import project.task1.model.UserAccount;
@@ -41,6 +42,7 @@ public class LibrarianPortalApp extends Application {
     private Scene profileScene;
     private Scene notificationScene;
     private Scene manageUsersScene;
+    private Scene borrowedBooksScene;
 
     private Label currentUserLabel;
     private TableView<BookSubmission> bookSubmissionTable;
@@ -87,6 +89,15 @@ public class LibrarianPortalApp extends Application {
     private ListView<String> notificationList;
     private Label notificationStatusLabel;
 
+    private TableView<Book> borrowedBooksTable;
+    private TextField bookTableTitleFilter;
+    private TextField bookTableAuthorUsernameFilter;
+    private DatePicker bookTablePublishedMin;
+    private DatePicker bookTablePublishedMax;
+    private TextField bookTableSummaryFilter;
+    private TextField bookTableBorrowedByFilter;
+    private Label bookTableStatusLabel;
+
     public LibrarianPortalApp() {
         LibrarianRepository librarianRepository = new LibrarianRepository();
         StudentStaffRepository studentStaffRepository = new StudentStaffRepository();
@@ -113,6 +124,7 @@ public class LibrarianPortalApp extends Application {
         profileScene = buildProfileScene();
         notificationScene = buildNotificattionScene();
         manageUsersScene = buildManageUsersScene();
+        borrowedBooksScene = buildBorrowedBooksScene();
 
         stage.setTitle("Task 3 - Librarian Portal");
         stage.setScene(loginRegisterScene);
@@ -210,6 +222,22 @@ public class LibrarianPortalApp extends Application {
         root.setCenter(buildManageUsersView());
         manageUsersStatusLabel = new Label();
         root.setBottom(buildStatusBar(manageUsersStatusLabel));
+
+        Scene scene = new Scene(root, 1060, 700);
+        scene.getStylesheets().add(
+                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
+        );
+
+        return scene;
+    }
+
+    private Scene buildBorrowedBooksScene() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setTop(new HBox(18, buildSceneSelector(4)));
+        root.setCenter(buildBorrowedBooksView());
+        bookTableStatusLabel = new Label();
+        root.setBottom(buildStatusBar(bookTableStatusLabel));
 
         Scene scene = new Scene(root, 1060, 700);
         scene.getStylesheets().add(
@@ -617,6 +645,88 @@ public class LibrarianPortalApp extends Application {
         return wrapper;
     }
 
+    private VBox buildBorrowedBooksView() {
+        VBox wrapper = new VBox(10);
+        wrapper.setPadding(new Insets(8, 18, 18, 18));
+        Label heading = new Label("Borrowed Books");
+        heading.getStyleClass().add("section-title");
+
+        borrowedBooksTable = new TableView<>();
+        borrowedBooksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+
+        TableColumn<Book, String> IdCol = new TableColumn<>("Id");
+        IdCol.setCellValueFactory(new PropertyValueFactory<>("id"));
+
+        TableColumn<Book, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+
+        TableColumn<Book, String> authorCol = new TableColumn<>("Author");
+        authorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
+
+        TableColumn<Book, Object> publishDateCol = new TableColumn<>("Published Date");
+        publishDateCol.setCellValueFactory(new PropertyValueFactory<>("publishDate"));
+
+        TableColumn<Book, String> summaryCol = new TableColumn<>("Summary");
+        summaryCol.setCellValueFactory(new PropertyValueFactory<>("summary"));
+
+        TableColumn<Book, String> borrowedByCol = new TableColumn<>("Borrowed By");
+        borrowedByCol.setCellValueFactory(new PropertyValueFactory<>("borrowedByUsername"));
+
+        TableColumn<Book, String> borrowCountCol = new TableColumn<>("Borrow Count");
+        borrowCountCol.setCellValueFactory(new PropertyValueFactory<>("borrowCount"));
+
+        borrowedBooksTable.getColumns().addAll(IdCol, titleCol, authorCol, publishDateCol, summaryCol, borrowedByCol, borrowCountCol);
+
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        card.setPrefWidth(320);
+
+        Label cardHeading = new Label("Borrowed Books");
+        cardHeading.getStyleClass().add("card-title");
+        Label hint = new Label("Use filters to search for borrowed books.");
+        hint.getStyleClass().add("muted");
+
+
+
+        bookTableTitleFilter = new TextField();
+        bookTableAuthorUsernameFilter = new TextField();
+        bookTablePublishedMin = new DatePicker();
+        bookTablePublishedMax = new DatePicker();
+        bookTableSummaryFilter = new TextField();
+        bookTableBorrowedByFilter = new TextField();
+
+        Button refreshBtn = new Button("Refresh Table");
+        refreshBtn.getStyleClass().add("primary-btn");
+        refreshBtn.setOnAction(event -> refreshBorrowedBooks());
+        Button readSummaryBtn = new Button("Read Summary");
+        readSummaryBtn.getStyleClass().add("primary-btn");
+        readSummaryBtn.setOnAction(event -> readBookSummary());
+
+        HBox filters1 = new HBox(5);
+        HBox filters2 = new HBox(5);
+        filters1.getChildren().add(new Label("Title: "));
+        filters1.getChildren().add(bookTableTitleFilter);
+        filters1.getChildren().add(new Label("Author: "));
+        filters1.getChildren().add(bookTableAuthorUsernameFilter);
+        filters1.getChildren().add(new Label("Published min: "));
+        filters1.getChildren().add(bookTablePublishedMin);
+        filters1.getChildren().add(new Label("Published max: "));
+        filters1.getChildren().add(bookTablePublishedMax);
+        filters2.getChildren().add(new Label("Summary: "));
+        filters2.getChildren().add(bookTableSummaryFilter);
+        filters2.getChildren().add(new Label("Borrowed By: "));
+        filters2.getChildren().add(bookTableBorrowedByFilter);
+        filters2.getChildren().add(refreshBtn);
+        filters2.getChildren().add(readSummaryBtn);
+
+        card.getChildren().addAll(heading, hint, filters1, filters2);
+
+        VBox.setVgrow(borrowedBooksTable, Priority.ALWAYS);
+        wrapper.getChildren().addAll(card, heading, borrowedBooksTable);
+
+        return wrapper;
+    }
+
     private HBox buildStatusBar(Label s) {
         HBox statusBar = new HBox();
         statusBar.setPadding(new Insets(10, 18, 12, 18));
@@ -633,20 +743,24 @@ public class LibrarianPortalApp extends Application {
         Button profile = new Button("Manage Personal Profile");
         Button notification = new Button("Notifications");
         Button manageUsers = new Button("Manage Users");
+        Button borrowedBooks = new Button("Borrowed Books");
         Button logoutBtn = new Button("Logout");
 
         acceptReject.getStyleClass().add("primary-btn");
         acceptReject.setOnAction(event -> stage.setScene(acceptRejectScene));
-        acceptReject.setPrefWidth(240);
+        acceptReject.setPrefWidth(200);
         profile.getStyleClass().add("primary-btn");
         profile.setOnAction(event -> stage.setScene(profileScene));
-        profile.setPrefWidth(240);
+        profile.setPrefWidth(200);
         notification.getStyleClass().add("primary-btn");
         notification.setOnAction(event -> { stage.setScene(notificationScene); refreshNotifications(); });
-        notification.setPrefWidth(180);
+        notification.setPrefWidth(160);
         manageUsers.getStyleClass().add("primary-btn");
         manageUsers.setOnAction(event -> { stage.setScene(manageUsersScene); refreshEditUsers(); });
-        manageUsers.setPrefWidth(180);
+        manageUsers.setPrefWidth(160);
+        borrowedBooks.getStyleClass().add("primary-btn");
+        borrowedBooks.setOnAction(event -> { stage.setScene(borrowedBooksScene); refreshBorrowedBooks(); });
+        borrowedBooks.setPrefWidth(160);
         logoutBtn.getStyleClass().add("secondary-btn");
         logoutBtn.setOnAction(event -> handleLogout());
 
@@ -658,9 +772,11 @@ public class LibrarianPortalApp extends Application {
             case 2: notification.setDisable(true);
             break;
             case 3: manageUsers.setDisable(true);
+            break;
+            case 4: borrowedBooks.setDisable(true);
         }
 
-        selector.getChildren().addAll(acceptReject, profile, notification, manageUsers, logoutBtn);
+        selector.getChildren().addAll(acceptReject, profile, notification, manageUsers, borrowedBooks, logoutBtn);
 
         return selector;
     }
@@ -858,10 +974,19 @@ public class LibrarianPortalApp extends Application {
             manageUsersNewPassword.clear();
             manageUsersNewPasswordConfirm.clear();
         }
-
-        return;
     }
 
+
+    private void refreshBorrowedBooks() {
+        borrowedBooksTable.setItems(FXCollections.observableArrayList(
+                portalService.getBorrowedBooksScreenData(
+                        bookTableTitleFilter.getText(),
+                        bookTableAuthorUsernameFilter.getText(),
+                        bookTablePublishedMin.getValue(),
+                        bookTablePublishedMax.getValue(),
+                        bookTableSummaryFilter.getText(),
+                        bookTableBorrowedByFilter.getText())));
+    }
 
     private void refreshEditUsers() {
         allUsersTable.setItems(FXCollections.observableArrayList(portalService.getUsersScreenData(manageUsersType.getValue())));
@@ -899,6 +1024,7 @@ public class LibrarianPortalApp extends Application {
         profileStatusLabel.setText(message);
         notificationStatusLabel.setText(message);
         manageUsersStatusLabel.setText(message);
+        bookTableStatusLabel.setText(message);
     }
 
     private void updateRegisterPasswordHint() {
@@ -907,6 +1033,12 @@ public class LibrarianPortalApp extends Application {
 
     private void updateProfilePasswordHint() {
         updatePasswordHint(profilePasswordField, profileConfirmPasswordField, profilePasswordHintLabel);
+    }
+
+    private void readBookSummary() {
+        Book selected = borrowedBooksTable.getSelectionModel().selectedItemProperty().get();
+        if (selected == null) showErrorPopup("Book Summary", "Action failed.", "No book is Selected currently.");
+        else showInfoPopup("Book Summary", "Title: " + selected.getTitle(), "Summary: " + selected.getSummary());
     }
 
     static private void updatePasswordHint(TextField passwordField, TextField confirmPasswordField, Label hint) {
