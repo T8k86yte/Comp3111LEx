@@ -186,13 +186,10 @@ public class AuthorDashboardFX extends Application {
         menuGrid.setVgap(20);
         menuGrid.setAlignment(Pos.CENTER);
 
-        // Row 1
         Button publishBtn = createMenuButton("📚 Publish Book", "Submit a new book for review");
         Button viewBtn = createMenuButton("📋 My Submissions", "View your book submissions");
         Button booksBtn = createMenuButton("📖 My Books", "View, edit, or delete your books");
-
-        // Row 2
-        Button profileBtn = createMenuButton("👤 Profile", "View your profile information");
+        Button profileBtn = createMenuButton("👤 Profile", "Manage your profile information");
 
         publishBtn.setOnAction(e -> {
             PublishBookFX publishUI = new PublishBookFX(currentAuthor);
@@ -215,9 +212,19 @@ public class AuthorDashboardFX extends Application {
             bookScreen.show();
         });
         
-        profileBtn.setOnAction(e -> showProfile());
+        // Updated profile button to open ProfileManagementFX
+        
+    profileBtn.setOnAction(e -> {
+        ProfileManagementFX profileScreen = new ProfileManagementFX(currentAuthor, updatedAuthor -> {
+        // Update the currentAuthor reference in dashboard
+            this.currentAuthor = updatedAuthor;
+        // Refresh the welcome label
+        // You may also want to refresh stats or other UI elements
+            System.out.println("✅ Dashboard updated with new profile info");
+        });
+        profileScreen.show();
+    });
 
-        // Add buttons to grid (3 columns, 2 rows)
         menuGrid.add(publishBtn, 0, 0);
         menuGrid.add(viewBtn, 1, 0);
         menuGrid.add(booksBtn, 2, 0);
@@ -365,18 +372,6 @@ public class AuthorDashboardFX extends Application {
         }
 
         return card;
-    }
-
-    private void showProfile() {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Profile");
-        alert.setHeaderText("👤 Author Profile");
-        alert.setContentText(
-            "Username: " + currentAuthor.getUsername() + "\n" +
-            "Full Name: " + currentAuthor.getFullName() + "\n" +
-            "Bio: " + (currentAuthor.getBio().isEmpty() ? "Not provided" : currentAuthor.getBio())
-        );
-        alert.showAndWait();
     }
 
     private void logout() {

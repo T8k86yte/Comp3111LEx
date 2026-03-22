@@ -37,6 +37,11 @@ public class AuthorRepository {
         }
     }
 
+    public void update(AuthorAccount author) {
+        save(author);
+        System.out.println("✅ Task2: Author updated: " + author.getUsername());
+    }
+
     public Optional<AuthorAccount> findByUsername(String username) {
         String sql = "SELECT * FROM authors WHERE username = ?";
         

@@ -30,9 +30,6 @@ echo "📦 Compiling Task 2..."
 # Compile Task 2 database package first
 javac -cp "$CLASSPATH" -d target/classes src/main/java/project/task2/database/*.java
 
-# Compile Task 1 models (required by Task 2)
-javac -cp "$CLASSPATH" -d target/classes src/main/java/project/task1/model/*.java 2>/dev/null || true
-
 # Compile Task 2 files
 javac -cp "$CLASSPATH" -d target/classes \
     src/main/java/project/task2/model/*.java \

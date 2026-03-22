@@ -211,6 +211,18 @@ public class AuthorPortalService {
         }
     }
 
+    // ========== PHASE 2: PROFILE MANAGEMENT ==========
+    public AuthorAccount updateProfile(AuthorAccount author) {
+        try {
+            authorRepository.update(author);
+            // Fetch the updated author from database to ensure we have the latest data
+            return authorRepository.findByUsername(author.getUsername()).orElse(author);
+        } catch (Exception e) {
+            System.err.println("❌ Task2: Error updating profile: " + e.getMessage());
+            return null;
+        }
+    }
+
     // ========== VALIDATION HELPER METHODS ==========
     private boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
