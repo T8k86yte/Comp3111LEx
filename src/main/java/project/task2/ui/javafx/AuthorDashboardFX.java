@@ -26,6 +26,7 @@ public class AuthorDashboardFX extends Application {
     private Stage submissionsStage;
     private VBox submissionsContainer;
     private Label statusLabel;
+    private Label notificationBadge;
     
     private HBox statsBox;
 
@@ -63,25 +64,23 @@ public class AuthorDashboardFX extends Application {
         centerContent.getChildren().addAll(titleLabel, statsBox, refreshDashboardBtn, menuGrid);
         root.setCenter(centerContent);
 
-        Scene scene = new Scene(root, 1000, 650);
+        Scene scene = new Scene(root, 1100, 650);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         primaryStage.setTitle("Author Dashboard");
         primaryStage.setScene(scene);
         
-        // FIX: When X is clicked, only close this window, not the whole app
         primaryStage.setOnCloseRequest(this::handleWindowClose);
         
         primaryStage.show();
 
         startDashboardAutoRefresh();
+        updateNotificationBadge();
     }
 
     private void handleWindowClose(WindowEvent event) {
         System.out.println("🚪 Closing Author Dashboard window...");
-        // Stop the timer but don't exit the app
         stopRefreshTimer();
-        // Just let the window close naturally - no Platform.exit()
     }
 
     private void stopRefreshTimer() {
@@ -99,7 +98,10 @@ public class AuthorDashboardFX extends Application {
             @Override
             public void run() {
                 if (primaryStage != null && primaryStage.isShowing()) {
-                    Platform.runLater(() -> refreshDashboardStats());
+                    Platform.runLater(() -> {
+                        refreshDashboardStats();
+                        updateNotificationBadge();
+                    });
                 } else {
                     stopRefreshTimer();
                 }
@@ -126,6 +128,18 @@ public class AuthorDashboardFX extends Application {
                 );
             }
         });
+    }
+
+    private void updateNotificationBadge() {
+        int unreadCount = authorService.getUnreadNotificationCount(currentAuthor.getUsername());
+        if (notificationBadge != null) {
+            if (unreadCount > 0) {
+                notificationBadge.setText(String.valueOf(unreadCount));
+                notificationBadge.setVisible(true);
+            } else {
+                notificationBadge.setVisible(false);
+            }
+        }
     }
 
     private HBox createTopBar() {
@@ -189,9 +203,27 @@ public class AuthorDashboardFX extends Application {
         menuGrid.setVgap(20);
         menuGrid.setAlignment(Pos.CENTER);
 
+        // Row 1
         Button publishBtn = createMenuButton("📚 Publish Book", "Submit a new book for review");
         Button viewBtn = createMenuButton("📋 My Submissions", "View your book submissions");
-        Button profileBtn = createMenuButton("👤 Profile", "View your profile information");
+        Button booksBtn = createMenuButton("📖 My Books", "View, edit, or delete your books");
+
+        // Row 2
+        Button profileBtn = createMenuButton("👤 Profile", "Manage your profile information");
+        Button notifBtn = createMenuButton("🔔 Notifications", "View your notifications");
+        
+        // Create notification badge
+        notificationBadge = new Label();
+        notificationBadge.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-font-weight: bold; " +
+                                   "-fx-padding: 2px 6px; -fx-background-radius: 10px; -fx-font-size: 10px;");
+        notificationBadge.setVisible(false);
+        
+        // Stack the notification button with badge
+        StackPane notifStack = new StackPane();
+        notifStack.getChildren().addAll(notifBtn, notificationBadge);
+        StackPane.setAlignment(notificationBadge, Pos.TOP_RIGHT);
+        notificationBadge.setTranslateX(5);
+        notificationBadge.setTranslateY(-5);
 
         publishBtn.setOnAction(e -> {
             PublishBookFX publishUI = new PublishBookFX(currentAuthor);
@@ -208,11 +240,47 @@ public class AuthorDashboardFX extends Application {
         });
 
         viewBtn.setOnAction(e -> showSubmissions());
-        profileBtn.setOnAction(e -> showProfile());
+        
+        booksBtn.setOnAction(e -> {
+            PublishedBookScreenFX bookScreen = new PublishedBookScreenFX(currentAuthor);
+            bookScreen.show();
+        });
+        
+        profileBtn.setOnAction(e -> {
+            ProfileManagementFX profileScreen = new ProfileManagementFX(currentAuthor, updatedAuthor -> {
+                this.currentAuthor = updatedAuthor;
+                Platform.runLater(() -> {
+                    // Update welcome label
+                    HBox topBar = (HBox) primaryStage.getScene().getRoot().lookup(".top-bar");
+                    if (topBar != null) {
+                        Label welcomeLabel = (Label) topBar.getChildren().get(0);
+                        if (welcomeLabel != null) {
+                            welcomeLabel.setText("Welcome, " + updatedAuthor.getFullName());
+                        }
+                    }
+                });
+            });
+            profileScreen.show();
+        });
+        
+        notifBtn.setOnAction(e -> {
+            NotificationBoardFX notifBoard = new NotificationBoardFX(currentAuthor);
+            notifBoard.show();
+            // Update badge after closing notification board
+            new Timer().schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    Platform.runLater(() -> updateNotificationBadge());
+                }
+            }, 1000);
+        });
 
+        // Add buttons to grid (3 columns, 2 rows)
         menuGrid.add(publishBtn, 0, 0);
         menuGrid.add(viewBtn, 1, 0);
-        menuGrid.add(profileBtn, 2, 0);
+        menuGrid.add(booksBtn, 2, 0);
+        menuGrid.add(profileBtn, 0, 1);
+        menuGrid.add(notifStack, 1, 1);
 
         return menuGrid;
     }
@@ -281,11 +349,9 @@ public class AuthorDashboardFX extends Application {
 
         refreshSubmissions();
 
-        // FIX: When X is clicked on submissions window, just close it
         submissionsStage.setOnCloseRequest(e -> {
             submissionsStage = null;
             refreshDashboardStats();
-            // Don't consume the event - let it close naturally
         });
 
         Scene scene = new Scene(root, 600, 500);
@@ -360,29 +426,17 @@ public class AuthorDashboardFX extends Application {
         return card;
     }
 
-    private void showProfile() {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Profile");
-        alert.setHeaderText("👤 Author Profile");
-        alert.setContentText(
-            "Username: " + currentAuthor.getUsername() + "\n" +
-            "Full Name: " + currentAuthor.getFullName() + "\n" +
-            "Bio: " + (currentAuthor.getBio().isEmpty() ? "Not provided" : currentAuthor.getBio())
-        );
-        alert.showAndWait();
-    }
-
     private void logout() {
         System.out.println("🚪 Logging out: " + currentAuthor.getUsername());
-        
+
         stopRefreshTimer();
-        
+
         if (submissionsStage != null && submissionsStage.isShowing()) {
             submissionsStage.close();
         }
-        
+
         primaryStage.close();
-        
+
         AuthorLoginFX loginUI = new AuthorLoginFX();
         try {
             loginUI.start(new Stage());

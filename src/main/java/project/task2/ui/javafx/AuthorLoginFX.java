@@ -1,7 +1,6 @@
 package project.task2.ui.javafx;
 
 import javafx.application.Application;
-import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -20,18 +19,16 @@ public class AuthorLoginFX extends Application {
     public void start(Stage primaryStage) {
         this.authorService = new AuthorPortalService();
         this.primaryStage = primaryStage;
-        
+
         // FIX: When X is clicked, only close this window
-        // If this is the last window, the app will exit automatically
         primaryStage.setOnCloseRequest(this::handleWindowClose);
-        
+
         showLoginScreen();
     }
 
     private void handleWindowClose(WindowEvent event) {
         System.out.println("🚪 Closing Author Login window...");
-        // Let the window close naturally
-        // Platform.exit() is NOT called here
+        // Let the window close naturally - no Platform.exit()
     }
 
     private void showLoginScreen() {
