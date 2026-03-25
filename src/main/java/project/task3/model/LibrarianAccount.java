@@ -1,8 +1,7 @@
 package project.task3.model;
 
-import project.task1.model.UserAccount;
-import project.task1.model.UserRole;
-import project.task2.model.AuthorAccount;
+import project.task2.model.UserAccount;
+import project.task2.model.UserRole;
 
 public class LibrarianAccount extends UserAccount {
     private final int employeeID;

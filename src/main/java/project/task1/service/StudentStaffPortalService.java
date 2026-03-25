@@ -2,11 +2,12 @@ package project.task1.service;
 
 import project.task1.model.Book;
 import project.task1.model.StudentStaffAccount;
-import project.task1.model.UserAccount;
 import project.task1.repo.BookRepository;
 import project.task1.repo.StudentStaffRepository;
 import project.shared.SharedAuthFacade;
+import project.task2.model.UserAccount;
 import project.task2.repo.AuthorRepository;
+import project.task2.utils.PasswordUtils;
 import project.task3.repo.LibrarianRepository;
 
 import java.io.IOException;
@@ -295,8 +296,8 @@ public class StudentStaffPortalService {
             if (!isStrongPassword(pwd)) {
                 return OperationResult.failure("Profile update failed: weak password.");
             }
-            salt = project.task1.security.PasswordSecurity.generateSaltBase64();
-            hash = project.task1.security.PasswordSecurity.hashPasswordBase64(pwd, salt);
+            salt = PasswordUtils.generateSalt();
+            hash = PasswordUtils.hashPassword(pwd, salt);
         }
         StudentStaffAccount updated = new StudentStaffAccount(
                 existing.getUsername(),
