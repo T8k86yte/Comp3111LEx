@@ -16,13 +16,14 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.Arrays;
+import java.util.function.Consumer;
 
 public class PublishBookFX {
     private AuthorPortalService authorService;
     private AuthorAccount currentAuthor;
     private Stage stage;
+    private Consumer<Void> onBookPublished;
     
-    // Form fields
     private TextField titleField;
     private List<CheckBox> genreCheckBoxes;
     private TextArea descArea;
@@ -31,7 +32,6 @@ public class PublishBookFX {
     private Label messageLabel;
     private Label draftIndicator;
     
-    // Preview components
     private VBox previewCard;
     private Label previewTitle;
     private Label previewAuthor;
@@ -39,28 +39,30 @@ public class PublishBookFX {
     private Label previewDescription;
     private Label previewFile;
     
-    // Draft auto-save
     private Timer autoSaveTimer;
     private boolean hasUnsavedChanges = false;
-    private static final int AUTO_SAVE_DELAY = 5000; // 5 seconds
-    private boolean isLoadingDraft = false; // Prevent auto-save while loading
+    private static final int AUTO_SAVE_DELAY = 5000;
+    private boolean isLoadingDraft = false;
 
-    public PublishBookFX(AuthorAccount author) {
+    public PublishBookFX(AuthorAccount author, Consumer<Void> onBookPublished) {
         this.currentAuthor = author;
         this.authorService = new AuthorPortalService();
         this.stage = new Stage();
         this.genreCheckBoxes = new ArrayList<>();
+        this.onBookPublished = onBookPublished;
+    }
+
+    public Stage getStage() {
+        return stage;
     }
 
     public void show() {
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
 
-        // Top bar - removed preview button
         HBox topBar = createTopBar();
         root.setTop(topBar);
 
-        // Center content
         ScrollPane scrollPane = new ScrollPane();
         scrollPane.setFitToWidth(true);
         scrollPane.setStyle("-fx-background-color: transparent;");
@@ -69,19 +71,13 @@ public class PublishBookFX {
         centerContent.setAlignment(Pos.TOP_CENTER);
         centerContent.setPadding(new Insets(30));
 
-        // Guidelines card
         centerContent.getChildren().add(createGuidelinesCard());
+        centerContent.getChildren().add(createFormCard());
 
-        // Form card
-        VBox formCard = createFormCard();
-        centerContent.getChildren().add(formCard);
-
-        // Preview card (initially hidden)
         previewCard = createPreviewCard();
         previewCard.setVisible(false);
         centerContent.getChildren().add(previewCard);
 
-        // Draft indicator
         draftIndicator = new Label("📝 Draft auto-saved");
         draftIndicator.getStyleClass().addAll("status", "status-approved");
         draftIndicator.setVisible(false);
@@ -90,10 +86,7 @@ public class PublishBookFX {
         scrollPane.setContent(centerContent);
         root.setCenter(scrollPane);
 
-        // Load any existing draft
         loadDraft();
-
-        // Setup auto-save
         setupAutoSave();
 
         Scene scene = new Scene(root, 850, 800);
@@ -103,12 +96,11 @@ public class PublishBookFX {
         stage.setScene(scene);
         stage.show();
 
-        // Cleanup on close
         stage.setOnCloseRequest(e -> {
             if (autoSaveTimer != null) {
                 autoSaveTimer.cancel();
             }
-            saveDraft(); // Save one last time before closing
+            saveDraft();
         });
     }
 
@@ -124,7 +116,6 @@ public class PublishBookFX {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        // Removed preview button - only close button remains
         Button closeBtn = new Button("✕");
         closeBtn.getStyleClass().addAll("button", "secondary-btn");
         closeBtn.setOnAction(e -> {
@@ -170,7 +161,6 @@ public class PublishBookFX {
         Label formTitle = new Label("Book Details");
         formTitle.getStyleClass().add("card-title");
 
-        // Title field
         VBox titleBox = new VBox(5);
         Label titleLabel2 = new Label("Book Title *");
         titleLabel2.getStyleClass().add("muted");
@@ -182,7 +172,6 @@ public class PublishBookFX {
         });
         titleBox.getChildren().addAll(titleLabel2, titleField);
 
-        // Author field (pre-filled)
         VBox authorBox = new VBox(5);
         Label authorLabel = new Label("Author Name");
         authorLabel.getStyleClass().add("muted");
@@ -191,7 +180,6 @@ public class PublishBookFX {
         authorField.getStyleClass().add("text-field");
         authorBox.getChildren().addAll(authorLabel, authorField);
 
-        // Multiple Genre Selection
         VBox genreBox = new VBox(5);
         Label genreLabel = new Label("Genres * (select multiple)");
         genreLabel.getStyleClass().add("muted");
@@ -217,7 +205,6 @@ public class PublishBookFX {
 
         genreBox.getChildren().addAll(genreLabel, genreFlowPane);
 
-        // Description field
         VBox descBox = new VBox(5);
         Label descLabel = new Label("Description/Abstract *");
         descLabel.getStyleClass().add("muted");
@@ -231,7 +218,6 @@ public class PublishBookFX {
         });
         descBox.getChildren().addAll(descLabel, descArea);
 
-        // File upload field
         VBox fileBox = new VBox(5);
         Label fileLabel = new Label("Book File *");
         fileLabel.getStyleClass().add("muted");
@@ -258,7 +244,6 @@ public class PublishBookFX {
         messageLabel.setWrapText(true);
         messageLabel.setVisible(false);
 
-        // Action buttons
         HBox actionBox = new HBox(15);
         actionBox.setAlignment(Pos.CENTER);
 
@@ -283,7 +268,6 @@ public class PublishBookFX {
                                       descBox, fileBox, selectedFileLabel, 
                                       messageLabel, actionBox);
 
-        // Browse button action
         browseBtn.setOnAction(e -> {
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle("Select Book File");
@@ -315,7 +299,6 @@ public class PublishBookFX {
             }
         });
 
-        // Submit button action
         submitBtn.setOnAction(e -> {
             if (validateForm()) {
                 submitBook();
@@ -350,7 +333,6 @@ public class PublishBookFX {
         previewFile = new Label();
         previewFile.getStyleClass().add("muted");
 
-        // Close preview button
         Button closePreviewBtn = new Button("Hide Preview");
         closePreviewBtn.getStyleClass().addAll("button", "secondary-btn");
         closePreviewBtn.setMaxWidth(200);
@@ -368,10 +350,9 @@ public class PublishBookFX {
             updatePreview();
             previewCard.setVisible(true);
             
-            // Scroll to preview
             ScrollPane scrollPane = (ScrollPane) previewCard.getScene().lookup(".scroll-pane");
             if (scrollPane != null) {
-                scrollPane.setVvalue(1.0); // Scroll to bottom where preview is
+                scrollPane.setVvalue(1.0);
             }
         }
     }
@@ -432,7 +413,6 @@ public class PublishBookFX {
 
         if (result.isSuccess()) {
             showMessage(messageLabel, "✅ " + result.getMessage(), "status-approved");
-            // Clear form
             titleField.clear();
             clearGenreSelections();
             descArea.clear();
@@ -442,6 +422,19 @@ public class PublishBookFX {
             draftIndicator.setVisible(false);
             previewCard.setVisible(false);
             authorService.clearDraft(currentAuthor.getUsername());
+            
+            // Notify dashboard to refresh
+            if (onBookPublished != null) {
+                onBookPublished.accept(null);
+            }
+            
+            // Close window after 1.5 seconds
+            new Timer().schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    javafx.application.Platform.runLater(() -> stage.close());
+                }
+            }, 1500);
         } else {
             showMessage(messageLabel, "❌ " + result.getMessage(), "status-rejected");
         }
@@ -486,7 +479,6 @@ public class PublishBookFX {
         label.setVisible(true);
     }
 
-    // ========== AUTO-SAVE FEATURE ==========
     private void setupAutoSave() {
         autoSaveTimer = new Timer(true);
         autoSaveTimer.scheduleAtFixedRate(new TimerTask() {
@@ -508,16 +500,13 @@ public class PublishBookFX {
         String description = descArea.getText().trim();
         String filePath = fileField.getText().trim();
 
-        // Save to service
         authorService.saveDraft(currentAuthor.getUsername(), title, selectedGenres, description, filePath);
         
-        // Show indicator
         if (!title.isEmpty() || !selectedGenres.isEmpty() || !description.isEmpty() || !filePath.isEmpty()) {
             draftIndicator.setText("📝 Draft saved at " + 
                 java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
             draftIndicator.setVisible(true);
             
-            // Fade out after 3 seconds
             new Timer().schedule(new TimerTask() {
                 @Override
                 public void run() {
@@ -534,7 +523,6 @@ public class PublishBookFX {
         
         String[] draft = authorService.loadDraft(currentAuthor.getUsername());
         if (draft != null && draft.length == 4) {
-            // [title, genres, description, filePath]
             titleField.setText(draft[0]);
             setSelectedGenres(draft[1]);
             descArea.setText(draft[2]);
@@ -550,7 +538,6 @@ public class PublishBookFX {
             draftIndicator.getStyleClass().setAll("status", "status-approved");
             draftIndicator.setVisible(true);
             
-            // Hide after 5 seconds
             new Timer().schedule(new TimerTask() {
                 @Override
                 public void run() {

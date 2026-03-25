@@ -17,6 +17,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.ArrayList;
 
 public class AuthorDashboardFX extends Application {
     private AuthorPortalService authorService;
@@ -28,6 +29,8 @@ public class AuthorDashboardFX extends Application {
     private Label statusLabel;
     
     private HBox statsBox;
+    private List<Stage> childWindows = new ArrayList<>();
+    private Label welcomeLabel;
 
     public AuthorDashboardFX(AuthorAccount author) {
         this.currentAuthor = author;
@@ -63,7 +66,7 @@ public class AuthorDashboardFX extends Application {
         centerContent.getChildren().addAll(titleLabel, statsBox, refreshDashboardBtn, menuGrid);
         root.setCenter(centerContent);
 
-        Scene scene = new Scene(root, 1000, 650);
+        Scene scene = new Scene(root, 1100, 650);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         primaryStage.setTitle("Author Dashboard");
@@ -77,8 +80,21 @@ public class AuthorDashboardFX extends Application {
     }
 
     private void handleWindowClose(WindowEvent event) {
-        System.out.println("🚪 Closing Author Dashboard...");
+        System.out.println("🚪 Closing Author Dashboard window...");
+        
+        for (Stage child : childWindows) {
+            if (child != null && child.isShowing()) {
+                child.close();
+            }
+        }
+        childWindows.clear();
+        
         stopRefreshTimer();
+    }
+
+    private void registerChildWindow(Stage stage) {
+        childWindows.add(stage);
+        stage.setOnCloseRequest(e -> childWindows.remove(stage));
     }
 
     private void stopRefreshTimer() {
@@ -90,7 +106,7 @@ public class AuthorDashboardFX extends Application {
     }
 
     private void startDashboardAutoRefresh() {
-        stopRefreshTimer(); // Stop any existing timer
+        stopRefreshTimer();
         refreshTimer = new Timer(true);
         refreshTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -130,8 +146,9 @@ public class AuthorDashboardFX extends Application {
         topBar.setPadding(new Insets(15, 20, 15, 20));
         topBar.setAlignment(Pos.CENTER_RIGHT);
         topBar.setStyle("-fx-background-color: white; -fx-border-color: #dbe6f2; -fx-border-width: 0 0 1 0;");
+        topBar.getStyleClass().add("top-bar");
 
-        Label welcomeLabel = new Label("Welcome, " + currentAuthor.getFullName());
+        welcomeLabel = new Label("Welcome, " + currentAuthor.getFullName());
         welcomeLabel.getStyleClass().add("current-user");
 
         Button logoutBtn = new Button("Logout");
@@ -186,33 +203,104 @@ public class AuthorDashboardFX extends Application {
         menuGrid.setVgap(20);
         menuGrid.setAlignment(Pos.CENTER);
 
+        // Row 1
         Button publishBtn = createMenuButton("📚 Publish Book", "Submit a new book for review");
         Button viewBtn = createMenuButton("📋 My Submissions", "View your book submissions");
-        Button profileBtn = createMenuButton("👤 Profile", "View your profile information");
+        Button booksBtn = createMenuButton("📖 My Books", "View, edit, or delete your books");
 
+        // Row 2
+        Button profileBtn = createMenuButton("👤 Profile", "Manage your profile information");
+        Button notifBtn = createMenuButton("🔔 Notifications", "View your notifications");
+
+        // Publish Book button with callback to refresh stats
         publishBtn.setOnAction(e -> {
-            PublishBookFX publishUI = new PublishBookFX(currentAuthor);
-            publishUI.show();
-            
-            // Schedule a stats refresh after a short delay
-            new Timer().schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    if (primaryStage != null && primaryStage.isShowing()) {
-                        Platform.runLater(() -> refreshDashboardStats());
-                    }
-                }
-            }, 1000);
+            System.out.println("📚 Opening Publish Book window...");
+            try {
+                PublishBookFX publishUI = new PublishBookFX(currentAuthor, updated -> {
+                    // Refresh dashboard stats after publishing
+                    refreshDashboardStats();
+                    System.out.println("✅ Dashboard stats refreshed after book published");
+                });
+                publishUI.show();
+                registerChildWindow(publishUI.getStage());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                showAlert("Error", "Could not open publish book window: " + ex.getMessage());
+            }
         });
 
-        viewBtn.setOnAction(e -> showSubmissions());
-        profileBtn.setOnAction(e -> showProfile());
+        // My Submissions button
+        viewBtn.setOnAction(e -> {
+            System.out.println("📋 Opening My Submissions...");
+            showSubmissions();
+        });
+        
+        // My Books button with callback to refresh stats
+        booksBtn.setOnAction(e -> {
+            System.out.println("📖 Opening My Books...");
+            try {
+                PublishedBookScreenFX bookScreen = new PublishedBookScreenFX(currentAuthor, updated -> {
+                    // Refresh dashboard stats after book is edited or deleted
+                    refreshDashboardStats();
+                    System.out.println("✅ Dashboard stats refreshed after book update");
+                });
+                bookScreen.show();
+                registerChildWindow(bookScreen.getStage());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                showAlert("Error", "Could not open my books window: " + ex.getMessage());
+            }
+        });
+        
+        // Profile button with callback
+        profileBtn.setOnAction(e -> {
+            System.out.println("👤 Opening Profile Management...");
+            try {
+                ProfileManagementFX profileScreen = new ProfileManagementFX(currentAuthor, updatedAuthor -> {
+                    this.currentAuthor = updatedAuthor;
+                    if (welcomeLabel != null) {
+                        welcomeLabel.setText("Welcome, " + updatedAuthor.getFullName());
+                    }
+                    refreshDashboardStats();
+                    System.out.println("✅ Dashboard updated with new profile info");
+                });
+                profileScreen.show();
+                registerChildWindow(profileScreen.getStage());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                showAlert("Error", "Could not open profile window: " + ex.getMessage());
+            }
+        });
+        
+        // Notifications button
+        notifBtn.setOnAction(e -> {
+            System.out.println("🔔 Opening Notifications...");
+            try {
+                NotificationBoardFX notifBoard = new NotificationBoardFX(currentAuthor);
+                notifBoard.show();
+                registerChildWindow(notifBoard.getStage());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                showAlert("Error", "Could not open notifications: " + ex.getMessage());
+            }
+        });
 
+        // Add buttons to grid
         menuGrid.add(publishBtn, 0, 0);
         menuGrid.add(viewBtn, 1, 0);
-        menuGrid.add(profileBtn, 2, 0);
+        menuGrid.add(booksBtn, 2, 0);
+        menuGrid.add(profileBtn, 0, 1);
+        menuGrid.add(notifBtn, 1, 1);
 
         return menuGrid;
+    }
+
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     private Button createMenuButton(String title, String subtitle) {
@@ -231,6 +319,7 @@ public class AuthorDashboardFX extends Application {
         }
 
         submissionsStage = new Stage();
+        registerChildWindow(submissionsStage);
         
         BorderPane root = new BorderPane();
         root.setStyle("-fx-background-color: white;");
@@ -356,33 +445,24 @@ public class AuthorDashboardFX extends Application {
         return card;
     }
 
-    private void showProfile() {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Profile");
-        alert.setHeaderText("👤 Author Profile");
-        alert.setContentText(
-            "Username: " + currentAuthor.getUsername() + "\n" +
-            "Full Name: " + currentAuthor.getFullName() + "\n" +
-            "Bio: " + (currentAuthor.getBio().isEmpty() ? "Not provided" : currentAuthor.getBio())
-        );
-        alert.showAndWait();
-    }
-
     private void logout() {
         System.out.println("🚪 Logging out: " + currentAuthor.getUsername());
-        
-        // Stop the refresh timer
+
+        for (Stage child : childWindows) {
+            if (child != null && child.isShowing()) {
+                child.close();
+            }
+        }
+        childWindows.clear();
+
         stopRefreshTimer();
-        
-        // Close any open submissions window
+
         if (submissionsStage != null && submissionsStage.isShowing()) {
             submissionsStage.close();
         }
-        
-        // Close dashboard and open login
+
         primaryStage.close();
-        
-        // Open login screen
+
         AuthorLoginFX loginUI = new AuthorLoginFX();
         try {
             loginUI.start(new Stage());

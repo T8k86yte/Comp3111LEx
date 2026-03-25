@@ -25,17 +25,17 @@ public class SubmissionRepository {
         }
     }
 
-    // Public method to force refresh from file
     public void refreshFromFile() {
+        System.out.println("🔄 Refreshing submissions from file...");
         loadFromFile();
     }
 
     private void loadFromFile() {
-        submissionsById.clear(); // Clear existing data
         try {
             Path filePath = Paths.get(SUBMISSIONS_FILE);
             if (Files.exists(filePath)) {
                 List<String> lines = Files.readAllLines(filePath);
+                submissionsById.clear();
                 for (String line : lines) {
                     if (!line.trim().isEmpty()) {
                         BookSubmission submission = BookSubmission.fromString(line);
@@ -44,7 +44,9 @@ public class SubmissionRepository {
                         }
                     }
                 }
-                System.out.println("Loaded " + submissionsById.size() + " submissions from file");
+                System.out.println("📚 Loaded " + submissionsById.size() + " submissions from file");
+            } else {
+                System.out.println("📭 No submissions file found");
             }
         } catch (IOException e) {
             System.err.println("Error loading submissions: " + e.getMessage());
@@ -61,54 +63,51 @@ public class SubmissionRepository {
             Path filePath = Paths.get(SUBMISSIONS_FILE);
             Files.write(filePath, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             
-            System.out.println("Saved " + lines.size() + " submissions to file");
+            System.out.println("💾 Saved " + lines.size() + " submissions to file");
         } catch (IOException e) {
             System.err.println("Error saving submissions: " + e.getMessage());
         }
     }
 
-    // Save a new submission
     public void save(BookSubmission submission) {
         submissionsById.put(submission.getSubmissionId(), submission);
         saveToFile();
+        System.out.println("✅ Submission saved: " + submission.getSubmissionId());
     }
 
-    // Update an existing submission
     public void update(BookSubmission submission) {
         submissionsById.put(submission.getSubmissionId(), submission);
         saveToFile();
+        System.out.println("✏️ Submission updated: " + submission.getSubmissionId());
     }
 
-    // Find by ID
+    public void delete(String submissionId) {
+        submissionsById.remove(submissionId);
+        saveToFile();
+        System.out.println("🗑️ Submission deleted: " + submissionId);
+    }
+
     public Optional<BookSubmission> findById(String submissionId) {
         return Optional.ofNullable(submissionsById.get(submissionId));
     }
 
-    // Find all submissions by an author - REFRESH before searching
     public List<BookSubmission> findByAuthor(String authorUsername) {
-        refreshFromFile(); // Always get fresh data from file
         return submissionsById.values().stream()
                 .filter(sub -> sub.getAuthorUsername().equals(authorUsername))
                 .collect(Collectors.toList());
     }
 
-    // Find all pending submissions (for librarian) - REFRESH before searching
     public List<BookSubmission> findPendingSubmissions() {
-        refreshFromFile(); // Always get fresh data from file
         return submissionsById.values().stream()
                 .filter(BookSubmission::isPending)
                 .collect(Collectors.toList());
     }
 
-    // Find all submissions - REFRESH before searching
     public List<BookSubmission> findAll() {
-        refreshFromFile(); // Always get fresh data from file
         return new ArrayList<>(submissionsById.values());
     }
 
-    // Get count - REFRESH before counting
     public int getCount() {
-        refreshFromFile(); // Always get fresh data from file
         return submissionsById.size();
     }
 }
