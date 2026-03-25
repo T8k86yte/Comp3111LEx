@@ -2,45 +2,54 @@ package project.task2.model;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.List;
+import java.util.ArrayList;
 
 public class BookSubmission {
     private final String submissionId;
     private final String title;
     private final String authorUsername;
     private final String authorFullName;
-    private final String genre;
+    private List<String> genres;
     private final String description;
     private final String filePath;
     private final LocalDateTime submissionDate;
-    private String status; // PENDING, APPROVED, REJECTED
+    private String status;
     private String rejectionReason;
     private LocalDateTime reviewedDate;
     private String reviewedBy;
+    private boolean isDraft;
+    private LocalDateTime lastEdited;
+    private int editCount;
 
     // Constructor for new submissions
     public BookSubmission(String title, String authorUsername, String authorFullName,
-                         String genre, String description, String filePath) {
+                         List<String> genres, String description, String filePath) {
         this.submissionId = generateSubmissionId();
         this.title = title;
         this.authorUsername = authorUsername;
         this.authorFullName = authorFullName;
-        this.genre = genre;
+        this.genres = genres != null ? genres : new ArrayList<>();
         this.description = description;
         this.filePath = filePath;
         this.submissionDate = LocalDateTime.now();
         this.status = "PENDING";
+        this.isDraft = false;
+        this.editCount = 0;
     }
 
-    // Constructor for loading from file
+    // Constructor for loading from file (with all fields)
     public BookSubmission(String submissionId, String title, String authorUsername,
-                         String authorFullName, String genre, String description,
+                         String authorFullName, String genresStr, String description,
                          String filePath, LocalDateTime submissionDate, String status,
-                         String rejectionReason, LocalDateTime reviewedDate, String reviewedBy) {
+                         String rejectionReason, LocalDateTime reviewedDate, String reviewedBy,
+                         boolean isDraft, int editCount) {
         this.submissionId = submissionId;
         this.title = title;
         this.authorUsername = authorUsername;
         this.authorFullName = authorFullName;
-        this.genre = genre;
+        this.genres = parseGenres(genresStr);
         this.description = description;
         this.filePath = filePath;
         this.submissionDate = submissionDate;
@@ -48,10 +57,23 @@ public class BookSubmission {
         this.rejectionReason = rejectionReason;
         this.reviewedDate = reviewedDate;
         this.reviewedBy = reviewedBy;
+        this.isDraft = isDraft;
+        this.editCount = editCount;
     }
 
     private String generateSubmissionId() {
         return "SUB" + System.currentTimeMillis();
+    }
+
+    private List<String> parseGenres(String genresStr) {
+        if (genresStr == null || genresStr.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return Arrays.asList(genresStr.split(","));
+    }
+
+    private String genresToString() {
+        return String.join(",", genres);
     }
 
     // Getters
@@ -59,8 +81,8 @@ public class BookSubmission {
     public String getTitle() { return title; }
     public String getAuthorUsername() { return authorUsername; }
     public String getAuthorFullName() { return authorFullName; }
-    public String getGenre() { return genre; }
-    public String getGenresAsString() { return genre; }
+    public List<String> getGenres() { return genres; }
+    public String getGenresAsString() { return genresToString(); }
     public String getDescription() { return description; }
     public String getFilePath() { return filePath; }
     public LocalDateTime getSubmissionDate() { return submissionDate; }
@@ -68,12 +90,23 @@ public class BookSubmission {
     public String getRejectionReason() { return rejectionReason; }
     public LocalDateTime getReviewedDate() { return reviewedDate; }
     public String getReviewedBy() { return reviewedBy; }
+    public boolean isDraft() { return isDraft; }
+    public int getEditCount() { return editCount; }
+    public LocalDateTime getLastEdited() { return lastEdited; }
 
-    // Status setters (for librarian)
+    // Setters for editing
+    public void setGenres(List<String> newGenres) {
+        this.genres = newGenres;
+        this.lastEdited = LocalDateTime.now();
+        this.editCount++;
+    }
+
+    // Status setters
     public void approve(String librarianUsername) {
         this.status = "APPROVED";
         this.reviewedDate = LocalDateTime.now();
         this.reviewedBy = librarianUsername;
+        this.isDraft = false;
     }
 
     public void reject(String librarianUsername, String reason) {
@@ -81,6 +114,7 @@ public class BookSubmission {
         this.rejectionReason = reason;
         this.reviewedDate = LocalDateTime.now();
         this.reviewedBy = librarianUsername;
+        this.isDraft = false;
     }
 
     // Helper methods
@@ -105,33 +139,39 @@ public class BookSubmission {
             title,
             authorUsername,
             authorFullName,
-            genre,
+            genresToString(),
             description,
             filePath,
             submissionDate.format(formatter),
             status,
             rejectionReason != null ? rejectionReason : "",
             reviewedDate != null ? reviewedDate.format(formatter) : "",
-            reviewedBy != null ? reviewedBy : ""
+            reviewedBy != null ? reviewedBy : "",
+            String.valueOf(isDraft),
+            String.valueOf(editCount),
+            lastEdited != null ? lastEdited.format(formatter) : ""
         );
     }
 
     // Parse from file string
     public static BookSubmission fromString(String data) {
-        // Keep trailing empty columns (e.g., pending records with empty review fields).
         String[] parts = data.split("\\|", -1);
-        if (parts.length >= 12) {
+        if (parts.length >= 13) {
             DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-
+            
             LocalDateTime submissionDate = LocalDateTime.parse(parts[7], formatter);
-            LocalDateTime reviewedDate = parts[10].isEmpty() ? null :
+            LocalDateTime reviewedDate = parts[10].isEmpty() ? null : 
                 LocalDateTime.parse(parts[10], formatter);
-
+            boolean isDraft = Boolean.parseBoolean(parts[12]);
+            int editCount = parts.length > 13 ? Integer.parseInt(parts[13]) : 0;
+            
             return new BookSubmission(
-                parts[0], parts[1], parts[2], parts[3], parts[4],
+                parts[0], parts[1], parts[2], parts[3], parts[4], 
                 parts[5], parts[6], submissionDate, parts[8],
                 parts[9].isEmpty() ? null : parts[9],
-                reviewedDate, parts[11].isEmpty() ? null : parts[11]
+                reviewedDate, parts[11].isEmpty() ? null : parts[11],
+                isDraft,
+                editCount
             );
         }
         return null;
