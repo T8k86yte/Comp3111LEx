@@ -1,0 +1,376 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Phase2 task1 update">
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/model/StudentStaffAccount.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/model/StudentStaffAccount.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/model/LibrarianAccount.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/model/LibrarianAccount.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/LibrarySys.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/model/Book.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/model/StudentStaffAccount$1.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/model/StudentStaffAccount.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/model/UserAccount.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/model/UserRole.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/repo/BookRepository.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/repo/InMemoryBookRepository.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/repo/StudentStaffRepository.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/security/PasswordSecurity.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService$LoginResult.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService$OperationResult.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/ui/StudentStaffPortalApp.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/model/BookSubmission.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/model/UserAccount.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/model/UserRole.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/repo/AuthorRepository.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/repo/DraftRepository.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/repo/SubmissionRepository.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/service/AuthorPortalService$LoginResult.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/service/AuthorPortalService$RegistrationResult.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/service/AuthorPortalService$SubmissionResult.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/service/AuthorPortalService.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorRegistrationFX.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/PublishBookFX$1.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/PublishBookFX$2.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/PublishBookFX$3.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/PublishBookFX$4.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/PublishBookFX.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/utils/FileHandler.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/utils/PasswordUtils.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/model/LibrarianAccount.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/repo/BookSubmissionRepository.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/repo/LibrarianRepository.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$LoginResult.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$OperationResult.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp$1.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalConsole.class" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;T8k86yte&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/T8k86yte/Comp3111LEx.git&quot;,
+    &quot;accountId&quot;: &quot;e591db63-2b26-414d-95e4-6df6aa4ccca7&quot;
+  }
+}</component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 8
+}</component>
+  <component name="ProjectId" id="39Z6ZC4OejTBU3J19D9WRV6TPbI" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Application.LibrarySys.executor": "Run",
+    "Application.mainApp1.executor": "Run",
+    "Downloaded.Files.Path.Enabled": "false",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Repository.Attach.Annotations": "false",
+    "Repository.Attach.JavaDocs": "false",
+    "Repository.Attach.Sources": "false",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "git-widget-placeholder": "master",
+    "ignore.virus.scanning.warn.message": "true",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "C:/Users/zyang/IdeaProjects/Comp3111LEx",
+    "nodejs_package_manager_path": "npm",
+    "project.structure.last.edited": "Project",
+    "project.structure.proportion": "0.15",
+    "project.structure.side.proportion": "0.2",
+    "settings.editor.selected.configurable": "org.jetbrains.plugins.github.ui.GithubSettingsConfigurable",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RunManager">
+    <configuration default="true" type="JetRunConfigurationType">
+      <module name="Comp3111LEx" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
+      <module name="Comp3111LEx" />
+      <option name="filePath" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-2fc7cc6b9a17-intellij.indexing.shared.core-IU-253.30387.90" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="" />
+      <created>1770891337716</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1770891337716</updated>
+      <workItem from="1770891341256" duration="1747000" />
+      <workItem from="1770893409193" duration="767000" />
+      <workItem from="1771387762848" duration="5543000" />
+      <workItem from="1771394546458" duration="1348000" />
+      <workItem from="1772345222989" duration="624000" />
+      <workItem from="1772345862642" duration="1836000" />
+      <workItem from="1772426847220" duration="54000" />
+      <workItem from="1772534131471" duration="1269000" />
+      <workItem from="1772535640303" duration="408000" />
+      <workItem from="1772607811162" duration="2229000" />
+      <workItem from="1772849221387" duration="1213000" />
+      <workItem from="1773034107621" duration="584000" />
+      <workItem from="1773034765501" duration="1203000" />
+      <workItem from="1773131556061" duration="1405000" />
+      <workItem from="1773200839299" duration="3682000" />
+      <workItem from="1773229054983" duration="1039000" />
+      <workItem from="1773310707339" duration="4769000" />
+      <workItem from="1773655380237" duration="6000" />
+    </task>
+    <task id="LOCAL-00001" summary="This is an initial commit for Comp3111LEx Project">
+      <option name="closed" value="true" />
+      <created>1771388733978</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1771388733978</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Add 2 print lines as report heading">
+      <option name="closed" value="true" />
+      <created>1771389266372</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1771389266372</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Additional 1 print line for testing">
+      <option name="closed" value="true" />
+      <created>1771391669164</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1771391669164</updated>
+    </task>
+    <task id="LOCAL-00004" summary="readme file added">
+      <option name="closed" value="true" />
+      <created>1771394196188</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1771394196188</updated>
+    </task>
+    <task id="LOCAL-00005" summary="readme file updated">
+      <option name="closed" value="true" />
+      <created>1771395213068</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1771395213068</updated>
+    </task>
+    <task id="LOCAL-00006" summary="screenshot uploaded">
+      <option name="closed" value="true" />
+      <created>1771395395896</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1771395395896</updated>
+    </task>
+    <task id="LOCAL-00007" summary="readme update 2">
+      <option name="closed" value="true" />
+      <created>1771395505955</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1771395505955</updated>
+    </task>
+    <task id="LOCAL-00008" summary="phase1 task1 update">
+      <option name="closed" value="true" />
+      <created>1772346836850</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1772346836850</updated>
+    </task>
+    <task id="LOCAL-00009" summary="phase1 task1 update: added file storage function">
+      <option name="closed" value="true" />
+      <created>1772534739514</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1772534739514</updated>
+    </task>
+    <task id="LOCAL-00010" summary="phase1 task1 update: added file storage function, updated StudentStaffPortalConsole for clarity">
+      <option name="closed" value="true" />
+      <created>1772535888054</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1772535888054</updated>
+    </task>
+    <task id="LOCAL-00011" summary="phase1 task1 update: added system UI design">
+      <option name="closed" value="true" />
+      <created>1772608430966</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1772608430966</updated>
+    </task>
+    <task id="LOCAL-00012" summary="phase1 task1 update: added system UI design">
+      <option name="closed" value="true" />
+      <created>1772608507556</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1772608507556</updated>
+    </task>
+    <task id="LOCAL-00013" summary="phase1 task1 update: UI theme template">
+      <option name="closed" value="true" />
+      <created>1772608533467</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1772608533467</updated>
+    </task>
+    <task id="LOCAL-00014" summary="phase1 task1 update: UI theme template">
+      <option name="closed" value="true" />
+      <created>1772608534582</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1772608534582</updated>
+    </task>
+    <task id="LOCAL-00015" summary="phase1 task1 update: UI theme template">
+      <option name="closed" value="true" />
+      <created>1772608539203</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1772608539203</updated>
+    </task>
+    <task id="LOCAL-00016" summary="phase1 task1 update: Improved UI logic for login/registration, added recommendation logic based on number of borrows">
+      <option name="closed" value="true" />
+      <created>1773035794401</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1773035794401</updated>
+    </task>
+    <task id="LOCAL-00017" summary="Application merge completed">
+      <option name="closed" value="true" />
+      <created>1773203668871</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1773203668871</updated>
+    </task>
+    <task id="LOCAL-00018" summary="Application merge completed">
+      <option name="closed" value="true" />
+      <created>1773229772972</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1773229772972</updated>
+    </task>
+    <task id="LOCAL-00019" summary="Improved student borrow&amp;return logic. Improved booklist UI to avoid collapsing columns. Improved user prompt logic by adding pop up screens.">
+      <option name="closed" value="true" />
+      <created>1773656142025</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1773656142025</updated>
+    </task>
+    <task id="LOCAL-00020" summary="Use case diagram for task1 using plantUML">
+      <option name="closed" value="true" />
+      <created>1773656817067</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1773656817067</updated>
+    </task>
+    <task id="LOCAL-00021" summary="Phase2 task1 update">
+      <option name="closed" value="true" />
+      <created>1773723933707</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1773723933707</updated>
+    </task>
+    <task id="LOCAL-00022" summary="Phase2 task1 update">
+      <option name="closed" value="true" />
+      <created>1774412669677</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1774412669677</updated>
+    </task>
+    <option name="localTasksCounter" value="23" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="This is an initial commit for Comp3111LEx Project" />
+    <MESSAGE value="Add 2 print lines as report heading" />
+    <MESSAGE value="Additional 1 print line for testing" />
+    <MESSAGE value="readme file added" />
+    <MESSAGE value="readme file updated" />
+    <MESSAGE value="screenshot uploaded" />
+    <MESSAGE value="readme update 2" />
+    <MESSAGE value="phase1 task1 update" />
+    <MESSAGE value="phase1 task1 update: added file storage function" />
+    <MESSAGE value="phase1 task1 update: added file storage function, updated StudentStaffPortalConsole for clarity" />
+    <MESSAGE value="phase1 task1 update: added system UI design" />
+    <MESSAGE value="phase1 task1 update: UI theme template" />
+    <MESSAGE value="phase1 task1 update: Improved UI logic for login/registration, added recommendation logic based on number of borrows" />
+    <MESSAGE value="Application merge completed" />
+    <MESSAGE value="Improved student borrow&amp;return logic. Improved booklist UI to avoid collapsing columns. Improved user prompt logic by adding pop up screens." />
+    <MESSAGE value="Use case diagram for task1 using plantUML" />
+    <MESSAGE value="Phase2 task1 update" />
+    <option name="LAST_COMMIT_MESSAGE" value="Phase2 task1 update" />
+  </component>
+</project>
