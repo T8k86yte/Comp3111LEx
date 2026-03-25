@@ -1,5 +1,6 @@
 package project.task3.repo;
 
+import project.task2.model.AuthorAccount;
 import project.task3.model.LibrarianAccount;
 
 import java.io.IOException;
@@ -74,5 +75,9 @@ public class LibrarianRepository {
 
     public Optional<LibrarianAccount> findByUsername(String username) {
         return Optional.ofNullable(librarianByUsername.get(username));
+    }
+
+    public List<LibrarianAccount> getAllUsers() {
+        return librarianByUsername.values().stream().toList();
     }
 }
