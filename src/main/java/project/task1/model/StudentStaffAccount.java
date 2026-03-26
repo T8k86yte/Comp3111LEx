@@ -9,9 +9,10 @@ public class StudentStaffAccount extends UserAccount {
             String fullName,
             String passwordSaltBase64,
             String passwordHashBase64,
-            UserRole role
+            UserRole role,
+            boolean disabled
     ) {
-        super(username, fullName, passwordSaltBase64, passwordHashBase64, role);
+        super(username, fullName, passwordSaltBase64, passwordHashBase64, role, disabled);
     }
 
     @Override
@@ -21,7 +22,8 @@ public class StudentStaffAccount extends UserAccount {
                 getFullName(),
                 getPasswordSaltBase64(),
                 getPasswordHashBase64(),
-                roleString(getRole())
+                roleString(getRole()),
+                isDisabled() ? "1" : "0"
         );
     }
 
@@ -33,7 +35,8 @@ public class StudentStaffAccount extends UserAccount {
                     parts[1],
                     parts[2],
                     parts[3],
-                    parts[4].equals("STUDENT") ? UserRole.STUDENT : UserRole.STAFF
+                    parts[4].equals("STUDENT") ? UserRole.STUDENT : UserRole.STAFF,
+                    parts[5].equals("1")
             );
         }
         return null;

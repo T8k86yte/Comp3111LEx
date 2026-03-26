@@ -304,7 +304,8 @@ public class StudentStaffPortalService {
                 normalizedFullName,
                 salt,
                 hash,
-                existing.getRole()
+                existing.getRole(),
+                existing.isDisabled()//Preserve the disabled state
         );
         studentstaffRepository.save(updated);
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
