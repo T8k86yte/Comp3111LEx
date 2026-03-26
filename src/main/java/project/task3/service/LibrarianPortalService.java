@@ -243,6 +243,7 @@ public class LibrarianPortalService {
                 normalizedFullName,
                 salt,
                 hash,
+                existing.isDisabled(),
                 eID
         ));
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
@@ -273,14 +274,14 @@ public class LibrarianPortalService {
 
             userAuthor = authorRepository.findByUsername(normalizedUsername);
             if (userAuthor.isPresent()) {
-                role = UserRole.AUTHOR;//Use STUDENT to represent both student and staff here
+                role = UserRole.AUTHOR;
                 user = userAuthor.get();
                 break;
             }
 
             userLibrarian = librarianRepository.findByUsername(normalizedUsername);
             if (userLibrarian.isPresent()) {
-                role = UserRole.LIBRARIAN;//Use STUDENT to represent both student and staff here
+                role = UserRole.LIBRARIAN;
                 user = userLibrarian.get();
                 break;
             }
@@ -306,7 +307,8 @@ public class LibrarianPortalService {
                         normalizedFullName,
                         salt,
                         hash,
-                        userStudentStaff.get().getRole()
+                        userStudentStaff.get().getRole(),
+                        user.isDisabled()//Preserve the disabled state
                 ));
                 break;
             case AUTHOR:
@@ -315,6 +317,7 @@ public class LibrarianPortalService {
                         normalizedFullName,
                         salt,
                         hash,
+                        user.isDisabled(),
                         userAuthor.get().getBio()
                 ));
                 break;
@@ -324,6 +327,7 @@ public class LibrarianPortalService {
                         normalizedFullName,
                         salt,
                         hash,
+                        user.isDisabled(),
                         userLibrarian.get().getEmployeeID()
                 ));
                 break;
@@ -372,6 +376,94 @@ public class LibrarianPortalService {
             return OperationResult.failure("User does not exist.");
         } while (false);
         return OperationResult.success("");
+    }
+
+    public OperationResult validateDisabledUsername(String username) {//Validate username, then check whether it is not disabled
+        String normalizedUsername = safeTrim(username);
+
+        UserAccount user;
+        Optional<StudentStaffAccount> userStudentStaff;
+        Optional<AuthorAccount> userAuthor;
+        Optional<LibrarianAccount> userLibrarian;
+        do
+        {
+            userStudentStaff = studentStaffRepository.findByUsername(normalizedUsername);
+            if (userStudentStaff.isPresent()) {
+                user = userStudentStaff.get();
+                break;
+            }
+
+            userAuthor = authorRepository.findByUsername(normalizedUsername);
+            if (userAuthor.isPresent()) {
+                user = userAuthor.get();
+                break;
+            }
+
+            userLibrarian = librarianRepository.findByUsername(normalizedUsername);
+            if (userLibrarian.isPresent()) {
+                user = userLibrarian.get();
+                break;
+            }
+
+            return OperationResult.failure("User does not exist.");
+        } while (false);
+
+        if (user.isDisabled()) return OperationResult.failure("The user account is already disabled.");
+
+        return OperationResult.success("");
+    }
+    public OperationResult disableUser(String username) {
+        String normalizedUsername = safeTrim(username);
+
+        if (normalizedUsername.isEmpty()) return OperationResult.failure("Disable failed: invalid username.");
+
+        UserAccount user;
+        Optional<StudentStaffAccount> userStudentStaff = Optional.empty();
+        Optional<AuthorAccount> userAuthor = Optional.empty();
+        Optional<LibrarianAccount> userLibrarian = Optional.empty();
+        UserRole role;
+        do
+        {
+            userStudentStaff = studentStaffRepository.findByUsername(normalizedUsername);
+            if (userStudentStaff.isPresent()) {
+                role = UserRole.STUDENT;//Use STUDENT to represent both student and staff here
+                user = userStudentStaff.get();
+                break;
+            }
+
+            userAuthor = authorRepository.findByUsername(normalizedUsername);
+            if (userAuthor.isPresent()) {
+                role = UserRole.AUTHOR;
+                user = userAuthor.get();
+                break;
+            }
+
+            userLibrarian = librarianRepository.findByUsername(normalizedUsername);
+            if (userLibrarian.isPresent()) {
+                role = UserRole.LIBRARIAN;
+                user = userLibrarian.get();
+                break;
+            }
+
+            return OperationResult.failure("Edit failed: account not found.");
+        } while (false);
+
+        user.setDisabled(true);
+
+        switch (role) {
+            case STUDENT:
+                studentStaffRepository.save(userStudentStaff.get());
+                break;
+            case AUTHOR:
+                authorRepository.save(userAuthor.get());
+                break;
+            case LIBRARIAN:
+                librarianRepository.save(userLibrarian.get());
+                break;
+        }
+        appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your account was disabled.", role);
+
+        return OperationResult.success("Successfully disabled target user account.");
     }
 
     public String getConfirmDetail(String subId) {

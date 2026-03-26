@@ -596,7 +596,10 @@ public class LibrarianPortalApp extends Application {
         TableColumn<UserAccount, String> roleCol = new TableColumn<>("Role");
         roleCol.setCellValueFactory(new PropertyValueFactory<>("role"));
 
-        allUsersTable.getColumns().addAll(usernameCol, fullNameCol, roleCol);
+        TableColumn<UserAccount, String> disabledCol = new TableColumn<>("is Disabled");
+        disabledCol.setCellValueFactory(new PropertyValueFactory<>("DisabledString"));
+
+        allUsersTable.getColumns().addAll(usernameCol, fullNameCol, roleCol, disabledCol);
 
         allUsersTable.getSelectionModel().selectedItemProperty().addListener((obs, oldUser, newUser) -> {
             if (newUser != null) manageUsersSelectedName.setText(newUser.getUsername());
@@ -635,7 +638,10 @@ public class LibrarianPortalApp extends Application {
         Button applyBtn = new Button("Apply Changes");
         applyBtn.getStyleClass().add("primary-btn");
         applyBtn.setOnAction(event -> handleUserEdit());
-        actions.getChildren().add(applyBtn);
+        Button disableBtn = new Button("Disable User");
+        disableBtn.getStyleClass().add("primary-btn");
+        disableBtn.setOnAction(event -> handleDisableUser());
+        actions.getChildren().addAll(applyBtn, disableBtn);
 
         card.getChildren().addAll(heading, hint, fields, actions);
 
@@ -967,6 +973,41 @@ public class LibrarianPortalApp extends Application {
             showErrorPopup("Edit User", "Action failed", result.message());
             return;
         }
+        else {
+            setStatus(result.message());
+            refreshEditUsers();
+            manageUsersNewFullName.clear();
+            manageUsersNewPassword.clear();
+            manageUsersNewPasswordConfirm.clear();
+        }
+    }
+
+    private void handleDisableUser() {
+        if (currentUser == null) {
+            showErrorPopup("Disable User", "No user logged in.", "Please log in first.");
+            return;
+        }
+
+        String name = manageUsersSelectedName.getText();
+        if (currentUser.username().equals(name)) {
+            showErrorPopup("Disable User", "Unsupported action.", "You cannot disable yourself.");
+            return;
+        }
+
+        LibrarianPortalService.OperationResult result = portalService.validateDisabledUsername(name);
+        if (!result.success()) {
+            showErrorPopup("Disable User", "Action failed", result.message());
+            return;
+        }
+
+        if (!showConfirmPopup(
+                "Disable User",
+                "Disable this user?",
+                portalService.getUserEditConfirmDetail(name, manageUsersNewFullName.getText())
+        )) return;
+
+        result = portalService.disableUser(name);
+        if (!result.success()) showErrorPopup("Edit User", "Action failed", result.message());
         else {
             setStatus(result.message());
             refreshEditUsers();

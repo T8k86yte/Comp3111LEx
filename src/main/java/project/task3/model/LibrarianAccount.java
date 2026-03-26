@@ -12,9 +12,10 @@ public class LibrarianAccount extends UserAccount {
             String fullName,
             String passwordSaltBase64,
             String passwordHashBase64,
+            boolean disabled,
             int employeeID
     ) {
-        super(username, fullName, passwordSaltBase64, passwordHashBase64, UserRole.LIBRARIAN);
+        super(username, fullName, passwordSaltBase64, passwordHashBase64, UserRole.LIBRARIAN, disabled);
         this.employeeID = employeeID;
     }
 
@@ -30,19 +31,21 @@ public class LibrarianAccount extends UserAccount {
                 getPasswordSaltBase64(),
                 getPasswordHashBase64(),
                 "LIBRARIAN",
+                isDisabled() ? "1" : "0",
                 Integer.toString(employeeID)
         );
     }
 
     public static LibrarianAccount fromString(String data) {
         String[] parts = data.split("\\|");
-        if (parts.length >= 6) {
+        if (parts.length >= 7) {
             return new LibrarianAccount(
                     parts[0],
                     parts[1],
                     parts[2],
                     parts[3],
-                    Integer.parseInt(parts[5])
+                    parts[5].equals("1"),
+                    Integer.parseInt(parts[6])
             );
         }
         return null;
