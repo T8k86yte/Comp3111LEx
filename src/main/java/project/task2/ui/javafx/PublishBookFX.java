@@ -12,6 +12,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import project.task2.model.AuthorAccount;
 import project.task2.service.AuthorPortalService;
+import project.task2.utils.SessionManager;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -38,7 +39,7 @@ public class PublishBookFX {
     private TextField coverImageField;
     private Label selectedCoverLabel;
     private ImageView coverPreview;
-    private Image originalCoverImage;  // Store original image for magnification
+    private Image originalCoverImage;
     private Button browseCoverBtn;
     private Button removeCoverBtn;
     
@@ -113,6 +114,9 @@ public class PublishBookFX {
             }
             saveDraft();
         });
+        
+        // Save session for crash recovery
+        SessionManager.setCurrentScreen("PUBLISH_BOOK", null);
     }
 
     private HBox createTopBar() {
@@ -185,6 +189,7 @@ public class PublishBookFX {
         titleField.getStyleClass().add("text-field");
         titleField.textProperty().addListener((obs, old, newVal) -> {
             if (!isLoadingDraft) hasUnsavedChanges = true;
+            saveScreenState();
         });
         titleBox.getChildren().addAll(titleLabel2, titleField);
 
@@ -216,6 +221,7 @@ public class PublishBookFX {
             checkBox.getStyleClass().add("muted");
             checkBox.setOnAction(e -> {
                 if (!isLoadingDraft) hasUnsavedChanges = true;
+                saveScreenState();
             });
             genreCheckBoxes.add(checkBox);
             genreFlowPane.getChildren().add(checkBox);
@@ -234,6 +240,7 @@ public class PublishBookFX {
         descArea.getStyleClass().add("text-area");
         descArea.textProperty().addListener((obs, old, newVal) -> {
             if (!isLoadingDraft) hasUnsavedChanges = true;
+            saveScreenState();
         });
         descBox.getChildren().addAll(descLabel, descArea);
 
@@ -292,7 +299,6 @@ public class PublishBookFX {
         coverPreview.setPreserveRatio(true);
         coverPreview.setStyle("-fx-border-color: #e2e8f0; -fx-border-radius: 4px; -fx-cursor: hand;");
         
-        // Add click handler to magnify image using original image
         coverPreview.setOnMouseClicked(this::showMagnifiedImage);
         
         selectedCoverLabel = new Label();
@@ -349,6 +355,7 @@ public class PublishBookFX {
                 String filePath = selectedFile.getAbsolutePath();
                 fileField.setText(filePath);
                 hasUnsavedChanges = true;
+                saveScreenState();
                 
                 String fileName = selectedFile.getName();
                 if (isValidFileType(fileName)) {
@@ -393,13 +400,11 @@ public class PublishBookFX {
                 
                 coverImageField.setText(filePath);
                 hasUnsavedChanges = true;
+                saveScreenState();
                 removeCoverBtn.setDisable(false);
                 
                 try {
-                    // Store original image at full resolution
                     originalCoverImage = new Image(new File(filePath).toURI().toString(), true);
-                    
-                    // Create preview image (scaled down)
                     Image previewImage = new Image(new File(filePath).toURI().toString(), 80, 100, true, true);
                     coverPreview.setImage(previewImage);
                     coverPreview.setVisible(true);
@@ -423,6 +428,7 @@ public class PublishBookFX {
             selectedCoverLabel.setVisible(false);
             removeCoverBtn.setDisable(true);
             hasUnsavedChanges = true;
+            saveScreenState();
         });
 
         submitBtn.setOnAction(e -> {
@@ -434,6 +440,24 @@ public class PublishBookFX {
         return formCard;
     }
 
+    private void saveScreenState() {
+        String title = titleField.getText().trim();
+        List<String> selectedGenres = getSelectedGenres();
+        String description = descArea.getText().trim();
+        String filePath = fileField.getText().trim();
+        String coverPath = coverImageField.getText().trim();
+        
+        String state = String.join("|",
+            title,
+            String.join(",", selectedGenres),
+            description,
+            filePath,
+            coverPath
+        );
+        
+        SessionManager.saveScreenState("PUBLISH_BOOK", state);
+    }
+
     private void showMagnifiedImage(MouseEvent event) {
         if (originalCoverImage == null) return;
         
@@ -443,11 +467,9 @@ public class PublishBookFX {
         BorderPane root = new BorderPane();
         root.setStyle("-fx-background-color: #1e293b;");
         
-        // Use the original high-resolution image
         ImageView largeImageView = new ImageView(originalCoverImage);
         largeImageView.setPreserveRatio(true);
         
-        // Set max size but maintain quality
         double maxWidth = 600;
         double maxHeight = 700;
         double imgWidth = originalCoverImage.getWidth();
@@ -462,7 +484,6 @@ public class PublishBookFX {
             largeImageView.setFitHeight(imgHeight);
         }
         
-        // Add zoom capability with scroll
         ScrollPane scrollPane = new ScrollPane();
         scrollPane.setContent(largeImageView);
         scrollPane.setPannable(true);
@@ -470,7 +491,6 @@ public class PublishBookFX {
         scrollPane.setFitToHeight(true);
         scrollPane.setStyle("-fx-background-color: transparent;");
         
-        // Add zoom controls
         HBox zoomControls = new HBox(10);
         zoomControls.setAlignment(Pos.CENTER);
         zoomControls.setPadding(new Insets(10));
@@ -538,7 +558,6 @@ public class PublishBookFX {
         previewCover.setPreserveRatio(true);
         previewCover.setStyle("-fx-border-color: #e2e8f0; -fx-border-radius: 4px; -fx-cursor: hand;");
         
-        // Add click handler to preview cover using original image
         previewCover.setOnMouseClicked(this::showMagnifiedFromPreview);
         
         Label noCoverLabel = new Label("No cover\nimage");
@@ -690,7 +709,6 @@ public class PublishBookFX {
         previewDescription.setText("📝 " + (description.isEmpty() ? "[No description provided]" : description));
         previewFile.setText("📁 File: " + (file.isEmpty() ? "No file selected" : file));
         
-        // Update preview cover using the stored original image (scaled for preview)
         if (originalCoverImage != null) {
             Image previewImg = new Image(originalCoverImage.getUrl(), 100, 140, true, true);
             previewCover.setImage(previewImg);
