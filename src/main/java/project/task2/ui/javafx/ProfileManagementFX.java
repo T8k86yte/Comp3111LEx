@@ -1,11 +1,14 @@
 package project.task2.ui.javafx;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import project.task2.model.AuthorAccount;
 import project.task2.service.AuthorPortalService;
 import project.task2.utils.PasswordUtils;
@@ -27,6 +30,11 @@ public class ProfileManagementFX {
     private VBox passwordContent;
     private Button profileTabBtn;
     private Button passwordTabBtn;
+    
+    // Password strength meter components
+    private ProgressBar strengthMeter;
+    private Label strengthLabel;
+    private Timeline strengthUpdateTimer;
     
     private String activeButtonStyle = "-fx-background-color: #2563eb; -fx-text-fill: white; -fx-font-weight: 600; " +
                                        "-fx-background-radius: 10px; -fx-padding: 10px 24px; -fx-cursor: hand; -fx-font-size: 13px;";
@@ -84,7 +92,7 @@ public class ProfileManagementFX {
         scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         root.setCenter(scrollPane);
 
-        Scene scene = new Scene(root, 520, 650);
+        Scene scene = new Scene(root, 580, 750);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         stage.setTitle("Profile Management - " + currentAuthor.getUsername());
@@ -129,7 +137,7 @@ public class ProfileManagementFX {
                      "-fx-border-color: #e2e8f0; -fx-border-radius: 16px; " +
                      "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.05), 8, 0, 0, 2);");
         card.setPadding(new Insets(20));
-        card.setMaxWidth(460);
+        card.setMaxWidth(500);
 
         HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
@@ -190,7 +198,7 @@ public class ProfileManagementFX {
 
     private VBox createTabContainer() {
         VBox container = new VBox(20);
-        container.setMaxWidth(460);
+        container.setMaxWidth(500);
         
         // Tab buttons
         HBox tabButtons = new HBox(15);
@@ -423,7 +431,7 @@ public class ProfileManagementFX {
         currentPasswordField.setMaxWidth(Double.MAX_VALUE);
         currentBox.getChildren().addAll(currentLabel, currentPasswordField);
         
-        // New Password
+        // New Password with strength meter
         VBox newBox = new VBox(6);
         Label newLabel = new Label("New Password");
         newLabel.setStyle("-fx-font-weight: 500; -fx-text-fill: #334155;");
@@ -432,7 +440,23 @@ public class ProfileManagementFX {
         newPasswordField.setStyle("-fx-background-color: white; -fx-border-color: #cbd5e1; -fx-border-radius: 10px; " +
                                   "-fx-background-radius: 10px; -fx-padding: 10px 12px;");
         newPasswordField.setMaxWidth(Double.MAX_VALUE);
-        newBox.getChildren().addAll(newLabel, newPasswordField);
+        
+        // Password strength meter
+        HBox strengthBox = new HBox(10);
+        strengthBox.setAlignment(Pos.CENTER_LEFT);
+        strengthMeter = new ProgressBar(0);
+        strengthMeter.setPrefWidth(200);
+        strengthMeter.setStyle("-fx-accent: #ef4444;");
+        strengthLabel = new Label("Very Weak");
+        strengthLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #ef4444; -fx-font-weight: 500;");
+        strengthBox.getChildren().addAll(strengthMeter, strengthLabel);
+        
+        // Real-time strength check
+        newPasswordField.textProperty().addListener((obs, old, newVal) -> {
+            updatePasswordStrength(newVal);
+        });
+        
+        newBox.getChildren().addAll(newLabel, newPasswordField, strengthBox);
         
         // Confirm Password
         VBox confirmBox = new VBox(6);
@@ -443,7 +467,29 @@ public class ProfileManagementFX {
         confirmPasswordField.setStyle("-fx-background-color: white; -fx-border-color: #cbd5e1; -fx-border-radius: 10px; " +
                                       "-fx-background-radius: 10px; -fx-padding: 10px 12px;");
         confirmPasswordField.setMaxWidth(Double.MAX_VALUE);
-        confirmBox.getChildren().addAll(confirmLabel, confirmPasswordField);
+        
+        // Match indicator
+        Label matchLabel = new Label();
+        matchLabel.setStyle("-fx-font-size: 11px;");
+        matchLabel.setVisible(false);
+        
+        confirmPasswordField.textProperty().addListener((obs, old, newVal) -> {
+            String newPass = newPasswordField.getText();
+            if (!newVal.isEmpty()) {
+                matchLabel.setVisible(true);
+                if (newVal.equals(newPass)) {
+                    matchLabel.setText("✓ Passwords match");
+                    matchLabel.setStyle("-fx-text-fill: #10b981; -fx-font-size: 11px;");
+                } else {
+                    matchLabel.setText("✗ Passwords do not match");
+                    matchLabel.setStyle("-fx-text-fill: #ef4444; -fx-font-size: 11px;");
+                }
+            } else {
+                matchLabel.setVisible(false);
+            }
+        });
+        
+        confirmBox.getChildren().addAll(confirmLabel, confirmPasswordField, matchLabel);
         
         // Password requirements card
         VBox reqBox = new VBox(8);
@@ -499,7 +545,9 @@ public class ProfileManagementFX {
             currentPasswordField.clear();
             newPasswordField.clear();
             confirmPasswordField.clear();
+            matchLabel.setVisible(false);
             localMessage.setVisible(false);
+            updatePasswordStrength("");
         });
         
         changeBtn.setOnAction(e -> {
@@ -553,14 +601,25 @@ public class ProfileManagementFX {
                 boolean success = authorService.updateProfile(updatedAuthor);
                 
                 if (success) {
-                    // Notify the dashboard of the update
-                    if (onProfileUpdated != null) {
-                        onProfileUpdated.accept(updatedAuthor);
-                    }
-                    showLocalMessage(localMessage, "✅ Password changed successfully!", "status-approved");
+                    showLocalMessage(localMessage, "✅ Password changed successfully! You will be logged out.", "status-approved");
+                    
+                    // Auto logout after password change - close all windows and go to login screen
                     new Thread(() -> {
-                        try { Thread.sleep(1500); } catch (InterruptedException ex) {}
-                        javafx.application.Platform.runLater(() -> stage.close());
+                        try {
+                            Thread.sleep(2000);
+                            javafx.application.Platform.runLater(() -> {
+                                // Close all windows
+                                stage.close();
+                                
+                                // Notify dashboard to logout
+                                if (onProfileUpdated != null) {
+                                    // Pass null to indicate logout is needed
+                                    onProfileUpdated.accept(null);
+                                }
+                            });
+                        } catch (InterruptedException ex) {
+                            ex.printStackTrace();
+                        }
                     }).start();
                 } else {
                     showLocalMessage(localMessage, "❌ Failed to change password", "status-rejected");
@@ -572,6 +631,55 @@ public class ProfileManagementFX {
         
         pane.getChildren().addAll(currentBox, newBox, confirmBox, reqBox, localMessage, buttonBox);
         return pane;
+    }
+    
+    private void updatePasswordStrength(String password) {
+        if (password == null || password.isEmpty()) {
+            strengthMeter.setProgress(0);
+            strengthLabel.setText("Very Weak");
+            strengthLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #ef4444; -fx-font-weight: 500;");
+            strengthMeter.setStyle("-fx-accent: #ef4444;");
+            return;
+        }
+        
+        int score = 0;
+        
+        // Length check
+        if (password.length() >= 8) score++;
+        if (password.length() >= 12) score++;
+        
+        // Character variety
+        if (password.matches(".*[a-z].*")) score++;
+        if (password.matches(".*[A-Z].*")) score++;
+        if (password.matches(".*\\d.*")) score++;
+        if (password.matches(".*[!@#$%^&*].*")) score++;
+        
+        // Calculate strength (0-1)
+        double strength = Math.min(score / 7.0, 1.0);
+        strengthMeter.setProgress(strength);
+        
+        // Update color and text
+        if (strength < 0.3) {
+            strengthMeter.setStyle("-fx-accent: #ef4444;");
+            strengthLabel.setText("Very Weak");
+            strengthLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #ef4444; -fx-font-weight: 500;");
+        } else if (strength < 0.5) {
+            strengthMeter.setStyle("-fx-accent: #f97316;");
+            strengthLabel.setText("Weak");
+            strengthLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #f97316; -fx-font-weight: 500;");
+        } else if (strength < 0.7) {
+            strengthMeter.setStyle("-fx-accent: #eab308;");
+            strengthLabel.setText("Fair");
+            strengthLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #eab308; -fx-font-weight: 500;");
+        } else if (strength < 0.85) {
+            strengthMeter.setStyle("-fx-accent: #22c55e;");
+            strengthLabel.setText("Good");
+            strengthLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #22c55e; -fx-font-weight: 500;");
+        } else {
+            strengthMeter.setStyle("-fx-accent: #10b981;");
+            strengthLabel.setText("Strong");
+            strengthLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #10b981; -fx-font-weight: 600;");
+        }
     }
 
     private void showLocalMessage(Label label, String message, String styleClass) {

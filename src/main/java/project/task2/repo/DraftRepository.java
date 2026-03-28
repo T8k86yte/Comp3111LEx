@@ -58,10 +58,9 @@ public class DraftRepository {
         }
     }
 
-    // Save draft for an author
     public void saveDraft(String authorUsername, String draftData) {
-        if (draftData == null || draftData.trim().isEmpty()) {
-            // If draft is empty, remove it
+        if (draftData == null || draftData.trim().isEmpty() || 
+            draftData.matches("\\|+")) {
             draftsByAuthor.remove(authorUsername);
         } else {
             draftsByAuthor.put(authorUsername, draftData);
@@ -69,17 +68,14 @@ public class DraftRepository {
         saveToFile();
     }
 
-    // Load draft for an author
     public String loadDraft(String authorUsername) {
         return draftsByAuthor.get(authorUsername);
     }
 
-    // Check if author has a draft
     public boolean hasDraft(String authorUsername) {
         return draftsByAuthor.containsKey(authorUsername);
     }
 
-    // Delete draft for an author
     public void deleteDraft(String authorUsername) {
         draftsByAuthor.remove(authorUsername);
         saveToFile();

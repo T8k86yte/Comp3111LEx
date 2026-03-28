@@ -217,7 +217,6 @@ public class AuthorDashboardFX extends Application {
             System.out.println("📚 Opening Publish Book window...");
             try {
                 PublishBookFX publishUI = new PublishBookFX(currentAuthor, updated -> {
-                    // Refresh dashboard stats after publishing
                     refreshDashboardStats();
                     System.out.println("✅ Dashboard stats refreshed after book published");
                 });
@@ -225,7 +224,7 @@ public class AuthorDashboardFX extends Application {
                 registerChildWindow(publishUI.getStage());
             } catch (Exception ex) {
                 ex.printStackTrace();
-                showAlert("Error", "Could not open publish book window: " + ex.getMessage());
+                showAlert("Error", "Could not open publish book window: " + ex.getMessage(), Alert.AlertType.ERROR);
             }
         });
 
@@ -240,7 +239,6 @@ public class AuthorDashboardFX extends Application {
             System.out.println("📖 Opening My Books...");
             try {
                 PublishedBookScreenFX bookScreen = new PublishedBookScreenFX(currentAuthor, updated -> {
-                    // Refresh dashboard stats after book is edited or deleted
                     refreshDashboardStats();
                     System.out.println("✅ Dashboard stats refreshed after book update");
                 });
@@ -248,27 +246,38 @@ public class AuthorDashboardFX extends Application {
                 registerChildWindow(bookScreen.getStage());
             } catch (Exception ex) {
                 ex.printStackTrace();
-                showAlert("Error", "Could not open my books window: " + ex.getMessage());
+                showAlert("Error", "Could not open my books window: " + ex.getMessage(), Alert.AlertType.ERROR);
             }
         });
         
-        // Profile button with callback
+        // Profile button with callback - handles auto-logout on password change
         profileBtn.setOnAction(e -> {
             System.out.println("👤 Opening Profile Management...");
             try {
                 ProfileManagementFX profileScreen = new ProfileManagementFX(currentAuthor, updatedAuthor -> {
-                    this.currentAuthor = updatedAuthor;
-                    if (welcomeLabel != null) {
-                        welcomeLabel.setText("Welcome, " + updatedAuthor.getFullName());
+                    if (updatedAuthor == null) {
+                        // Password was changed - need to logout
+                        System.out.println("🔐 Password changed - logging out...");
+                        showAlert("Password Changed", 
+                            "Your password has been changed. You will be logged out for security reasons.\n\n" +
+                            "Please log in again with your new password.", 
+                            Alert.AlertType.INFORMATION);
+                        logout();
+                    } else {
+                        // Normal profile update
+                        this.currentAuthor = updatedAuthor;
+                        if (welcomeLabel != null) {
+                            welcomeLabel.setText("Welcome, " + updatedAuthor.getFullName());
+                        }
+                        refreshDashboardStats();
+                        System.out.println("✅ Dashboard updated with new profile info");
                     }
-                    refreshDashboardStats();
-                    System.out.println("✅ Dashboard updated with new profile info");
                 });
                 profileScreen.show();
                 registerChildWindow(profileScreen.getStage());
             } catch (Exception ex) {
                 ex.printStackTrace();
-                showAlert("Error", "Could not open profile window: " + ex.getMessage());
+                showAlert("Error", "Could not open profile window: " + ex.getMessage(), Alert.AlertType.ERROR);
             }
         });
         
@@ -281,7 +290,7 @@ public class AuthorDashboardFX extends Application {
                 registerChildWindow(notifBoard.getStage());
             } catch (Exception ex) {
                 ex.printStackTrace();
-                showAlert("Error", "Could not open notifications: " + ex.getMessage());
+                showAlert("Error", "Could not open notifications: " + ex.getMessage(), Alert.AlertType.ERROR);
             }
         });
 
@@ -295,8 +304,8 @@ public class AuthorDashboardFX extends Application {
         return menuGrid;
     }
 
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
+    private void showAlert(String title, String message, Alert.AlertType type) {
+        Alert alert = new Alert(type);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);

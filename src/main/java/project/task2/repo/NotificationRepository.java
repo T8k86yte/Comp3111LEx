@@ -73,14 +73,23 @@ public class NotificationRepository {
     public List<Notification> findByAuthor(String authorUsername) {
         return notificationsById.values().stream()
                 .filter(n -> n.getAuthorUsername().equals(authorUsername))
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .sorted((a, b) -> {
+                    // Priority notifications come first, then by date (newest first)
+                    if (a.isPriority() && !b.isPriority()) return -1;
+                    if (!a.isPriority() && b.isPriority()) return 1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
                 .collect(Collectors.toList());
     }
 
     public List<Notification> findUnreadByAuthor(String authorUsername) {
         return notificationsById.values().stream()
                 .filter(n -> n.getAuthorUsername().equals(authorUsername) && !n.isRead())
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .sorted((a, b) -> {
+                    if (a.isPriority() && !b.isPriority()) return -1;
+                    if (!a.isPriority() && b.isPriority()) return 1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
                 .collect(Collectors.toList());
     }
 
@@ -99,6 +108,49 @@ public class NotificationRepository {
             }
         }
         saveToFile();
+    }
+    
+    // NEW: Delete a single notification
+    public void delete(String notificationId) {
+        Notification removed = notificationsById.remove(notificationId);
+        if (removed != null) {
+            saveToFile();
+            System.out.println("🗑️ Deleted notification: " + notificationId);
+        }
+    }
+    
+    // NEW: Delete all notifications for an author
+    public void deleteAllByAuthor(String authorUsername) {
+        List<String> toDelete = notificationsById.values().stream()
+                .filter(n -> n.getAuthorUsername().equals(authorUsername))
+                .map(Notification::getNotificationId)
+                .collect(Collectors.toList());
+        
+        for (String id : toDelete) {
+            notificationsById.remove(id);
+        }
+        
+        if (!toDelete.isEmpty()) {
+            saveToFile();
+            System.out.println("🗑️ Deleted " + toDelete.size() + " notifications for " + authorUsername);
+        }
+    }
+    
+    // NEW: Delete read notifications for an author
+    public void deleteReadByAuthor(String authorUsername) {
+        List<String> toDelete = notificationsById.values().stream()
+                .filter(n -> n.getAuthorUsername().equals(authorUsername) && n.isRead())
+                .map(Notification::getNotificationId)
+                .collect(Collectors.toList());
+        
+        for (String id : toDelete) {
+            notificationsById.remove(id);
+        }
+        
+        if (!toDelete.isEmpty()) {
+            saveToFile();
+            System.out.println("🗑️ Deleted " + toDelete.size() + " read notifications for " + authorUsername);
+        }
     }
 
     public int getUnreadCount(String authorUsername) {
