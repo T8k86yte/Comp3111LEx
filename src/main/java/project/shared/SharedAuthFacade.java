@@ -1,9 +1,10 @@
 package project.shared;
 
 import project.task1.model.StudentStaffAccount;
+import project.task1.model.UserRole;
 import project.task1.repo.StudentStaffRepository;
+import project.task1.security.PasswordSecurity;
 import project.task2.model.AuthorAccount;
-import project.task2.model.UserRole;
 import project.task2.repo.AuthorRepository;
 import project.task2.utils.PasswordUtils;
 import project.task3.model.LibrarianAccount;
@@ -72,8 +73,8 @@ public class SharedAuthFacade {
         switch (normalizedRole) {
             case "STUDENT", "STAFF" -> {
                 UserRole role = "STUDENT".equals(normalizedRole) ? UserRole.STUDENT : UserRole.STAFF;
-                String salt = PasswordUtils.generateSalt();
-                String hash = PasswordUtils.hashPassword(password, salt);
+                String salt = PasswordSecurity.generateSaltBase64();
+                String hash = PasswordSecurity.hashPasswordBase64(password, salt);
                 StudentStaffAccount account = new StudentStaffAccount(
                         normalizedUsername,
                         normalizedFullName,
@@ -87,8 +88,8 @@ public class SharedAuthFacade {
                 ));
             }
             case "AUTHOR" -> {
-                String salt = PasswordUtils.generateSalt();
-                String hash = PasswordUtils.hashPassword(password, salt);
+                String salt = PasswordSecurity.generateSaltBase64();
+                String hash = PasswordSecurity.hashPasswordBase64(password, salt);
                 AuthorAccount account = new AuthorAccount(
                         normalizedUsername,
                         normalizedFullName,
@@ -151,7 +152,7 @@ public class SharedAuthFacade {
                 if (account.isEmpty()) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }
-                boolean ok = PasswordUtils.verifyPassword(
+                boolean ok = PasswordSecurity.verifyPassword(
                         password,
                         account.get().getPasswordSaltBase64(),
                         account.get().getPasswordHashBase64()
@@ -169,7 +170,7 @@ public class SharedAuthFacade {
                 if (account.isEmpty()) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }
-                boolean ok = PasswordUtils.verifyPassword(
+                boolean ok = PasswordSecurity.verifyPassword(
                         password,
                         account.get().getPasswordSaltBase64(),
                         account.get().getPasswordHashBase64()

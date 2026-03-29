@@ -1,8 +1,5 @@
 package project.task1.model;
 
-import project.task2.model.UserAccount;
-import project.task2.model.UserRole;
-
 public class StudentStaffAccount extends UserAccount {
     public StudentStaffAccount(
             String username,
