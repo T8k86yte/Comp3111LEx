@@ -9,8 +9,10 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import project.task2.model.AuthorAccount;
 import project.task2.service.AuthorPortalService;
+import project.task2.utils.FileHandler;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
@@ -27,7 +29,9 @@ public class PublishBookFX {
     private List<CheckBox> genreCheckBoxes;
     private TextArea descArea;
     private TextField fileField;
+    private TextField coverImageField;
     private Label selectedFileLabel;
+    private Label selectedCoverLabel;
     private Label messageLabel;
     private Label draftIndicator;
     
@@ -38,6 +42,7 @@ public class PublishBookFX {
     private Label previewGenres;
     private Label previewDescription;
     private Label previewFile;
+    private Label previewCover;
     
     // Draft auto-save
     private Timer autoSaveTimer;
@@ -148,16 +153,18 @@ public class PublishBookFX {
         Label info1 = new Label("• Fill in all required fields marked with *");
         Label info2 = new Label("• You can select multiple genres");
         Label info3 = new Label("• Book file must be in PDF, TXT, DOC, or DOCX format");
-        Label info4 = new Label("• Your book will be reviewed by a librarian");
-        Label info5 = new Label("• Form auto-saves every 5 seconds - you can close and return later");
+        Label info4 = new Label("• Optional cover image must be JPG/JPEG/PNG and <= 5MB");
+        Label info5 = new Label("• Your book will be reviewed by a librarian");
+        Label info6 = new Label("• Form auto-saves every 5 seconds - you can close and return later");
 
         info1.getStyleClass().add("muted");
         info2.getStyleClass().add("muted");
         info3.getStyleClass().add("muted");
         info4.getStyleClass().add("muted");
         info5.getStyleClass().add("muted");
+        info6.getStyleClass().add("muted");
 
-        infoCard.getChildren().addAll(infoTitle, info1, info2, info3, info4, info5);
+        infoCard.getChildren().addAll(infoTitle, info1, info2, info3, info4, info5, info6);
         return infoCard;
     }
 
@@ -250,9 +257,27 @@ public class PublishBookFX {
         fileInputBox.getChildren().addAll(fileField, browseBtn);
         fileBox.getChildren().addAll(fileLabel, fileInputBox);
 
+        VBox coverBox = new VBox(5);
+        Label coverLabel = new Label("Cover Image (Optional)");
+        coverLabel.getStyleClass().add("muted");
+        HBox coverInputBox = new HBox(10);
+        coverImageField = new TextField();
+        coverImageField.setPromptText("Choose cover image (JPG, JPEG, PNG)");
+        coverImageField.getStyleClass().add("text-field");
+        coverImageField.setEditable(false);
+        HBox.setHgrow(coverImageField, Priority.ALWAYS);
+        Button browseCoverBtn = new Button("Browse");
+        browseCoverBtn.getStyleClass().addAll("button", "secondary-btn");
+        browseCoverBtn.setPrefWidth(100);
+        coverInputBox.getChildren().addAll(coverImageField, browseCoverBtn);
+        coverBox.getChildren().addAll(coverLabel, coverInputBox);
+
         selectedFileLabel = new Label();
         selectedFileLabel.getStyleClass().add("status-approved");
         selectedFileLabel.setVisible(false);
+        selectedCoverLabel = new Label();
+        selectedCoverLabel.getStyleClass().add("status-approved");
+        selectedCoverLabel.setVisible(false);
 
         messageLabel = new Label();
         messageLabel.setWrapText(true);
@@ -280,7 +305,7 @@ public class PublishBookFX {
         actionBox.getChildren().addAll(previewBtn, submitBtn, clearDraftBtn);
 
         formCard.getChildren().addAll(formTitle, titleBox, authorBox, genreBox, 
-                                      descBox, fileBox, selectedFileLabel, 
+                                      descBox, fileBox, coverBox, selectedFileLabel, selectedCoverLabel,
                                       messageLabel, actionBox);
 
         // Browse button action
@@ -302,16 +327,48 @@ public class PublishBookFX {
                 hasUnsavedChanges = true;
                 
                 String fileName = selectedFile.getName();
-                if (isValidFileType(fileName)) {
+                if (FileHandler.isValidFileType(fileName)
+                        && FileHandler.isWithinBookFileSizeLimit(Path.of(filePath))) {
                     selectedFileLabel.setText("✅ Selected: " + fileName);
                     selectedFileLabel.getStyleClass().setAll("status", "status-approved");
                     selectedFileLabel.setVisible(true);
                 } else {
-                    selectedFileLabel.setText("❌ Invalid file type. Allowed: PDF, TXT, DOC, DOCX");
+                    selectedFileLabel.setText("❌ Invalid/oversized book file. Allowed: "
+                            + FileHandler.getAllowedFileTypes()
+                            + " and <= " + (FileHandler.getMaxBookFileSizeBytes() / (1024 * 1024)) + "MB");
                     selectedFileLabel.getStyleClass().setAll("status", "status-rejected");
                     selectedFileLabel.setVisible(true);
                     fileField.clear();
                 }
+            }
+        });
+
+        browseCoverBtn.setOnAction(e -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Select Cover Image");
+            fileChooser.getExtensionFilters().addAll(
+                    new FileChooser.ExtensionFilter("Image Files", "*.jpg", "*.jpeg", "*.png"),
+                    new FileChooser.ExtensionFilter("All Files", "*.*")
+            );
+            File selected = fileChooser.showOpenDialog(stage);
+            if (selected == null) {
+                return;
+            }
+            String path = selected.getAbsolutePath();
+            coverImageField.setText(path);
+            hasUnsavedChanges = true;
+            if (FileHandler.isValidImageType(selected.getName())
+                    && FileHandler.isWithinImageFileSizeLimit(Path.of(path))) {
+                selectedCoverLabel.setText("✅ Cover: " + selected.getName());
+                selectedCoverLabel.getStyleClass().setAll("status", "status-approved");
+                selectedCoverLabel.setVisible(true);
+            } else {
+                selectedCoverLabel.setText("❌ Invalid/oversized cover image. Allowed: "
+                        + FileHandler.getAllowedImageTypes()
+                        + " and <= " + (FileHandler.getMaxImageFileSizeBytes() / (1024 * 1024)) + "MB");
+                selectedCoverLabel.getStyleClass().setAll("status", "status-rejected");
+                selectedCoverLabel.setVisible(true);
+                coverImageField.clear();
             }
         });
 
@@ -349,6 +406,8 @@ public class PublishBookFX {
 
         previewFile = new Label();
         previewFile.getStyleClass().add("muted");
+        previewCover = new Label();
+        previewCover.getStyleClass().add("muted");
 
         // Close preview button
         Button closePreviewBtn = new Button("Hide Preview");
@@ -356,8 +415,8 @@ public class PublishBookFX {
         closePreviewBtn.setMaxWidth(200);
         closePreviewBtn.setOnAction(e -> previewCard.setVisible(false));
 
-        card.getChildren().addAll(previewTitle2, previewTitle, previewAuthor, 
-                                  previewGenres, previewDescription, previewFile, closePreviewBtn);
+        card.getChildren().addAll(previewTitle2, previewTitle, previewAuthor,
+                                  previewGenres, previewDescription, previewFile, previewCover, closePreviewBtn);
         return card;
     }
 
@@ -381,6 +440,7 @@ public class PublishBookFX {
         List<String> selectedGenres = getSelectedGenres();
         String description = descArea.getText().trim();
         String file = fileField.getText().trim();
+        String cover = coverImageField.getText().trim();
 
         previewTitle.setText(title.isEmpty() ? "[No title provided]" : "📌 " + title);
         previewAuthor.setText("✍️ By: " + currentAuthor.getFullName());
@@ -388,6 +448,7 @@ public class PublishBookFX {
                               String.join(", ", selectedGenres)));
         previewDescription.setText("📝 " + (description.isEmpty() ? "[No description provided]" : description));
         previewFile.setText("📁 File: " + (file.isEmpty() ? "No file selected" : file));
+        previewCover.setText("🖼️ Cover: " + (cover.isEmpty() ? "No cover image" : cover));
     }
 
     private boolean validateForm() {
@@ -395,6 +456,7 @@ public class PublishBookFX {
         List<String> selectedGenres = getSelectedGenres();
         String description = descArea.getText().trim();
         String filePath = fileField.getText().trim();
+        String coverPath = coverImageField.getText().trim();
 
         if (title.isEmpty()) {
             showMessage(messageLabel, "❌ Book title is required", "status-rejected");
@@ -412,6 +474,12 @@ public class PublishBookFX {
             showMessage(messageLabel, "❌ Book file is required", "status-rejected");
             return false;
         }
+        if (!coverPath.isEmpty()
+                && (!FileHandler.isValidImageType(coverPath)
+                || !FileHandler.isWithinImageFileSizeLimit(Path.of(coverPath)))) {
+            showMessage(messageLabel, "❌ Invalid/oversized cover image", "status-rejected");
+            return false;
+        }
         return true;
     }
 
@@ -420,6 +488,7 @@ public class PublishBookFX {
         List<String> selectedGenres = getSelectedGenres();
         String description = descArea.getText().trim();
         String filePath = fileField.getText().trim();
+        String coverPath = coverImageField.getText().trim();
 
         AuthorPortalService.SubmissionResult result = authorService.submitBookForApproval(
             currentAuthor.getUsername(),
@@ -427,7 +496,8 @@ public class PublishBookFX {
             title,
             String.join(",", selectedGenres),
             description,
-            filePath
+            filePath,
+            coverPath
         );
 
         if (result.isSuccess()) {
@@ -437,7 +507,9 @@ public class PublishBookFX {
             clearGenreSelections();
             descArea.clear();
             fileField.clear();
+            coverImageField.clear();
             selectedFileLabel.setVisible(false);
+            selectedCoverLabel.setVisible(false);
             hasUnsavedChanges = false;
             draftIndicator.setVisible(false);
             previewCard.setVisible(false);
@@ -474,12 +546,6 @@ public class PublishBookFX {
         }
     }
 
-    private boolean isValidFileType(String fileName) {
-        String lower = fileName.toLowerCase();
-        return lower.endsWith(".pdf") || lower.endsWith(".txt") || 
-               lower.endsWith(".doc") || lower.endsWith(".docx");
-    }
-
     private void showMessage(Label label, String message, String styleClass) {
         label.setText(message);
         label.getStyleClass().setAll("status", styleClass);
@@ -507,12 +573,13 @@ public class PublishBookFX {
         List<String> selectedGenres = getSelectedGenres();
         String description = descArea.getText().trim();
         String filePath = fileField.getText().trim();
+        String coverImagePath = coverImageField.getText().trim();
 
         // Save to service
-        authorService.saveDraft(currentAuthor.getUsername(), title, selectedGenres, description, filePath);
+        authorService.saveDraft(currentAuthor.getUsername(), title, selectedGenres, description, filePath, coverImagePath);
         
         // Show indicator
-        if (!title.isEmpty() || !selectedGenres.isEmpty() || !description.isEmpty() || !filePath.isEmpty()) {
+        if (!title.isEmpty() || !selectedGenres.isEmpty() || !description.isEmpty() || !filePath.isEmpty() || !coverImagePath.isEmpty()) {
             draftIndicator.setText("📝 Draft saved at " + 
                 java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
             draftIndicator.setVisible(true);
@@ -533,8 +600,8 @@ public class PublishBookFX {
         isLoadingDraft = true;
         
         String[] draft = authorService.loadDraft(currentAuthor.getUsername());
-        if (draft != null && draft.length == 4) {
-            // [title, genres, description, filePath]
+        if (draft != null && draft.length >= 4) {
+            // [title, genres, description, filePath, coverPath]
             titleField.setText(draft[0]);
             setSelectedGenres(draft[1]);
             descArea.setText(draft[2]);
@@ -544,6 +611,13 @@ public class PublishBookFX {
                 selectedFileLabel.setText("✅ Loaded draft: " + file.getName());
                 selectedFileLabel.getStyleClass().setAll("status", "status-approved");
                 selectedFileLabel.setVisible(true);
+            }
+            if (draft.length >= 5 && !draft[4].isEmpty()) {
+                coverImageField.setText(draft[4]);
+                File cover = new File(draft[4]);
+                selectedCoverLabel.setText("✅ Loaded cover: " + cover.getName());
+                selectedCoverLabel.getStyleClass().setAll("status", "status-approved");
+                selectedCoverLabel.setVisible(true);
             }
             
             draftIndicator.setText("📝 Draft loaded from previous session");
@@ -570,7 +644,9 @@ public class PublishBookFX {
         clearGenreSelections();
         descArea.clear();
         fileField.clear();
+        coverImageField.clear();
         selectedFileLabel.setVisible(false);
+        selectedCoverLabel.setVisible(false);
         previewCard.setVisible(false);
         draftIndicator.setText("🗑️ Draft cleared");
         draftIndicator.getStyleClass().setAll("status", "status-rejected");

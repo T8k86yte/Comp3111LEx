@@ -7,6 +7,9 @@ import java.util.UUID;
 public class FileHandler {
     private static final String BOOKS_DIRECTORY = "books/";
     private static final String[] ALLOWED_EXTENSIONS = {".pdf", ".txt", ".doc", ".docx"};
+    private static final String[] ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"};
+    private static final long MAX_BOOK_FILE_SIZE_BYTES = 25L * 1024L * 1024L;
+    private static final long MAX_IMAGE_FILE_SIZE_BYTES = 5L * 1024L * 1024L;
 
     static {
         // Create books directory if it doesn't exist
@@ -67,6 +70,35 @@ public class FileHandler {
         return false;
     }
 
+    public static boolean isValidImageType(String fileName) {
+        String extension = getFileExtension(fileName).toLowerCase();
+        for (String allowed : ALLOWED_IMAGE_EXTENSIONS) {
+            if (allowed.equals(extension)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean isWithinBookFileSizeLimit(Path path) {
+        return isWithinLimit(path, MAX_BOOK_FILE_SIZE_BYTES);
+    }
+
+    public static boolean isWithinImageFileSizeLimit(Path path) {
+        return isWithinLimit(path, MAX_IMAGE_FILE_SIZE_BYTES);
+    }
+
+    private static boolean isWithinLimit(Path path, long limitBytes) {
+        try {
+            if (path == null || !Files.exists(path)) {
+                return false;
+            }
+            return Files.size(path) <= limitBytes;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     /**
      * Get file extension from filename
      */
@@ -83,5 +115,17 @@ public class FileHandler {
      */
     public static String getAllowedFileTypes() {
         return String.join(", ", ALLOWED_EXTENSIONS);
+    }
+
+    public static String getAllowedImageTypes() {
+        return String.join(", ", ALLOWED_IMAGE_EXTENSIONS);
+    }
+
+    public static long getMaxBookFileSizeBytes() {
+        return MAX_BOOK_FILE_SIZE_BYTES;
+    }
+
+    public static long getMaxImageFileSizeBytes() {
+        return MAX_IMAGE_FILE_SIZE_BYTES;
     }
 }

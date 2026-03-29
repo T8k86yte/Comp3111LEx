@@ -7,6 +7,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import project.task2.model.AuthorAccount;
@@ -15,6 +16,7 @@ import project.task2.service.AuthorPortalService;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -26,7 +28,6 @@ public class AuthorDashboardFX extends Application {
     private Stage submissionsStage;
     private VBox submissionsContainer;
     private Label statusLabel;
-    private Label notificationBadge;
     
     private HBox statsBox;
 
@@ -64,7 +65,7 @@ public class AuthorDashboardFX extends Application {
         centerContent.getChildren().addAll(titleLabel, statsBox, refreshDashboardBtn, menuGrid);
         root.setCenter(centerContent);
 
-        Scene scene = new Scene(root, 1100, 650);
+        Scene scene = new Scene(root, 1000, 650);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         primaryStage.setTitle("Author Dashboard");
@@ -75,11 +76,10 @@ public class AuthorDashboardFX extends Application {
         primaryStage.show();
 
         startDashboardAutoRefresh();
-        updateNotificationBadge();
     }
 
     private void handleWindowClose(WindowEvent event) {
-        System.out.println("🚪 Closing Author Dashboard window...");
+        System.out.println("🚪 Closing Author Dashboard...");
         stopRefreshTimer();
     }
 
@@ -92,16 +92,13 @@ public class AuthorDashboardFX extends Application {
     }
 
     private void startDashboardAutoRefresh() {
-        stopRefreshTimer();
+        stopRefreshTimer(); // Stop any existing timer
         refreshTimer = new Timer(true);
         refreshTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 if (primaryStage != null && primaryStage.isShowing()) {
-                    Platform.runLater(() -> {
-                        refreshDashboardStats();
-                        updateNotificationBadge();
-                    });
+                    Platform.runLater(() -> refreshDashboardStats());
                 } else {
                     stopRefreshTimer();
                 }
@@ -128,18 +125,6 @@ public class AuthorDashboardFX extends Application {
                 );
             }
         });
-    }
-
-    private void updateNotificationBadge() {
-        int unreadCount = authorService.getUnreadNotificationCount(currentAuthor.getUsername());
-        if (notificationBadge != null) {
-            if (unreadCount > 0) {
-                notificationBadge.setText(String.valueOf(unreadCount));
-                notificationBadge.setVisible(true);
-            } else {
-                notificationBadge.setVisible(false);
-            }
-        }
     }
 
     private HBox createTopBar() {
@@ -203,32 +188,16 @@ public class AuthorDashboardFX extends Application {
         menuGrid.setVgap(20);
         menuGrid.setAlignment(Pos.CENTER);
 
-        // Row 1
         Button publishBtn = createMenuButton("📚 Publish Book", "Submit a new book for review");
         Button viewBtn = createMenuButton("📋 My Submissions", "View your book submissions");
-        Button booksBtn = createMenuButton("📖 My Books", "View, edit, or delete your books");
-
-        // Row 2
-        Button profileBtn = createMenuButton("👤 Profile", "Manage your profile information");
-        Button notifBtn = createMenuButton("🔔 Notifications", "View your notifications");
-        
-        // Create notification badge
-        notificationBadge = new Label();
-        notificationBadge.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-font-weight: bold; " +
-                                   "-fx-padding: 2px 6px; -fx-background-radius: 10px; -fx-font-size: 10px;");
-        notificationBadge.setVisible(false);
-        
-        // Stack the notification button with badge
-        StackPane notifStack = new StackPane();
-        notifStack.getChildren().addAll(notifBtn, notificationBadge);
-        StackPane.setAlignment(notificationBadge, Pos.TOP_RIGHT);
-        notificationBadge.setTranslateX(5);
-        notificationBadge.setTranslateY(-5);
+        Button profileBtn = createMenuButton("👤 Profile", "Manage your profile");
+        Button notificationBtn = createMenuButton("🔔 Notifications", "Review author notifications");
 
         publishBtn.setOnAction(e -> {
             PublishBookFX publishUI = new PublishBookFX(currentAuthor);
             publishUI.show();
             
+            // Schedule a stats refresh after a short delay
             new Timer().schedule(new TimerTask() {
                 @Override
                 public void run() {
@@ -240,47 +209,13 @@ public class AuthorDashboardFX extends Application {
         });
 
         viewBtn.setOnAction(e -> showSubmissions());
-        
-        booksBtn.setOnAction(e -> {
-            PublishedBookScreenFX bookScreen = new PublishedBookScreenFX(currentAuthor);
-            bookScreen.show();
-        });
-        
-        profileBtn.setOnAction(e -> {
-            ProfileManagementFX profileScreen = new ProfileManagementFX(currentAuthor, updatedAuthor -> {
-                this.currentAuthor = updatedAuthor;
-                Platform.runLater(() -> {
-                    // Update welcome label
-                    HBox topBar = (HBox) primaryStage.getScene().getRoot().lookup(".top-bar");
-                    if (topBar != null) {
-                        Label welcomeLabel = (Label) topBar.getChildren().get(0);
-                        if (welcomeLabel != null) {
-                            welcomeLabel.setText("Welcome, " + updatedAuthor.getFullName());
-                        }
-                    }
-                });
-            });
-            profileScreen.show();
-        });
-        
-        notifBtn.setOnAction(e -> {
-            NotificationBoardFX notifBoard = new NotificationBoardFX(currentAuthor);
-            notifBoard.show();
-            // Update badge after closing notification board
-            new Timer().schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    Platform.runLater(() -> updateNotificationBadge());
-                }
-            }, 1000);
-        });
+        profileBtn.setOnAction(e -> showProfile());
+        notificationBtn.setOnAction(e -> showNotifications());
 
-        // Add buttons to grid (3 columns, 2 rows)
         menuGrid.add(publishBtn, 0, 0);
         menuGrid.add(viewBtn, 1, 0);
-        menuGrid.add(booksBtn, 2, 0);
-        menuGrid.add(profileBtn, 0, 1);
-        menuGrid.add(notifStack, 1, 1);
+        menuGrid.add(profileBtn, 2, 0);
+        menuGrid.add(notificationBtn, 0, 1);
 
         return menuGrid;
     }
@@ -413,8 +348,10 @@ public class AuthorDashboardFX extends Application {
         Label dateLabel = new Label("📅 Submitted: " + 
             sub.getSubmissionDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
         dateLabel.getStyleClass().add("muted");
+        Label coverLabel = new Label("🖼️ Cover: " + (sub.getCoverImagePath().isBlank() ? "None" : sub.getCoverImagePath()));
+        coverLabel.getStyleClass().add("muted");
 
-        card.getChildren().addAll(header, genreLabel, dateLabel);
+        card.getChildren().addAll(header, genreLabel, dateLabel, coverLabel);
 
         if (sub.getStatus().equals("REJECTED") && sub.getRejectionReason() != null) {
             Label reasonLabel = new Label("❌ Reason: " + sub.getRejectionReason());
@@ -423,20 +360,232 @@ public class AuthorDashboardFX extends Application {
             card.getChildren().add(reasonLabel);
         }
 
+        HBox actions = new HBox(8);
+        actions.setAlignment(Pos.CENTER_LEFT);
+        if (sub.isPending()) {
+            Button editBtn = new Button("Edit");
+            editBtn.getStyleClass().addAll("button", "secondary-btn");
+            editBtn.setOnAction(e -> showEditSubmissionDialog(sub));
+            actions.getChildren().add(editBtn);
+        }
+        Button deleteBtn = new Button("Delete");
+        deleteBtn.getStyleClass().addAll("button", "secondary-btn");
+        deleteBtn.setOnAction(e -> handleDeleteSubmission(sub));
+        actions.getChildren().add(deleteBtn);
+        card.getChildren().add(actions);
+
         return card;
+    }
+
+    private void showProfile() {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Manage Profile");
+        dialog.setHeaderText("Update full name, password, and bio");
+        ButtonType saveType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveType, ButtonType.CANCEL);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setVgap(8);
+        TextField fullNameField = new TextField(currentAuthor.getFullName());
+        PasswordField currentPwdField = new PasswordField();
+        PasswordField newPwdField = new PasswordField();
+        PasswordField confirmPwdField = new PasswordField();
+        TextArea bioField = new TextArea(currentAuthor.getBio());
+        bioField.setPrefRowCount(3);
+        Label meter = new Label("Leave new password blank to keep current one.");
+        meter.setTextFill(Color.GRAY);
+        newPwdField.textProperty().addListener((obs, oldV, newV) -> updatePasswordMeter(meter, newV, confirmPwdField.getText()));
+        confirmPwdField.textProperty().addListener((obs, oldV, newV) -> updatePasswordMeter(meter, newPwdField.getText(), newV));
+
+        grid.add(new Label("Full Name"), 0, 0);
+        grid.add(fullNameField, 1, 0);
+        grid.add(new Label("Current Password"), 0, 1);
+        grid.add(currentPwdField, 1, 1);
+        grid.add(new Label("New Password"), 0, 2);
+        grid.add(newPwdField, 1, 2);
+        grid.add(new Label("Confirm Password"), 0, 3);
+        grid.add(confirmPwdField, 1, 3);
+        grid.add(new Label("Bio"), 0, 4);
+        grid.add(bioField, 1, 4);
+        grid.add(meter, 1, 5);
+        dialog.getDialogPane().setContent(grid);
+
+        Optional<ButtonType> choice = dialog.showAndWait();
+        if (choice.isEmpty() || choice.get() != saveType) {
+            return;
+        }
+        AuthorPortalService.RegistrationResult result = authorService.updateProfile(
+                currentAuthor.getUsername(),
+                fullNameField.getText(),
+                newPwdField.getText(),
+                confirmPwdField.getText(),
+                bioField.getText(),
+                currentPwdField.getText()
+        );
+        if (!result.isSuccess()) {
+            showAlert(Alert.AlertType.ERROR, "Profile Update Failed", result.getMessage());
+            return;
+        }
+        AuthorAccount refreshed = authorService.getAuthorByUsername(currentAuthor.getUsername());
+        if (refreshed != null) {
+            currentAuthor = refreshed;
+        }
+        showAlert(Alert.AlertType.INFORMATION, "Profile Updated", result.getMessage());
+    }
+
+    private void showNotifications() {
+        List<AuthorPortalService.NotificationView> notifications =
+                authorService.getNotificationBoard(currentAuthor.getUsername(), "ALL", "", false);
+        if (notifications.isEmpty()) {
+            showAlert(Alert.AlertType.INFORMATION, "Notifications", "No notifications.");
+            return;
+        }
+        ChoiceDialog<String> dialog = new ChoiceDialog<>(
+                notifications.get(0).id(),
+                notifications.stream()
+                        .map(n -> n.id() + " | " + n.timestamp().toLocalDate() + " [" + n.category() + "] " + n.message())
+                        .toList()
+        );
+        dialog.setTitle("Notifications");
+        dialog.setHeaderText("Select one notification");
+        dialog.setContentText("Notification:");
+        Optional<String> picked = dialog.showAndWait();
+        if (picked.isEmpty()) {
+            return;
+        }
+        String id = picked.get().split("\\|")[0].trim();
+        Alert action = new Alert(Alert.AlertType.CONFIRMATION);
+        action.setTitle("Notification Action");
+        action.setHeaderText("Choose action for selected notification");
+        ButtonType readBtn = new ButtonType("Mark Read");
+        ButtonType deleteBtn = new ButtonType("Delete");
+        action.getButtonTypes().setAll(readBtn, deleteBtn, ButtonType.CANCEL);
+        Optional<ButtonType> actionPicked = action.showAndWait();
+        if (actionPicked.isEmpty() || actionPicked.get() == ButtonType.CANCEL) {
+            return;
+        }
+        AuthorPortalService.SubmissionResult result = actionPicked.get() == deleteBtn
+                ? authorService.deleteNotification(currentAuthor.getUsername(), id)
+                : authorService.markNotificationRead(currentAuthor.getUsername(), id);
+        showAlert(result.isSuccess() ? Alert.AlertType.INFORMATION : Alert.AlertType.ERROR,
+                "Notification",
+                result.getMessage());
+    }
+
+    private void handleDeleteSubmission(BookSubmission sub) {
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Delete Submission");
+        confirm.setHeaderText("Delete submission " + sub.getSubmissionId() + "?");
+        confirm.setContentText("Pending submissions can be deleted. Approved ones only if not currently borrowed.");
+        Optional<ButtonType> choice = confirm.showAndWait();
+        if (choice.isEmpty() || choice.get() != ButtonType.OK) {
+            return;
+        }
+        AuthorPortalService.SubmissionResult result =
+                authorService.deleteSubmission(currentAuthor.getUsername(), sub.getSubmissionId());
+        showAlert(result.isSuccess() ? Alert.AlertType.INFORMATION : Alert.AlertType.ERROR,
+                "Delete Submission",
+                result.getMessage());
+        if (result.isSuccess()) {
+            refreshSubmissions();
+            refreshDashboardStats();
+        }
+    }
+
+    private void showEditSubmissionDialog(BookSubmission sub) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Edit Submission");
+        dialog.setHeaderText("Only pending submissions can be edited");
+        ButtonType saveType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveType, ButtonType.CANCEL);
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setVgap(8);
+        TextField title = new TextField(sub.getTitle());
+        TextField genres = new TextField(sub.getGenresAsString());
+        TextArea desc = new TextArea(sub.getDescription());
+        TextField file = new TextField(sub.getFilePath());
+        TextField cover = new TextField(sub.getCoverImagePath());
+        grid.add(new Label("Title"), 0, 0);
+        grid.add(title, 1, 0);
+        grid.add(new Label("Genres"), 0, 1);
+        grid.add(genres, 1, 1);
+        grid.add(new Label("Description"), 0, 2);
+        grid.add(desc, 1, 2);
+        grid.add(new Label("File Path"), 0, 3);
+        grid.add(file, 1, 3);
+        grid.add(new Label("Cover Path"), 0, 4);
+        grid.add(cover, 1, 4);
+        dialog.getDialogPane().setContent(grid);
+        Optional<ButtonType> choice = dialog.showAndWait();
+        if (choice.isEmpty() || choice.get() != saveType) {
+            return;
+        }
+        AuthorPortalService.SubmissionResult result = authorService.editPendingSubmission(
+                currentAuthor.getUsername(),
+                sub.getSubmissionId(),
+                title.getText(),
+                genres.getText(),
+                desc.getText(),
+                file.getText(),
+                cover.getText()
+        );
+        showAlert(result.isSuccess() ? Alert.AlertType.INFORMATION : Alert.AlertType.ERROR,
+                "Edit Submission",
+                result.getMessage());
+        if (result.isSuccess()) {
+            refreshSubmissions();
+        }
+    }
+
+    private void updatePasswordMeter(Label meter, String password, String confirm) {
+        if (password == null || password.isBlank()) {
+            meter.setText("Leave new password blank to keep current one.");
+            meter.setTextFill(Color.GRAY);
+            return;
+        }
+        boolean strong = password.length() >= 8
+                && password.matches(".*[A-Za-z].*")
+                && password.matches(".*\\d.*")
+                && password.matches(".*[A-Z].*");
+        if (!strong) {
+            meter.setText("Weak password.");
+            meter.setTextFill(Color.CRIMSON);
+            return;
+        }
+        if (confirm != null && !confirm.isBlank() && !password.equals(confirm)) {
+            meter.setText("Passwords do not match.");
+            meter.setTextFill(Color.CRIMSON);
+            return;
+        }
+        meter.setText("Strong password.");
+        meter.setTextFill(Color.FORESTGREEN);
+    }
+
+    private void showAlert(Alert.AlertType type, String header, String message) {
+        Alert alert = new Alert(type);
+        alert.setTitle("Author Portal");
+        alert.setHeaderText(header);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     private void logout() {
         System.out.println("🚪 Logging out: " + currentAuthor.getUsername());
-
+        
+        // Stop the refresh timer
         stopRefreshTimer();
-
+        
+        // Close any open submissions window
         if (submissionsStage != null && submissionsStage.isShowing()) {
             submissionsStage.close();
         }
-
+        
+        // Close dashboard and open login
         primaryStage.close();
-
+        
+        // Open login screen
         AuthorLoginFX loginUI = new AuthorLoginFX();
         try {
             loginUI.start(new Stage());

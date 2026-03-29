@@ -36,6 +36,7 @@ public class LibrarianPortalService {
     private final SharedAuthFacade sharedAuthFacade;
     private final BookRepository bookRepository;
     private final SubmissionRepository bookSubmissionRepository;
+    private final StudentStaffPortalService studentStaffPortalService;
 
     private static final String TASK1_NOTIFICATIONS_FILE = "data/task1/notifications.txt";
     private static final String TASK2_NOTIFICATIONS_FILE = "data/task2/notifications.txt";
@@ -49,6 +50,12 @@ public class LibrarianPortalService {
         this.sharedAuthFacade = new SharedAuthFacade(studentStaffRepository, authorRepository, librarianRepository);
         this.bookRepository = bookRepository;
         this.bookSubmissionRepository = bookSubmissionRepository;
+        this.studentStaffPortalService = new StudentStaffPortalService(
+                studentStaffRepository,
+                bookRepository,
+                authorRepository,
+                librarianRepository
+        );
     }
 
     public LibrarianPortalService.OperationResult registerLibrarian(String username, String fullname, String rawPassword, String employeeIDtext) {
@@ -207,22 +214,86 @@ public class LibrarianPortalService {
         return rejectBookSubmission(subId, l.get(), reason);
     }
 
+    public OperationResult approveBookSubmissionsBulk(List<String> submissionIds, String username) {
+        if (submissionIds == null || submissionIds.isEmpty()) {
+            return OperationResult.failure("Bulk approve failed: no submissions selected.");
+        }
+        int ok = 0;
+        List<String> errors = new ArrayList<>();
+        for (String subId : submissionIds) {
+            OperationResult result = approveBookSubmission(subId, username);
+            if (result.success()) {
+                ok++;
+            } else {
+                errors.add(subId + ": " + result.message());
+            }
+        }
+        if (errors.isEmpty()) {
+            return OperationResult.success("Bulk approve completed: " + ok + " submission(s).");
+        }
+        return OperationResult.failure("Bulk approve partial: " + ok + " approved.\n" + String.join("\n", errors));
+    }
+
+    public OperationResult rejectBookSubmissionsBulk(List<String> submissionIds, String username, String reason) {
+        if (submissionIds == null || submissionIds.isEmpty()) {
+            return OperationResult.failure("Bulk reject failed: no submissions selected.");
+        }
+        int ok = 0;
+        List<String> errors = new ArrayList<>();
+        for (String subId : submissionIds) {
+            OperationResult result = rejectBookSubmission(subId, username, reason);
+            if (result.success()) {
+                ok++;
+            } else {
+                errors.add(subId + ": " + result.message());
+            }
+        }
+        if (errors.isEmpty()) {
+            return OperationResult.success("Bulk reject completed: " + ok + " submission(s).");
+        }
+        return OperationResult.failure("Bulk reject partial: " + ok + " rejected.\n" + String.join("\n", errors));
+    }
+
     public OperationResult updateProfile(String username, String newFullName, String newPassword, String confirmNewPassword, String newEmployeeID) {
+        return updateProfile(username, newFullName, newPassword, confirmNewPassword, newEmployeeID, "");
+    }
+
+    public OperationResult updateProfile(
+            String username,
+            String newFullName,
+            String newPassword,
+            String confirmNewPassword,
+            String newEmployeeID,
+            String currentPassword
+    ) {
         String normalizedUsername = safeTrim(username);
         String normalizedFullName = safeTrim(newFullName);
         String pwd = newPassword == null ? "" : newPassword;
         String confirm = confirmNewPassword == null ? "" : confirmNewPassword;
         String normalizedEmployeeID = safeTrim(newEmployeeID);
+        String currentPwd = currentPassword == null ? "" : currentPassword;
 
         if (normalizedUsername.isEmpty()) return OperationResult.failure("Profile update failed: invalid user.");
         Optional<LibrarianAccount> existingOpt = librarianRepository.findByUsername(normalizedUsername);
         if (existingOpt.isEmpty()) return OperationResult.failure("Profile update failed: account not found.");
         LibrarianAccount existing = existingOpt.get();
         if (normalizedFullName.isEmpty()) return OperationResult.failure("Profile update failed: full name is required.");
+        boolean fullNameChanged = !normalizedFullName.equals(existing.getFullName());
+        boolean employeeIdChanged = !normalizedEmployeeID.isBlank()
+                && !normalizedEmployeeID.equals(Integer.toString(existing.getEmployeeID()));
+        boolean passwordChanged = !pwd.isBlank() || !confirm.isBlank();
+        if ((fullNameChanged || employeeIdChanged || passwordChanged)
+                && !project.task1.security.PasswordSecurity.verifyPassword(
+                currentPwd,
+                existing.getPasswordSaltBase64(),
+                existing.getPasswordHashBase64()
+        )) {
+            return OperationResult.failure("Profile update failed: current password is incorrect.");
+        }
 
         String salt = existing.getPasswordSaltBase64();
         String hash = existing.getPasswordHashBase64();
-        if (!pwd.isBlank() || !confirm.isBlank()) {
+        if (passwordChanged) {
             if (!pwd.equals(confirm)) return OperationResult.failure("Profile update failed: passwords do not match.");
             if (!isStrongPassword(pwd)) return OperationResult.failure("Profile update failed: weak password.");
             salt = project.task1.security.PasswordSecurity.generateSaltBase64();
@@ -248,6 +319,52 @@ public class LibrarianPortalService {
         ));
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
         return OperationResult.success("Profile updated successfully.");
+    }
+
+    public OperationResult addNewUser(
+            String roleText,
+            String username,
+            String fullName,
+            String password,
+            String confirmPassword,
+            String bio,
+            String employeeIdText
+    ) {
+        SharedAuthFacade.AuthResult result = sharedAuthFacade.register(
+                username,
+                fullName,
+                password,
+                confirmPassword,
+                roleText,
+                bio,
+                employeeIdText
+        );
+        if (!result.success()) {
+            return OperationResult.failure(result.message());
+        }
+        appendNotificationTo(result.principal().username(), "ANNOUNCEMENT", "Your account was created by librarian.", mapRole(result.principal().role()));
+        appendNotification("SYSTEM", "USER_UPDATE", "New user created: " + result.principal().username() + " (" + result.principal().role() + ").");
+        return OperationResult.success("Successfully created user account.");
+    }
+
+    public OperationResult disableUsers(List<String> usernames) {
+        if (usernames == null || usernames.isEmpty()) {
+            return OperationResult.failure("Bulk disable failed: no usernames provided.");
+        }
+        int ok = 0;
+        List<String> errors = new ArrayList<>();
+        for (String username : usernames) {
+            OperationResult result = disableUser(username);
+            if (result.success()) {
+                ok++;
+            } else {
+                errors.add(username + ": " + result.message());
+            }
+        }
+        if (errors.isEmpty()) {
+            return OperationResult.success("Bulk disable successful: " + ok + " account(s) disabled.");
+        }
+        return OperationResult.failure("Bulk disable partial success: " + ok + " disabled.\n" + String.join("\n", errors));
     }
 
     public OperationResult editUserAccount(String username, String newFullName, String newPassword, String confirmNewPassword) {
@@ -468,7 +585,12 @@ public class LibrarianPortalService {
 
     public String getConfirmDetail(String subId) {
         BookSubmission sub = bookSubmissionRepository.findById(subId).get();
-        return "Title: " + sub.getTitle() + "\nAuthor Username: "+ sub.getAuthorUsername() + "\nDescription: " + sub.getDescription() + "\nSubmission Time: " + sub.getSubmissionDate() + "\n";
+        return "Title: " + sub.getTitle()
+                + "\nAuthor Username: " + sub.getAuthorUsername()
+                + "\nDescription: " + sub.getDescription()
+                + "\nBook File: " + sub.getFilePath()
+                + "\nCover Image: " + (sub.getCoverImagePath().isBlank() ? "None" : sub.getCoverImagePath())
+                + "\nSubmission Time: " + sub.getSubmissionDate() + "\n";
     }
 
 
@@ -515,12 +637,77 @@ public class LibrarianPortalService {
 
 
     public List<NotificationView> getNotificationBoard(String username) {
+        return getNotificationBoard(username, "ALL", "", true);
+    }
+
+    public List<NotificationView> getNotificationBoard(String username, String categoryFilter, String keyword, boolean urgentFirst) {
         String normalized = safeTrim(username);
         if (normalized.isEmpty()) return List.of();
 
         List<NotificationView> notifications = loadStoredNotifications(normalized);
-        notifications.sort(Comparator.comparing(NotificationView::timestamp).reversed());
-        return notifications;
+        String normalizedCategory = safeTrim(categoryFilter).toUpperCase();
+        String normalizedKeyword = safeTrim(keyword).toLowerCase();
+        List<NotificationView> filtered = notifications.stream()
+                .filter(n -> "ALL".equals(normalizedCategory) || n.category().equalsIgnoreCase(normalizedCategory))
+                .filter(n -> normalizedKeyword.isEmpty()
+                        || n.message().toLowerCase().contains(normalizedKeyword)
+                        || n.category().toLowerCase().contains(normalizedKeyword))
+                .collect(Collectors.toList());
+        Comparator<NotificationView> byTime = Comparator.comparing(NotificationView::timestamp).reversed();
+        if (urgentFirst) {
+            filtered.sort(Comparator.comparing((NotificationView n) -> isUrgentCategory(n.category())).reversed().thenComparing(byTime));
+        } else {
+            filtered.sort(byTime);
+        }
+        return filtered;
+    }
+
+    public OperationResult exportBorrowedBooksCsv(String outputPath) {
+        String normalizedPath = safeTrim(outputPath);
+        if (normalizedPath.isEmpty()) {
+            return OperationResult.failure("Export failed: output path is required.");
+        }
+        try {
+            List<String> lines = new ArrayList<>();
+            lines.add("BookTitle,BorrowerUsername,PublishDate,Status");
+            for (Book book : bookRepository.findAll()) {
+                if (book.isAvailable()) {
+                    continue;
+                }
+                String title = escapeCsv(book.getTitle());
+                String borrower = escapeCsv(book.getBorrowedByUsername());
+                String publish = book.getPublishDate().toString();
+                String status = "BORROWED";
+                lines.add(title + "," + borrower + "," + publish + "," + status);
+            }
+            Path path = Paths.get(normalizedPath);
+            if (path.getParent() != null) {
+                Files.createDirectories(path.getParent());
+            }
+            Files.write(path, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            return OperationResult.success("Export successful: " + normalizedPath);
+        } catch (Exception e) {
+            return OperationResult.failure("Export failed: " + e.getMessage());
+        }
+    }
+
+    public OperationResult deleteBookAndNotify(String bookId) {
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        if (normalizedBookId.isEmpty()) {
+            return OperationResult.failure("Delete failed: invalid book ID.");
+        }
+        Optional<Book> bookOpt = bookRepository.findById(normalizedBookId);
+        if (bookOpt.isEmpty()) {
+            return OperationResult.failure("Delete failed: book not found.");
+        }
+        String title = bookOpt.get().getTitle();
+        studentStaffPortalService.notifyBookDeletedForBorrowers(normalizedBookId, title);
+        boolean deleted = bookRepository.deleteBook(normalizedBookId);
+        if (!deleted) {
+            return OperationResult.failure("Delete failed: unable to remove target book.");
+        }
+        appendNotification("SYSTEM", "ANNOUNCEMENT", "Book deleted: " + normalizedBookId + " - " + title);
+        return OperationResult.success("Book deleted successfully: " + normalizedBookId);
     }
 
     private void appendNotification(String username, String category, String message) {
@@ -586,7 +773,7 @@ public class LibrarianPortalService {
                 String[] parts = line.split("\\|", -1);
                 if (parts.length < 4) continue;
                 String u = decode(parts[0]);
-                if (!username.equals(u)) continue;
+                if (!username.equals(u) && !"SYSTEM".equalsIgnoreCase(u)) continue;
                 list.add(new NotificationView(
                         LocalDateTime.parse(parts[3], HISTORY_TIME_FORMAT),
                         decode(parts[1]),
@@ -597,6 +784,35 @@ public class LibrarianPortalService {
         } catch (Exception e) {
             return List.of();
         }
+    }
+
+    private static UserRole mapRole(String role) {
+        if (role == null) {
+            return UserRole.STUDENT;
+        }
+        return switch (role.toUpperCase()) {
+            case "STAFF" -> UserRole.STAFF;
+            case "AUTHOR" -> UserRole.AUTHOR;
+            case "LIBRARIAN" -> UserRole.LIBRARIAN;
+            default -> UserRole.STUDENT;
+        };
+    }
+
+    private static boolean isUrgentCategory(String category) {
+        if (category == null) {
+            return false;
+        }
+        String normalized = category.toUpperCase();
+        return normalized.contains("URGENT")
+                || normalized.contains("REQUEST")
+                || normalized.contains("USER_UPDATE")
+                || normalized.contains("SUBMISSION");
+    }
+
+    private static String escapeCsv(String value) {
+        String normalized = value == null ? "" : value;
+        String escaped = normalized.replace("\"", "\"\"");
+        return "\"" + escaped + "\"";
     }
 
     public record NotificationView(

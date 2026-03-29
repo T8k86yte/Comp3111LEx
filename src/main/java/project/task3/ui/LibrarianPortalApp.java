@@ -12,6 +12,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import project.shared.SharedAuthFacade;
+import project.shared.SessionRecoveryStore;
 import project.task1.model.Book;
 import project.task1.repo.StudentStaffRepository;
 import project.task1.service.StudentStaffPortalService;
@@ -72,6 +73,7 @@ public class LibrarianPortalApp extends Application {
     private Label loginStatusLabel;
 
     private TextField profileFullNameField;
+    private PasswordField profileCurrentPasswordField;
     private TextField profilePasswordField;
     private TextField profileConfirmPasswordField;
     private TextField profileStaffIDField;
@@ -84,9 +86,18 @@ public class LibrarianPortalApp extends Application {
     private PasswordField manageUsersNewPassword;
     private PasswordField manageUsersNewPasswordConfirm;
     private TableView<UserAccount> allUsersTable;
+    private ComboBox<String> addUserRoleBox;
+    private TextField addUserUsernameField;
+    private TextField addUserFullNameField;
+    private PasswordField addUserPasswordField;
+    private PasswordField addUserConfirmPasswordField;
+    private TextField addUserBioField;
+    private TextField addUserEmployeeIdField;
     private Label manageUsersStatusLabel;
 
     private ListView<String> notificationList;
+    private ComboBox<String> notificationCategoryFilter;
+    private TextField notificationKeywordFilter;
     private Label notificationStatusLabel;
 
     private TableView<Book> borrowedBooksTable;
@@ -286,6 +297,7 @@ public class LibrarianPortalApp extends Application {
         grid.setHgap(8);
         grid.setVgap(8);
         profileFullNameField = new TextField();
+        profileCurrentPasswordField = new PasswordField();
         profilePasswordField = new PasswordField();
         profileConfirmPasswordField = new PasswordField();
         profileStaffIDField = new TextField();
@@ -296,10 +308,14 @@ public class LibrarianPortalApp extends Application {
 
         grid.add(new Label("Full Name"), 0, 0);
         grid.add(profileFullNameField, 1, 0);
-        grid.add(new Label("New Password"), 0, 1);
-        grid.add(profilePasswordField, 1, 1);
-        grid.add(new Label("Confirm Password"), 0, 2);
-        grid.add(profileConfirmPasswordField, 1, 2);
+        grid.add(new Label("Employee ID"), 0, 1);
+        grid.add(profileStaffIDField, 1, 1);
+        grid.add(new Label("Current Password"), 0, 2);
+        grid.add(profileCurrentPasswordField, 1, 2);
+        grid.add(new Label("New Password"), 0, 3);
+        grid.add(profilePasswordField, 1, 3);
+        grid.add(new Label("Confirm Password"), 0, 4);
+        grid.add(profileConfirmPasswordField, 1, 4);
 
         if (currentUser != null) {
             profileFullNameField.setText(currentUser.fullName());
@@ -320,9 +336,18 @@ public class LibrarianPortalApp extends Application {
         heading.getStyleClass().add("card-title");
         Label hint = new Label("Timestamped and categorized notifications.");
         hint.getStyleClass().add("muted");
+        notificationCategoryFilter = new ComboBox<>(FXCollections.observableArrayList("ALL", "ANNOUNCEMENT", "USER_UPDATE", "SUBMISSION"));
+        notificationCategoryFilter.setValue("ALL");
+        notificationKeywordFilter = new TextField();
+        notificationKeywordFilter.setPromptText("Search notifications");
+        Button applyFilter = new Button("Apply Filter");
+        applyFilter.getStyleClass().add("secondary-btn");
+        applyFilter.setOnAction(e -> refreshNotifications());
+        HBox filterBar = new HBox(8, notificationCategoryFilter, notificationKeywordFilter, applyFilter);
+        filterBar.setAlignment(Pos.CENTER_LEFT);
         notificationList = new ListView<>();
         VBox.setVgrow(notificationList, Priority.ALWAYS);
-        card.getChildren().addAll(heading, hint, notificationList);
+        card.getChildren().addAll(heading, hint, filterBar, notificationList);
         return card;
     }
 
@@ -512,6 +537,7 @@ public class LibrarianPortalApp extends Application {
 
         bookSubmissionTable = new TableView<>();
         bookSubmissionTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        bookSubmissionTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
         TableColumn<BookSubmission, String> idCol = new TableColumn<>("Book Submission ID");
         idCol.setCellValueFactory(new PropertyValueFactory<>("submissionId"));
@@ -536,8 +562,10 @@ public class LibrarianPortalApp extends Application {
 
         TableColumn<BookSubmission, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
+        TableColumn<BookSubmission, String> filePathCol = new TableColumn<>("Book File");
+        filePathCol.setCellValueFactory(new PropertyValueFactory<>("filePath"));
 
-        bookSubmissionTable.getColumns().addAll(idCol, titleCol, authorUsernameCol, authorFullNameCol, genreCol, dateCol, summaryCol, statusCol);
+        bookSubmissionTable.getColumns().addAll(idCol, titleCol, authorUsernameCol, authorFullNameCol, genreCol, dateCol, summaryCol, statusCol, filePathCol);
 
         bookSubmissionTable.getSelectionModel().selectedItemProperty().addListener((obs, oldSubmission, newSubmission) -> {
             if (newSubmission != null) {
@@ -556,6 +584,15 @@ public class LibrarianPortalApp extends Application {
         Button refreshBtn = new Button("Refresh Table");
         refreshBtn.getStyleClass().add("primary-btn");
         refreshBtn.setOnAction(event -> refreshSubmissions());
+        Button previewFileBtn = new Button("Preview/Download Selected File");
+        previewFileBtn.getStyleClass().add("secondary-btn");
+        previewFileBtn.setOnAction(event -> handlePreviewSubmissionFile());
+        Button bulkApproveBtn = new Button("Bulk Approve Selected");
+        bulkApproveBtn.getStyleClass().add("secondary-btn");
+        bulkApproveBtn.setOnAction(event -> handleBulkApproveSelected());
+        Button bulkRejectBtn = new Button("Bulk Reject Selected");
+        bulkRejectBtn.getStyleClass().add("secondary-btn");
+        bulkRejectBtn.setOnAction(event -> handleBulkRejectSelected());
 
         HBox filters1 = new HBox(5);
         HBox filters2 = new HBox(5);
@@ -572,6 +609,9 @@ public class LibrarianPortalApp extends Application {
         filters2.getChildren().add(new Label("Status: "));
         filters2.getChildren().add(tableStatusFilter);
         filters2.getChildren().add(refreshBtn);
+        filters2.getChildren().add(previewFileBtn);
+        filters2.getChildren().add(bulkApproveBtn);
+        filters2.getChildren().add(bulkRejectBtn);
 
         VBox.setVgrow(bookSubmissionTable, Priority.ALWAYS);
         wrapper.getChildren().addAll(buildAcceptRejectHeader(), new Label("Filters: "), filters1, filters2, heading, bookSubmissionTable);
@@ -641,9 +681,45 @@ public class LibrarianPortalApp extends Application {
         Button disableBtn = new Button("Disable User");
         disableBtn.getStyleClass().add("primary-btn");
         disableBtn.setOnAction(event -> handleDisableUser());
-        actions.getChildren().addAll(applyBtn, disableBtn);
+        Button bulkDisableBtn = new Button("Bulk Disable (CSV usernames)");
+        bulkDisableBtn.getStyleClass().add("secondary-btn");
+        bulkDisableBtn.setOnAction(event -> handleBulkDisableUsers());
+        actions.getChildren().addAll(applyBtn, disableBtn, bulkDisableBtn);
 
-        card.getChildren().addAll(heading, hint, fields, actions);
+        GridPane addUserGrid = new GridPane();
+        addUserGrid.setHgap(8);
+        addUserGrid.setVgap(8);
+        addUserRoleBox = new ComboBox<>(FXCollections.observableArrayList("Student", "Staff", "Author", "Librarian"));
+        addUserRoleBox.setValue("Student");
+        addUserUsernameField = new TextField();
+        addUserFullNameField = new TextField();
+        addUserPasswordField = new PasswordField();
+        addUserConfirmPasswordField = new PasswordField();
+        addUserBioField = new TextField();
+        addUserEmployeeIdField = new TextField();
+        addUserUsernameField.setPromptText("new username");
+        addUserFullNameField.setPromptText("full name");
+        addUserBioField.setPromptText("bio (author)");
+        addUserEmployeeIdField.setPromptText("employee id (librarian)");
+        addUserGrid.add(new Label("Add User Role"), 0, 0);
+        addUserGrid.add(addUserRoleBox, 1, 0);
+        addUserGrid.add(new Label("Username"), 0, 1);
+        addUserGrid.add(addUserUsernameField, 1, 1);
+        addUserGrid.add(new Label("Full Name"), 0, 2);
+        addUserGrid.add(addUserFullNameField, 1, 2);
+        addUserGrid.add(new Label("Password"), 0, 3);
+        addUserGrid.add(addUserPasswordField, 1, 3);
+        addUserGrid.add(new Label("Confirm"), 0, 4);
+        addUserGrid.add(addUserConfirmPasswordField, 1, 4);
+        addUserGrid.add(new Label("Bio"), 0, 5);
+        addUserGrid.add(addUserBioField, 1, 5);
+        addUserGrid.add(new Label("Employee ID"), 0, 6);
+        addUserGrid.add(addUserEmployeeIdField, 1, 6);
+        Button addUserBtn = new Button("Add New User");
+        addUserBtn.getStyleClass().add("primary-btn");
+        addUserBtn.setOnAction(event -> handleAddUser());
+
+        card.getChildren().addAll(heading, hint, fields, actions, new Separator(), new Label("Create New User"), addUserGrid, addUserBtn);
 
         VBox.setVgrow(bookSubmissionTable, Priority.ALWAYS);
         wrapper.getChildren().addAll(card, heading, allUsersTable);
@@ -707,6 +783,12 @@ public class LibrarianPortalApp extends Application {
         Button readSummaryBtn = new Button("Read Summary");
         readSummaryBtn.getStyleClass().add("primary-btn");
         readSummaryBtn.setOnAction(event -> readBookSummary());
+        Button exportBtn = new Button("Export CSV");
+        exportBtn.getStyleClass().add("secondary-btn");
+        exportBtn.setOnAction(event -> handleExportBorrowedBooks());
+        Button deleteBookBtn = new Button("Delete Selected Book");
+        deleteBookBtn.getStyleClass().add("danger-btn");
+        deleteBookBtn.setOnAction(event -> handleDeleteSelectedBook());
 
         HBox filters1 = new HBox(5);
         HBox filters2 = new HBox(5);
@@ -724,6 +806,8 @@ public class LibrarianPortalApp extends Application {
         filters2.getChildren().add(bookTableBorrowedByFilter);
         filters2.getChildren().add(refreshBtn);
         filters2.getChildren().add(readSummaryBtn);
+        filters2.getChildren().add(exportBtn);
+        filters2.getChildren().add(deleteBookBtn);
 
         card.getChildren().addAll(heading, hint, filters1, filters2);
 
@@ -753,19 +837,37 @@ public class LibrarianPortalApp extends Application {
         Button logoutBtn = new Button("Logout");
 
         acceptReject.getStyleClass().add("primary-btn");
-        acceptReject.setOnAction(event -> stage.setScene(acceptRejectScene));
+        acceptReject.setOnAction(event -> {
+            SessionRecoveryStore.saveValue("task3.lastView", "SUBMISSIONS");
+            stage.setScene(acceptRejectScene);
+        });
         acceptReject.setPrefWidth(200);
         profile.getStyleClass().add("primary-btn");
-        profile.setOnAction(event -> stage.setScene(profileScene));
+        profile.setOnAction(event -> {
+            SessionRecoveryStore.saveValue("task3.lastView", "PROFILE");
+            stage.setScene(profileScene);
+        });
         profile.setPrefWidth(200);
         notification.getStyleClass().add("primary-btn");
-        notification.setOnAction(event -> { stage.setScene(notificationScene); refreshNotifications(); });
+        notification.setOnAction(event -> {
+            SessionRecoveryStore.saveValue("task3.lastView", "NOTIFICATIONS");
+            stage.setScene(notificationScene);
+            refreshNotifications();
+        });
         notification.setPrefWidth(160);
         manageUsers.getStyleClass().add("primary-btn");
-        manageUsers.setOnAction(event -> { stage.setScene(manageUsersScene); refreshEditUsers(); });
+        manageUsers.setOnAction(event -> {
+            SessionRecoveryStore.saveValue("task3.lastView", "USERS");
+            stage.setScene(manageUsersScene);
+            refreshEditUsers();
+        });
         manageUsers.setPrefWidth(160);
         borrowedBooks.getStyleClass().add("primary-btn");
-        borrowedBooks.setOnAction(event -> { stage.setScene(borrowedBooksScene); refreshBorrowedBooks(); });
+        borrowedBooks.setOnAction(event -> {
+            SessionRecoveryStore.saveValue("task3.lastView", "BORROWED_BOOKS");
+            stage.setScene(borrowedBooksScene);
+            refreshBorrowedBooks();
+        });
         borrowedBooks.setPrefWidth(160);
         logoutBtn.getStyleClass().add("secondary-btn");
         logoutBtn.setOnAction(event -> handleLogout());
@@ -835,8 +937,28 @@ public class LibrarianPortalApp extends Application {
         }
         currentUserLabel.setText("Current user: " + currentUser.username() + " (" + currentUser.role() + ")");
         loginPasswordField.clear();
-        stage.setScene(acceptRejectScene);
+        restoreLastTask3View();
         showInfoPopup("Login", "Welcome", result.message());
+    }
+
+    private void restoreLastTask3View() {
+        String view = SessionRecoveryStore.loadValue("task3.lastView").orElse("SUBMISSIONS");
+        switch (view) {
+            case "PROFILE" -> stage.setScene(profileScene);
+            case "NOTIFICATIONS" -> {
+                stage.setScene(notificationScene);
+                refreshNotifications();
+            }
+            case "USERS" -> {
+                stage.setScene(manageUsersScene);
+                refreshEditUsers();
+            }
+            case "BORROWED_BOOKS" -> {
+                stage.setScene(borrowedBooksScene);
+                refreshBorrowedBooks();
+            }
+            default -> stage.setScene(acceptRejectScene);
+        }
     }
 
     private void handleLogout() {
@@ -855,6 +977,89 @@ public class LibrarianPortalApp extends Application {
     private void handleApproveReject() {
         if (actionBox.getValue().equals("Approve")) handleApprove();
         else handleReject();
+    }
+
+    private void handleBulkApproveSelected() {
+        if (currentUser == null) {
+            showErrorPopup("Bulk Approve", "User not logged in", "Please log in first.");
+            return;
+        }
+        List<BookSubmission> selected = bookSubmissionTable.getSelectionModel().getSelectedItems();
+        if (selected == null || selected.isEmpty()) {
+            showErrorPopup("Bulk Approve", "No submissions selected", "Select one or more submissions.");
+            return;
+        }
+        List<String> ids = selected.stream().map(BookSubmission::getSubmissionId).toList();
+        if (!showConfirmPopup("Bulk Approve", "Approve selected submissions?",
+                "Count: " + ids.size() + "\nIDs: " + String.join(", ", ids))) {
+            return;
+        }
+        LibrarianPortalService.OperationResult result = portalService.approveBookSubmissionsBulk(ids, currentUser.username());
+        setStatus(result.message());
+        if (!result.success()) {
+            showErrorPopup("Bulk Approve", "Completed with errors.", result.message());
+        } else {
+            showInfoPopup("Bulk Approve", "Success", result.message());
+        }
+        refreshSubmissions();
+    }
+
+    private void handleBulkRejectSelected() {
+        if (currentUser == null) {
+            showErrorPopup("Bulk Reject", "User not logged in", "Please log in first.");
+            return;
+        }
+        List<BookSubmission> selected = bookSubmissionTable.getSelectionModel().getSelectedItems();
+        if (selected == null || selected.isEmpty()) {
+            showErrorPopup("Bulk Reject", "No submissions selected", "Select one or more submissions.");
+            return;
+        }
+        TextInputDialog reasonDialog = new TextInputDialog();
+        reasonDialog.setTitle("Bulk Reject");
+        reasonDialog.setHeaderText("Provide rejection reason");
+        reasonDialog.setContentText("Reason:");
+        Optional<String> reasonInput = reasonDialog.showAndWait();
+        if (reasonInput.isEmpty()) {
+            return;
+        }
+        List<String> ids = selected.stream().map(BookSubmission::getSubmissionId).toList();
+        LibrarianPortalService.OperationResult result =
+                portalService.rejectBookSubmissionsBulk(ids, currentUser.username(), reasonInput.get());
+        setStatus(result.message());
+        if (!result.success()) {
+            showErrorPopup("Bulk Reject", "Completed with errors.", result.message());
+        } else {
+            showInfoPopup("Bulk Reject", "Success", result.message());
+        }
+        refreshSubmissions();
+    }
+
+    private void handlePreviewSubmissionFile() {
+        BookSubmission selected = bookSubmissionTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showErrorPopup("Submission File", "No submission selected.", "Please select one submission first.");
+            return;
+        }
+        String filePath = selected.getFilePath();
+        if (filePath == null || filePath.isBlank()) {
+            showErrorPopup("Submission File", "File path is missing.", "Selected submission has no file.");
+            return;
+        }
+        java.io.File file = new java.io.File(filePath);
+        if (!file.exists()) {
+            showErrorPopup("Submission File", "File not found.", filePath);
+            return;
+        }
+        if (!java.awt.Desktop.isDesktopSupported()) {
+            showErrorPopup("Submission File", "Desktop open is unsupported.", filePath);
+            return;
+        }
+        try {
+            java.awt.Desktop.getDesktop().open(file);
+            setStatus("Opened submission file: " + file.getName());
+        } catch (Exception ex) {
+            showErrorPopup("Submission File", "Cannot open file.", ex.getMessage());
+        }
     }
 
     private void handleApprove() {
@@ -919,12 +1124,14 @@ public class LibrarianPortalApp extends Application {
             showErrorPopup("Profile Update", "User not logged in.", "Please log in first.");
             return;
         }
+        String newPassword = profilePasswordField == null ? "" : profilePasswordField.getText();
         LibrarianPortalService.OperationResult result = portalService.updateProfile(
                 currentUser.username(),
                 profileFullNameField == null ? "" : profileFullNameField.getText(),
-                profilePasswordField == null ? "" : profilePasswordField.getText(),
+                newPassword,
                 profileConfirmPasswordField == null ? "" : profileConfirmPasswordField.getText(),
-                profileStaffIDField == null ? "" : profileStaffIDField.getText()
+                profileStaffIDField == null ? "" : profileStaffIDField.getText(),
+                profileCurrentPasswordField == null ? "" : profileCurrentPasswordField.getText()
         );
         setStatus(result.message());
         if (!result.success()) {
@@ -940,11 +1147,19 @@ public class LibrarianPortalApp extends Application {
         if (profilePasswordField != null) {
             profilePasswordField.clear();
         }
+        if (profileCurrentPasswordField != null) {
+            profileCurrentPasswordField.clear();
+        }
         if (profileConfirmPasswordField != null) {
             profileConfirmPasswordField.clear();
         }
         if (profileStaffIDField != null) {
             profileStaffIDField.clear();
+        }
+        if (!newPassword.isBlank()) {
+            showInfoPopup("Profile Update", "Success", "Password changed. Please log in again.");
+            handleLogout();
+            return;
         }
         showInfoPopup("Profile Update", "Success", result.message());
     }
@@ -1042,7 +1257,12 @@ public class LibrarianPortalApp extends Application {
 
     private void refreshNotifications() {
         if (notificationList == null || currentUser == null) return;
-        List<String> rows = portalService.getNotificationBoard(currentUser.username())
+        List<String> rows = portalService.getNotificationBoard(
+                        currentUser.username(),
+                        notificationCategoryFilter == null ? "ALL" : notificationCategoryFilter.getValue(),
+                        notificationKeywordFilter == null ? "" : notificationKeywordFilter.getText(),
+                        true
+                )
                 .stream()
                 .map(n -> formatNotificationRow(n.timestamp(), n.category(), n.message()))
                 .collect(java.util.stream.Collectors.toList());
@@ -1051,6 +1271,92 @@ public class LibrarianPortalApp extends Application {
             return;
         }
         notificationList.setItems(FXCollections.observableArrayList(rows));
+    }
+
+    private void handleBulkDisableUsers() {
+        if (manageUsersSelectedName == null) {
+            return;
+        }
+        String raw = manageUsersSelectedName.getText() == null ? "" : manageUsersSelectedName.getText().trim();
+        if (raw.isEmpty()) {
+            showErrorPopup("Bulk Disable", "No usernames provided.", "Enter comma-separated usernames in the username field.");
+            return;
+        }
+        List<String> usernames = java.util.Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        LibrarianPortalService.OperationResult result = portalService.disableUsers(usernames);
+        if (!result.success()) {
+            showErrorPopup("Bulk Disable", "Action completed with errors.", result.message());
+        } else {
+            showInfoPopup("Bulk Disable", "Success", result.message());
+        }
+        refreshEditUsers();
+    }
+
+    private void handleAddUser() {
+        LibrarianPortalService.OperationResult result = portalService.addNewUser(
+                addUserRoleBox == null ? "Student" : addUserRoleBox.getValue(),
+                addUserUsernameField == null ? "" : addUserUsernameField.getText(),
+                addUserFullNameField == null ? "" : addUserFullNameField.getText(),
+                addUserPasswordField == null ? "" : addUserPasswordField.getText(),
+                addUserConfirmPasswordField == null ? "" : addUserConfirmPasswordField.getText(),
+                addUserBioField == null ? "" : addUserBioField.getText(),
+                addUserEmployeeIdField == null ? "" : addUserEmployeeIdField.getText()
+        );
+        if (!result.success()) {
+            showErrorPopup("Add User", "Create account failed.", result.message());
+            return;
+        }
+        showInfoPopup("Add User", "Success", result.message());
+        addUserUsernameField.clear();
+        addUserFullNameField.clear();
+        addUserPasswordField.clear();
+        addUserConfirmPasswordField.clear();
+        addUserBioField.clear();
+        addUserEmployeeIdField.clear();
+        refreshEditUsers();
+    }
+
+    private void handleExportBorrowedBooks() {
+        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+        chooser.setTitle("Export Borrowed Books CSV");
+        chooser.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        java.io.File target = chooser.showSaveDialog(stage);
+        if (target == null) {
+            return;
+        }
+        LibrarianPortalService.OperationResult result = portalService.exportBorrowedBooksCsv(target.getAbsolutePath());
+        if (!result.success()) {
+            showErrorPopup("Export Borrowed Books", "Export failed.", result.message());
+            return;
+        }
+        showInfoPopup("Export Borrowed Books", "Export completed", result.message());
+    }
+
+    private void handleDeleteSelectedBook() {
+        Book selected = borrowedBooksTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showErrorPopup("Delete Book", "No book selected.", "Please select a book row first.");
+            return;
+        }
+        if (!showConfirmPopup(
+                "Delete Book",
+                "Delete selected book from library?",
+                "Book ID: " + selected.getId() + "\nTitle: " + selected.getTitle()
+                        + "\nBorrowers who borrowed this book will receive a deletion notice."
+        )) {
+            return;
+        }
+        LibrarianPortalService.OperationResult result = portalService.deleteBookAndNotify(selected.getId());
+        if (!result.success()) {
+            showErrorPopup("Delete Book", "Delete failed.", result.message());
+            return;
+        }
+        setStatus(result.message());
+        showInfoPopup("Delete Book", "Success", result.message());
+        refreshBorrowedBooks();
     }
 
     private String formatNotificationRow(LocalDateTime timestamp, String category, String message) {

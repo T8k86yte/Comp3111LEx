@@ -21,8 +21,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -119,6 +121,46 @@ public class StudentStaffPortalService {
                 .stream()
                 .filter(Book::isAvailable)
                 .limit(Math.max(0, limit))
+                .collect(Collectors.toList());
+    }
+
+    public List<RecommendedBookView> getWeeklyRecommendedBooks(int limit) {
+        int normalizedLimit = Math.max(0, limit);
+        if (normalizedLimit == 0) {
+            return List.of();
+        }
+        LocalDate since = LocalDate.now().minusDays(6);
+        Map<String, Integer> weeklyCounts = new HashMap<>();
+        for (BorrowRecord record : loadBorrowRecords()) {
+            if (record.borrowDate().isBefore(since)) {
+                continue;
+            }
+            weeklyCounts.merge(record.bookId(), 1, Integer::sum);
+        }
+        if (weeklyCounts.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Book> booksById = bookRepository.findAll()
+                .stream()
+                .collect(Collectors.toMap(Book::getId, b -> b, (a, b) -> a));
+        return weeklyCounts.entrySet()
+                .stream()
+                .filter(e -> booksById.containsKey(e.getKey()))
+                .map(e -> {
+                    Book b = booksById.get(e.getKey());
+                    return new RecommendedBookView(
+                            b.getId(),
+                            b.getTitle(),
+                            b.getAuthor(),
+                            e.getValue(),
+                            b.isAvailable()
+                    );
+                })
+                .sorted(
+                        Comparator.comparingInt(RecommendedBookView::weeklyBorrowCount).reversed()
+                                .thenComparing(RecommendedBookView::title)
+                )
+                .limit(normalizedLimit)
                 .collect(Collectors.toList());
     }
 
@@ -271,10 +313,21 @@ public class StudentStaffPortalService {
     }
 
     public OperationResult updateProfile(String username, String newFullName, String newPassword, String confirmPassword) {
+        return updateProfile(username, newFullName, newPassword, confirmPassword, "");
+    }
+
+    public OperationResult updateProfile(
+            String username,
+            String newFullName,
+            String newPassword,
+            String confirmPassword,
+            String currentPassword
+    ) {
         String normalizedUsername = safeTrim(username);
         String normalizedFullName = safeTrim(newFullName);
         String pwd = newPassword == null ? "" : newPassword;
         String confirm = confirmPassword == null ? "" : confirmPassword;
+        String currentPwd = currentPassword == null ? "" : currentPassword;
         if (normalizedUsername.isEmpty()) {
             return OperationResult.failure("Profile update failed: invalid user.");
         }
@@ -286,10 +339,20 @@ public class StudentStaffPortalService {
         if (normalizedFullName.isEmpty()) {
             return OperationResult.failure("Profile update failed: full name is required.");
         }
+        boolean fullNameChanged = !normalizedFullName.equals(existing.getFullName());
+        boolean passwordChanged = !pwd.isBlank() || !confirm.isBlank();
+        if ((fullNameChanged || passwordChanged)
+                && !project.task1.security.PasswordSecurity.verifyPassword(
+                currentPwd,
+                existing.getPasswordSaltBase64(),
+                existing.getPasswordHashBase64()
+        )) {
+            return OperationResult.failure("Profile update failed: current password is incorrect.");
+        }
 
         String salt = existing.getPasswordSaltBase64();
         String hash = existing.getPasswordHashBase64();
-        if (!pwd.isBlank() || !confirm.isBlank()) {
+        if (passwordChanged) {
             if (!pwd.equals(confirm)) {
                 return OperationResult.failure("Profile update failed: passwords do not match.");
             }
@@ -313,6 +376,15 @@ public class StudentStaffPortalService {
     }
 
     public List<NotificationView> getNotificationBoard(String username) {
+        return getNotificationBoard(username, "ALL", "", true);
+    }
+
+    public List<NotificationView> getNotificationBoard(
+            String username,
+            String categoryFilter,
+            String keyword,
+            boolean urgentFirst
+    ) {
         String normalized = safeTrim(username);
         if (normalized.isEmpty()) {
             return List.of();
@@ -334,8 +406,25 @@ public class StudentStaffPortalService {
         }
 
         notifications.addAll(loadStoredNotifications(normalized));
-        notifications.sort(Comparator.comparing(NotificationView::timestamp).reversed());
-        return notifications;
+        String normalizedCategoryFilter = safeTrim(categoryFilter).toUpperCase();
+        String normalizedKeyword = safeTrim(keyword).toLowerCase();
+        List<NotificationView> filtered = notifications.stream()
+                .filter(n -> "ALL".equals(normalizedCategoryFilter)
+                        || n.category().equalsIgnoreCase(normalizedCategoryFilter))
+                .filter(n -> normalizedKeyword.isEmpty()
+                        || n.message().toLowerCase().contains(normalizedKeyword)
+                        || n.category().toLowerCase().contains(normalizedKeyword))
+                .collect(Collectors.toList());
+        Comparator<NotificationView> byTime = Comparator.comparing(NotificationView::timestamp).reversed();
+        if (urgentFirst) {
+            filtered.sort(
+                    Comparator.comparing((NotificationView n) -> isUrgentCategory(n.category())).reversed()
+                            .thenComparing(byTime)
+            );
+        } else {
+            filtered.sort(byTime);
+        }
+        return filtered;
     }
 
     public void notifyBookDeletedForBorrowers(String bookId, String bookTitle) {
@@ -674,6 +763,17 @@ public class StudentStaffPortalService {
                 && password.matches(".*[A-Z].*");
     }
 
+    private static boolean isUrgentCategory(String category) {
+        if (category == null) {
+            return false;
+        }
+        String normalized = category.toUpperCase();
+        return normalized.contains("URGENT")
+                || normalized.contains("BOOK_DELETION")
+                || normalized.contains("AUTO_RETURN")
+                || normalized.contains("DUE_REMINDER");
+    }
+
     private static String encode(String value) {
         return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
@@ -728,6 +828,14 @@ public class StudentStaffPortalService {
             LocalDateTime timestamp,
             String category,
             String message
+    ) {}
+
+    public record RecommendedBookView(
+            String bookId,
+            String title,
+            String author,
+            int weeklyBorrowCount,
+            boolean available
     ) {}
 
     private record ReadingProgress(
