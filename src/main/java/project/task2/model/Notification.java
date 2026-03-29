@@ -12,7 +12,9 @@ public class Notification {
     private boolean isRead;
     private final LocalDateTime createdAt;
     private final String relatedSubmissionId;
+    private final boolean isPriority;  // NEW: priority flag for urgent notifications
 
+    // Constructor for new notifications (default priority = false)
     public Notification(String authorUsername, String title, String message, String type, String relatedSubmissionId) {
         this.notificationId = "NOTIF_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 10000);
         this.authorUsername = authorUsername;
@@ -22,10 +24,13 @@ public class Notification {
         this.isRead = false;
         this.createdAt = LocalDateTime.now();
         this.relatedSubmissionId = relatedSubmissionId;
+        this.isPriority = isPriorityType(type);
     }
 
+    // Constructor for loading from file
     public Notification(String notificationId, String authorUsername, String title, String message, 
-                        String type, boolean isRead, LocalDateTime createdAt, String relatedSubmissionId) {
+                        String type, boolean isRead, LocalDateTime createdAt, 
+                        String relatedSubmissionId, boolean isPriority) {
         this.notificationId = notificationId;
         this.authorUsername = authorUsername;
         this.title = title;
@@ -34,6 +39,14 @@ public class Notification {
         this.isRead = isRead;
         this.createdAt = createdAt;
         this.relatedSubmissionId = relatedSubmissionId;
+        this.isPriority = isPriority;
+    }
+
+    // Determine if a notification type should be priority
+    private boolean isPriorityType(String type) {
+        return type.equals("BOOK_DELETED") || 
+               type.equals("BOOK_REJECTED") ||
+               type.equals("URGENT_ANNOUNCEMENT");
     }
 
     public String getNotificationId() { return notificationId; }
@@ -44,6 +57,7 @@ public class Notification {
     public boolean isRead() { return isRead; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public String getRelatedSubmissionId() { return relatedSubmissionId; }
+    public boolean isPriority() { return isPriority; }
 
     public void markAsRead() { this.isRead = true; }
 
@@ -56,17 +70,11 @@ public class Notification {
         return switch (type) {
             case "BOOK_APPROVED" -> "✅";
             case "BOOK_REJECTED" -> "❌";
+            case "BOOK_SUBMITTED" -> "📝";
             case "BOOK_PENDING" -> "⏳";
+            case "BOOK_DELETED" -> "🗑️";
+            case "URGENT_ANNOUNCEMENT" -> "⚠️";
             default -> "📌";
-        };
-    }
-
-    public String getTypeColor() {
-        return switch (type) {
-            case "BOOK_APPROVED" -> "status-approved";
-            case "BOOK_REJECTED" -> "status-rejected";
-            case "BOOK_PENDING" -> "status-pending";
-            default -> "muted";
         };
     }
 
@@ -80,13 +88,14 @@ public class Notification {
             type,
             String.valueOf(isRead),
             createdAt.toString(),
-            relatedSubmissionId != null ? relatedSubmissionId : ""
+            relatedSubmissionId != null ? relatedSubmissionId : "",
+            String.valueOf(isPriority)
         );
     }
 
     public static Notification fromString(String data) {
         String[] parts = data.split("\\|");
-        if (parts.length >= 8) {
+        if (parts.length >= 9) {
             return new Notification(
                 parts[0],
                 parts[1],
@@ -95,7 +104,8 @@ public class Notification {
                 parts[4],
                 Boolean.parseBoolean(parts[5]),
                 LocalDateTime.parse(parts[6]),
-                parts[7].isEmpty() ? null : parts[7]
+                parts[7].isEmpty() ? null : parts[7],
+                Boolean.parseBoolean(parts[8])
             );
         }
         return null;

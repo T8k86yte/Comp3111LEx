@@ -1,119 +1,90 @@
 package project.task2.repo;
 
-import project.task1.model.StudentStaffAccount;
 import project.task2.model.AuthorAccount;
-import project.task2.database.DatabaseConnection;
 
-import java.sql.*;
-import java.time.LocalDateTime;
+import java.io.*;
+import java.nio.file.*;
 import java.util.*;
 
 public class AuthorRepository {
-    private final Connection conn;
+    private static final String AUTHORS_FILE = "data/authors.txt";
+    private final Map<String, AuthorAccount> authorsByUsername = new HashMap<>();
 
     public AuthorRepository() {
-        this.conn = DatabaseConnection.getConnection();
+        createDataDirectory();
+        loadFromFile();
+    }
+
+    private void createDataDirectory() {
+        try {
+            Path dataDir = Paths.get("data");
+            if (!Files.exists(dataDir)) {
+                Files.createDirectories(dataDir);
+            }
+        } catch (IOException e) {
+            System.err.println("Error creating data directory: " + e.getMessage());
+        }
     }
 
     public void save(AuthorAccount author) {
-        String sql = """
-            INSERT OR REPLACE INTO authors 
-            (username, full_name, password_salt, password_hash, bio, registration_date)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """;
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, author.getUsername());
-            pstmt.setString(2, author.getFullName());
-            pstmt.setString(3, author.getPasswordSalt());
-            pstmt.setString(4, author.getPasswordHash());
-            pstmt.setString(5, author.getBio());
-            pstmt.setString(6, LocalDateTime.now().toString());
-            
-            pstmt.executeUpdate();
-            System.out.println("✅ Task2: Author saved: " + author.getUsername());
-            
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error saving author: " + e.getMessage());
-        }
+        authorsByUsername.put(author.getUsername(), author);
+        saveAllToFile();
+        System.out.println("✅ Author saved: " + author.getUsername());
     }
 
     public void update(AuthorAccount author) {
         save(author);
-        System.out.println("✅ Task2: Author updated: " + author.getUsername());
+        System.out.println("✅ Author updated: " + author.getUsername());
     }
 
-    public Optional<AuthorAccount> findByUsername(String username) {
-        String sql = "SELECT * FROM authors WHERE username = ?";
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, username);
-            ResultSet rs = pstmt.executeQuery();
-            
-            if (rs.next()) {
-                AuthorAccount author = new AuthorAccount(
-                    rs.getString("username"),
-                    rs.getString("full_name"),
-                    rs.getString("password_salt"),
-                    rs.getString("password_hash"),
-                    rs.getString("bio")
-                );
-                return Optional.of(author);
+    private void saveAllToFile() {
+        try {
+            List<String> lines = new ArrayList<>();
+            for (AuthorAccount author : authorsByUsername.values()) {
+                lines.add(author.toString());
             }
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error finding author: " + e.getMessage());
+            
+            Path filePath = Paths.get(AUTHORS_FILE);
+            Files.write(filePath, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            
+        } catch (IOException e) {
+            System.err.println("Error saving authors to file: " + e.getMessage());
         }
-        return Optional.empty();
+    }
+
+    private void loadFromFile() {
+        try {
+            Path filePath = Paths.get(AUTHORS_FILE);
+            if (Files.exists(filePath)) {
+                List<String> lines = Files.readAllLines(filePath);
+                
+                for (String line : lines) {
+                    if (!line.trim().isEmpty()) {
+                        AuthorAccount author = AuthorAccount.fromString(line);
+                        if (author != null) {
+                            authorsByUsername.put(author.getUsername(), author);
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error loading authors from file: " + e.getMessage());
+        }
     }
 
     public boolean existsByUsername(String username) {
-        String sql = "SELECT 1 FROM authors WHERE username = ?";
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, username);
-            ResultSet rs = pstmt.executeQuery();
-            return rs.next();
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error checking username: " + e.getMessage());
-        }
-        return false;
+        return authorsByUsername.containsKey(username);
     }
 
     public List<AuthorAccount> findAll() {
-        List<AuthorAccount> authors = new ArrayList<>();
-        String sql = "SELECT * FROM authors ORDER BY username";
-        
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
-            while (rs.next()) {
-                authors.add(new AuthorAccount(
-                    rs.getString("username"),
-                    rs.getString("full_name"),
-                    rs.getString("password_salt"),
-                    rs.getString("password_hash"),
-                    rs.getString("bio")
-                ));
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error finding all authors: " + e.getMessage());
-        }
-        return authors;
+        return new ArrayList<>(authorsByUsername.values());
+    }
+
+    public Optional<AuthorAccount> findByUsername(String username) {
+        return Optional.ofNullable(authorsByUsername.get(username));
     }
 
     public int getCount() {
-        String sql = "SELECT COUNT(*) FROM authors";
-        
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            return rs.getInt(1);
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error counting authors: " + e.getMessage());
-        }
-        return 0;
-    }
-
-    public List<AuthorAccount> getAllUsers() {
-        return authorsByUsername.values().stream().toList();
+        return authorsByUsername.size();
     }
 }

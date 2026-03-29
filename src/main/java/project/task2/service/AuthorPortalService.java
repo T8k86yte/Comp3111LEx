@@ -113,16 +113,18 @@ public class AuthorPortalService {
 
     // ========== DRAFT METHODS ==========
     public void saveDraft(String authorUsername, String title, List<String> genres, 
-                          String description, String filePath) {
+                          String description, String filePath, String coverImagePath) {
         String genresStr = genres != null ? String.join(",", genres) : "";
         String draftData = String.join("|",
             title != null ? title : "",
             genresStr,
             description != null ? description : "",
-            filePath != null ? filePath : ""
+            filePath != null ? filePath : "",
+            coverImagePath != null ? coverImagePath : ""
         );
         
-        if (!title.isEmpty() || !genresStr.isEmpty() || !description.isEmpty() || !filePath.isEmpty()) {
+        if (!title.isEmpty() || !genresStr.isEmpty() || !description.isEmpty() || 
+            !filePath.isEmpty() || !coverImagePath.isEmpty()) {
             draftRepository.saveDraft(authorUsername, draftData);
         } else {
             draftRepository.deleteDraft(authorUsername);
@@ -135,9 +137,9 @@ public class AuthorPortalService {
             return null;
         }
         
-        String[] parts = draftData.split("\\|", 4);
-        if (parts.length == 4) {
-            return parts;
+        String[] parts = draftData.split("\\|", 5);
+        if (parts.length >= 4) {
+            return parts; // [title, genres, description, filePath, coverImagePath]
         }
         return null;
     }
@@ -149,7 +151,8 @@ public class AuthorPortalService {
     // ========== BOOK SUBMISSION ==========
     public SubmissionResult submitBookForApproval(String authorUsername, String authorFullName,
                                               String title, String genresStr, 
-                                              String description, String filePath) {
+                                              String description, String filePath,
+                                              String coverImagePath) {
     
         if (isBlank(title)) {
             return SubmissionResult.failure("Book title is required.");
@@ -169,22 +172,29 @@ public class AuthorPortalService {
                 FileHandler.getAllowedFileTypes());
         }
 
+        // Validate cover image if provided
+        if (coverImagePath != null && !coverImagePath.isEmpty()) {
+            if (!isValidCoverImage(coverImagePath)) {
+                return SubmissionResult.failure("Invalid cover image. Allowed: JPG, PNG (max 5MB)");
+            }
+        }
+
         try {
             List<String> genres = Arrays.asList(genresStr.split(","));
             
             BookSubmission submission = new BookSubmission(
                 title, authorUsername, authorFullName, 
-                genres, description, filePath
+                genres, description, filePath, coverImagePath
             );
 
             submissionRepository.save(submission);
             clearDraft(authorUsername);
-
-            // Send notification about pending submission
+            
+            // Send notification for submission
             sendNotification(authorUsername, 
-                "Book Submitted: " + title,
-                "Your book '" + title + "' has been submitted and is pending review.",
-                "BOOK_PENDING",
+                "📝 Book Submitted: " + title,
+                "Your book '" + title + "' has been submitted and is pending review by a librarian.",
+                "BOOK_SUBMITTED",
                 submission.getSubmissionId());
 
             return SubmissionResult.success(
@@ -197,8 +207,38 @@ public class AuthorPortalService {
         }
     }
 
+    private boolean isValidCoverImage(String filePath) {
+        String lower = filePath.toLowerCase();
+        // Check extension
+        if (!lower.endsWith(".jpg") && !lower.endsWith(".jpeg") && !lower.endsWith(".png")) {
+            return false;
+        }
+        // Check file size (5MB limit)
+        try {
+            java.io.File file = new java.io.File(filePath);
+            if (file.exists() && file.length() > 5 * 1024 * 1024) {
+                return false;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        return true;
+    }
+
     public List<BookSubmission> getAuthorSubmissions(String authorUsername) {
+        submissionRepository.refreshFromFile();
         return submissionRepository.findByAuthor(authorUsername);
+    }
+
+    // ========== PROFILE MANAGEMENT ==========
+    public boolean updateProfile(AuthorAccount author) {
+        try {
+            authorRepository.update(author);
+            return true;
+        } catch (Exception e) {
+            System.err.println("❌ Task2: Error updating profile: " + e.getMessage());
+            return false;
+        }
     }
 
     // ========== BOOK EDITING & DELETION ==========
@@ -222,17 +262,6 @@ public class AuthorPortalService {
         }
     }
 
-    // ========== PROFILE MANAGEMENT ==========
-    public AuthorAccount updateProfile(AuthorAccount author) {
-        try {
-            authorRepository.update(author);
-            return authorRepository.findByUsername(author.getUsername()).orElse(author);
-        } catch (Exception e) {
-            System.err.println("❌ Task2: Error updating profile: " + e.getMessage());
-            return null;
-        }
-    }
-
     // ========== NOTIFICATION METHODS ==========
     public void sendNotification(String authorUsername, String title, String message, 
                                   String type, String relatedSubmissionId) {
@@ -242,10 +271,6 @@ public class AuthorPortalService {
 
     public List<Notification> getNotifications(String authorUsername) {
         return notificationRepository.findByAuthor(authorUsername);
-    }
-
-    public List<Notification> getUnreadNotifications(String authorUsername) {
-        return notificationRepository.findUnreadByAuthor(authorUsername);
     }
 
     public int getUnreadNotificationCount(String authorUsername) {
@@ -258,6 +283,19 @@ public class AuthorPortalService {
 
     public void markAllNotificationsAsRead(String authorUsername) {
         notificationRepository.markAllAsRead(authorUsername);
+    }
+
+    // ========== NOTIFICATION DELETE METHODS ==========
+    public void deleteNotification(String notificationId) {
+        notificationRepository.delete(notificationId);
+    }
+    
+    public void deleteAllNotifications(String authorUsername) {
+        notificationRepository.deleteAllByAuthor(authorUsername);
+    }
+    
+    public void deleteReadNotifications(String authorUsername) {
+        notificationRepository.deleteReadByAuthor(authorUsername);
     }
 
     // ========== VALIDATION HELPER METHODS ==========

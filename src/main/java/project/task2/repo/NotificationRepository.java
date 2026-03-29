@@ -1,135 +1,161 @@
 package project.task2.repo;
 
 import project.task2.model.Notification;
-import project.task2.database.DatabaseConnection;
 
-import java.sql.*;
-import java.time.LocalDateTime;
+import java.io.*;
+import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class NotificationRepository {
-    private final Connection conn;
+    private static final String NOTIFICATIONS_FILE = "data/notifications.txt";
+    private final Map<String, Notification> notificationsById = new ConcurrentHashMap<>();
 
     public NotificationRepository() {
-        this.conn = DatabaseConnection.getConnection();
+        createDataDirectory();
+        loadFromFile();
+    }
+
+    private void createDataDirectory() {
+        try {
+            Path dataDir = Paths.get("data");
+            if (!Files.exists(dataDir)) {
+                Files.createDirectories(dataDir);
+            }
+        } catch (IOException e) {
+            System.err.println("Error creating data directory: " + e.getMessage());
+        }
+    }
+
+    private void loadFromFile() {
+        try {
+            Path filePath = Paths.get(NOTIFICATIONS_FILE);
+            if (Files.exists(filePath)) {
+                List<String> lines = Files.readAllLines(filePath);
+                notificationsById.clear();
+                for (String line : lines) {
+                    if (!line.trim().isEmpty()) {
+                        Notification notification = Notification.fromString(line);
+                        if (notification != null) {
+                            notificationsById.put(notification.getNotificationId(), notification);
+                        }
+                    }
+                }
+                System.out.println("Loaded " + notificationsById.size() + " notifications from file");
+            }
+        } catch (IOException e) {
+            System.err.println("Error loading notifications: " + e.getMessage());
+        }
+    }
+
+    private void saveToFile() {
+        try {
+            List<String> lines = new ArrayList<>();
+            for (Notification notification : notificationsById.values()) {
+                lines.add(notification.toString());
+            }
+            
+            Path filePath = Paths.get(NOTIFICATIONS_FILE);
+            Files.write(filePath, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            
+            System.out.println("Saved " + lines.size() + " notifications to file");
+        } catch (IOException e) {
+            System.err.println("Error saving notifications: " + e.getMessage());
+        }
     }
 
     public void save(Notification notification) {
-        String sql = """
-            INSERT OR REPLACE INTO notifications 
-            (notification_id, author_username, title, message, type, is_read, created_at, related_submission_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """;
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, notification.getNotificationId());
-            pstmt.setString(2, notification.getAuthorUsername());
-            pstmt.setString(3, notification.getTitle());
-            pstmt.setString(4, notification.getMessage());
-            pstmt.setString(5, notification.getType());
-            pstmt.setInt(6, notification.isRead() ? 1 : 0);
-            pstmt.setString(7, notification.getCreatedAt().toString());
-            pstmt.setString(8, notification.getRelatedSubmissionId());
-            
-            pstmt.executeUpdate();
-            
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error saving notification: " + e.getMessage());
-        }
+        notificationsById.put(notification.getNotificationId(), notification);
+        saveToFile();
     }
 
     public List<Notification> findByAuthor(String authorUsername) {
-        List<Notification> notifications = new ArrayList<>();
-        String sql = "SELECT * FROM notifications WHERE author_username = ? ORDER BY created_at DESC";
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, authorUsername);
-            ResultSet rs = pstmt.executeQuery();
-            
-            while (rs.next()) {
-                notifications.add(mapResultSetToNotification(rs));
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error finding notifications: " + e.getMessage());
-        }
-        return notifications;
+        return notificationsById.values().stream()
+                .filter(n -> n.getAuthorUsername().equals(authorUsername))
+                .sorted((a, b) -> {
+                    // Priority notifications come first, then by date (newest first)
+                    if (a.isPriority() && !b.isPriority()) return -1;
+                    if (!a.isPriority() && b.isPriority()) return 1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
+                .collect(Collectors.toList());
     }
 
     public List<Notification> findUnreadByAuthor(String authorUsername) {
-        List<Notification> notifications = new ArrayList<>();
-        String sql = "SELECT * FROM notifications WHERE author_username = ? AND is_read = 0 ORDER BY created_at DESC";
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, authorUsername);
-            ResultSet rs = pstmt.executeQuery();
-            
-            while (rs.next()) {
-                notifications.add(mapResultSetToNotification(rs));
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error finding unread notifications: " + e.getMessage());
-        }
-        return notifications;
+        return notificationsById.values().stream()
+                .filter(n -> n.getAuthorUsername().equals(authorUsername) && !n.isRead())
+                .sorted((a, b) -> {
+                    if (a.isPriority() && !b.isPriority()) return -1;
+                    if (!a.isPriority() && b.isPriority()) return 1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
+                .collect(Collectors.toList());
     }
 
     public void markAsRead(String notificationId) {
-        String sql = "UPDATE notifications SET is_read = 1 WHERE notification_id = ?";
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, notificationId);
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error marking notification as read: " + e.getMessage());
+        Notification notification = notificationsById.get(notificationId);
+        if (notification != null) {
+            notification.markAsRead();
+            saveToFile();
         }
     }
 
     public void markAllAsRead(String authorUsername) {
-        String sql = "UPDATE notifications SET is_read = 1 WHERE author_username = ?";
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, authorUsername);
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error marking all notifications as read: " + e.getMessage());
+        for (Notification notification : notificationsById.values()) {
+            if (notification.getAuthorUsername().equals(authorUsername) && !notification.isRead()) {
+                notification.markAsRead();
+            }
+        }
+        saveToFile();
+    }
+    
+    // NEW: Delete a single notification
+    public void delete(String notificationId) {
+        Notification removed = notificationsById.remove(notificationId);
+        if (removed != null) {
+            saveToFile();
+            System.out.println("🗑️ Deleted notification: " + notificationId);
         }
     }
-
-    public void delete(String notificationId) {
-        String sql = "DELETE FROM notifications WHERE notification_id = ?";
+    
+    // NEW: Delete all notifications for an author
+    public void deleteAllByAuthor(String authorUsername) {
+        List<String> toDelete = notificationsById.values().stream()
+                .filter(n -> n.getAuthorUsername().equals(authorUsername))
+                .map(Notification::getNotificationId)
+                .collect(Collectors.toList());
         
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, notificationId);
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error deleting notification: " + e.getMessage());
+        for (String id : toDelete) {
+            notificationsById.remove(id);
+        }
+        
+        if (!toDelete.isEmpty()) {
+            saveToFile();
+            System.out.println("🗑️ Deleted " + toDelete.size() + " notifications for " + authorUsername);
+        }
+    }
+    
+    // NEW: Delete read notifications for an author
+    public void deleteReadByAuthor(String authorUsername) {
+        List<String> toDelete = notificationsById.values().stream()
+                .filter(n -> n.getAuthorUsername().equals(authorUsername) && n.isRead())
+                .map(Notification::getNotificationId)
+                .collect(Collectors.toList());
+        
+        for (String id : toDelete) {
+            notificationsById.remove(id);
+        }
+        
+        if (!toDelete.isEmpty()) {
+            saveToFile();
+            System.out.println("🗑️ Deleted " + toDelete.size() + " read notifications for " + authorUsername);
         }
     }
 
     public int getUnreadCount(String authorUsername) {
-        String sql = "SELECT COUNT(*) FROM notifications WHERE author_username = ? AND is_read = 0";
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, authorUsername);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return rs.getInt(1);
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error getting unread count: " + e.getMessage());
-        }
-        return 0;
-    }
-
-    private Notification mapResultSetToNotification(ResultSet rs) throws SQLException {
-        return new Notification(
-            rs.getString("notification_id"),
-            rs.getString("author_username"),
-            rs.getString("title"),
-            rs.getString("message"),
-            rs.getString("type"),
-            rs.getInt("is_read") == 1,
-            LocalDateTime.parse(rs.getString("created_at")),
-            rs.getString("related_submission_id")
-        );
+        return (int) notificationsById.values().stream()
+                .filter(n -> n.getAuthorUsername().equals(authorUsername) && !n.isRead())
+                .count();
     }
 }

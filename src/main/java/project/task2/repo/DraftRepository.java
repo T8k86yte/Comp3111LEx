@@ -1,73 +1,83 @@
 package project.task2.repo;
 
-import project.task2.database.DatabaseConnection;
-
-import java.sql.*;
-import java.time.LocalDateTime;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class DraftRepository {
-    private final Connection conn;
+    private static final String DRAFTS_FILE = "data/drafts.txt";
+    private final Map<String, String> draftsByAuthor = new ConcurrentHashMap<>();
 
     public DraftRepository() {
-        this.conn = DatabaseConnection.getConnection();
+        createDataDirectory();
+        loadFromFile();
+    }
+
+    private void createDataDirectory() {
+        try {
+            Files.createDirectories(Paths.get("data"));
+        } catch (IOException e) {
+            System.err.println("Error creating data directory: " + e.getMessage());
+        }
+    }
+
+    private void loadFromFile() {
+        try {
+            Path filePath = Paths.get(DRAFTS_FILE);
+            if (Files.exists(filePath)) {
+                List<String> lines = Files.readAllLines(filePath);
+                for (String line : lines) {
+                    if (!line.trim().isEmpty()) {
+                        String[] parts = line.split("\\|", 2);
+                        if (parts.length == 2) {
+                            draftsByAuthor.put(parts[0], parts[1]);
+                        }
+                    }
+                }
+                System.out.println("Loaded " + draftsByAuthor.size() + " drafts from file");
+            }
+        } catch (IOException e) {
+            System.err.println("Error loading drafts: " + e.getMessage());
+        }
+    }
+
+    private void saveToFile() {
+        try {
+            List<String> lines = new ArrayList<>();
+            for (Map.Entry<String, String> entry : draftsByAuthor.entrySet()) {
+                lines.add(entry.getKey() + "|" + entry.getValue());
+            }
+            
+            Path filePath = Paths.get(DRAFTS_FILE);
+            Files.write(filePath, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            
+            System.out.println("Saved " + lines.size() + " drafts to file");
+        } catch (IOException e) {
+            System.err.println("Error saving drafts: " + e.getMessage());
+        }
     }
 
     public void saveDraft(String authorUsername, String draftData) {
-        String sql = """
-            INSERT OR REPLACE INTO drafts (author_username, draft_data, last_updated)
-            VALUES (?, ?, ?)
-            """;
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, authorUsername);
-            pstmt.setString(2, draftData);
-            pstmt.setString(3, LocalDateTime.now().toString());
-            
-            pstmt.executeUpdate();
-            
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error saving draft: " + e.getMessage());
+        if (draftData == null || draftData.trim().isEmpty() || 
+            draftData.matches("\\|+")) {
+            draftsByAuthor.remove(authorUsername);
+        } else {
+            draftsByAuthor.put(authorUsername, draftData);
         }
+        saveToFile();
     }
 
     public String loadDraft(String authorUsername) {
-        String sql = "SELECT draft_data FROM drafts WHERE author_username = ?";
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, authorUsername);
-            ResultSet rs = pstmt.executeQuery();
-            
-            if (rs.next()) {
-                return rs.getString("draft_data");
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error loading draft: " + e.getMessage());
-        }
-        return null;
+        return draftsByAuthor.get(authorUsername);
     }
 
     public boolean hasDraft(String authorUsername) {
-        String sql = "SELECT 1 FROM drafts WHERE author_username = ?";
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, authorUsername);
-            ResultSet rs = pstmt.executeQuery();
-            return rs.next();
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error checking draft: " + e.getMessage());
-        }
-        return false;
+        return draftsByAuthor.containsKey(authorUsername);
     }
 
     public void deleteDraft(String authorUsername) {
-        String sql = "DELETE FROM drafts WHERE author_username = ?";
-        
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, authorUsername);
-            pstmt.executeUpdate();
-            
-        } catch (SQLException e) {
-            System.err.println("❌ Task2: Error deleting draft: " + e.getMessage());
-        }
+        draftsByAuthor.remove(authorUsername);
+        saveToFile();
     }
 }

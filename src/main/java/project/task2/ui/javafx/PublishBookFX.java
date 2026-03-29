@@ -4,11 +4,15 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
+import javafx.scene.input.MouseEvent;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import project.task2.model.AuthorAccount;
 import project.task2.service.AuthorPortalService;
+import project.task2.utils.SessionManager;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -16,13 +20,14 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.Arrays;
+import java.util.function.Consumer;
 
 public class PublishBookFX {
     private AuthorPortalService authorService;
     private AuthorAccount currentAuthor;
     private Stage stage;
+    private Consumer<Void> onBookPublished;
     
-    // Form fields
     private TextField titleField;
     private List<CheckBox> genreCheckBoxes;
     private TextArea descArea;
@@ -31,36 +36,45 @@ public class PublishBookFX {
     private Label messageLabel;
     private Label draftIndicator;
     
-    // Preview components
+    private TextField coverImageField;
+    private Label selectedCoverLabel;
+    private ImageView coverPreview;
+    private Image originalCoverImage;
+    private Button browseCoverBtn;
+    private Button removeCoverBtn;
+    
     private VBox previewCard;
     private Label previewTitle;
     private Label previewAuthor;
     private Label previewGenres;
     private Label previewDescription;
     private Label previewFile;
+    private ImageView previewCover;
     
-    // Draft auto-save
     private Timer autoSaveTimer;
     private boolean hasUnsavedChanges = false;
-    private static final int AUTO_SAVE_DELAY = 5000; // 5 seconds
-    private boolean isLoadingDraft = false; // Prevent auto-save while loading
+    private static final int AUTO_SAVE_DELAY = 5000;
+    private boolean isLoadingDraft = false;
 
-    public PublishBookFX(AuthorAccount author) {
+    public PublishBookFX(AuthorAccount author, Consumer<Void> onBookPublished) {
         this.currentAuthor = author;
         this.authorService = new AuthorPortalService();
         this.stage = new Stage();
         this.genreCheckBoxes = new ArrayList<>();
+        this.onBookPublished = onBookPublished;
+    }
+
+    public Stage getStage() {
+        return stage;
     }
 
     public void show() {
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
 
-        // Top bar - removed preview button
         HBox topBar = createTopBar();
         root.setTop(topBar);
 
-        // Center content
         ScrollPane scrollPane = new ScrollPane();
         scrollPane.setFitToWidth(true);
         scrollPane.setStyle("-fx-background-color: transparent;");
@@ -69,19 +83,13 @@ public class PublishBookFX {
         centerContent.setAlignment(Pos.TOP_CENTER);
         centerContent.setPadding(new Insets(30));
 
-        // Guidelines card
         centerContent.getChildren().add(createGuidelinesCard());
+        centerContent.getChildren().add(createFormCard());
 
-        // Form card
-        VBox formCard = createFormCard();
-        centerContent.getChildren().add(formCard);
-
-        // Preview card (initially hidden)
         previewCard = createPreviewCard();
         previewCard.setVisible(false);
         centerContent.getChildren().add(previewCard);
 
-        // Draft indicator
         draftIndicator = new Label("📝 Draft auto-saved");
         draftIndicator.getStyleClass().addAll("status", "status-approved");
         draftIndicator.setVisible(false);
@@ -90,26 +98,25 @@ public class PublishBookFX {
         scrollPane.setContent(centerContent);
         root.setCenter(scrollPane);
 
-        // Load any existing draft
         loadDraft();
-
-        // Setup auto-save
         setupAutoSave();
 
-        Scene scene = new Scene(root, 850, 800);
+        Scene scene = new Scene(root, 900, 900);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         stage.setTitle("Publish New Book - " + currentAuthor.getFullName());
         stage.setScene(scene);
         stage.show();
 
-        // Cleanup on close
         stage.setOnCloseRequest(e -> {
             if (autoSaveTimer != null) {
                 autoSaveTimer.cancel();
             }
-            saveDraft(); // Save one last time before closing
+            saveDraft();
         });
+        
+        // Save session for crash recovery
+        SessionManager.setCurrentScreen("PUBLISH_BOOK", null);
     }
 
     private HBox createTopBar() {
@@ -124,7 +131,6 @@ public class PublishBookFX {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        // Removed preview button - only close button remains
         Button closeBtn = new Button("✕");
         closeBtn.getStyleClass().addAll("button", "secondary-btn");
         closeBtn.setOnAction(e -> {
@@ -139,7 +145,7 @@ public class PublishBookFX {
     private VBox createGuidelinesCard() {
         VBox infoCard = new VBox(10);
         infoCard.getStyleClass().add("card");
-        infoCard.setMaxWidth(700);
+        infoCard.setMaxWidth(800);
         infoCard.setPadding(new Insets(20));
 
         Label infoTitle = new Label("📋 Book Submission Guidelines");
@@ -148,23 +154,27 @@ public class PublishBookFX {
         Label info1 = new Label("• Fill in all required fields marked with *");
         Label info2 = new Label("• You can select multiple genres");
         Label info3 = new Label("• Book file must be in PDF, TXT, DOC, or DOCX format");
-        Label info4 = new Label("• Your book will be reviewed by a librarian");
-        Label info5 = new Label("• Form auto-saves every 5 seconds - you can close and return later");
+        Label info4 = new Label("• Optional: Upload a cover image (JPG, PNG - max 5MB)");
+        Label info5 = new Label("• Click on cover image to magnify (full resolution)");
+        Label info6 = new Label("• Your book will be reviewed by a librarian");
+        Label info7 = new Label("• Form auto-saves every 5 seconds - you can close and return later");
 
         info1.getStyleClass().add("muted");
         info2.getStyleClass().add("muted");
         info3.getStyleClass().add("muted");
         info4.getStyleClass().add("muted");
         info5.getStyleClass().add("muted");
+        info6.getStyleClass().add("muted");
+        info7.getStyleClass().add("muted");
 
-        infoCard.getChildren().addAll(infoTitle, info1, info2, info3, info4, info5);
+        infoCard.getChildren().addAll(infoTitle, info1, info2, info3, info4, info5, info6, info7);
         return infoCard;
     }
 
     private VBox createFormCard() {
         VBox formCard = new VBox(20);
         formCard.getStyleClass().add("card");
-        formCard.setMaxWidth(700);
+        formCard.setMaxWidth(800);
         formCard.setPadding(new Insets(30));
 
         Label formTitle = new Label("Book Details");
@@ -179,6 +189,7 @@ public class PublishBookFX {
         titleField.getStyleClass().add("text-field");
         titleField.textProperty().addListener((obs, old, newVal) -> {
             if (!isLoadingDraft) hasUnsavedChanges = true;
+            saveScreenState();
         });
         titleBox.getChildren().addAll(titleLabel2, titleField);
 
@@ -210,6 +221,7 @@ public class PublishBookFX {
             checkBox.getStyleClass().add("muted");
             checkBox.setOnAction(e -> {
                 if (!isLoadingDraft) hasUnsavedChanges = true;
+                saveScreenState();
             });
             genreCheckBoxes.add(checkBox);
             genreFlowPane.getChildren().add(checkBox);
@@ -228,10 +240,11 @@ public class PublishBookFX {
         descArea.getStyleClass().add("text-area");
         descArea.textProperty().addListener((obs, old, newVal) -> {
             if (!isLoadingDraft) hasUnsavedChanges = true;
+            saveScreenState();
         });
         descBox.getChildren().addAll(descLabel, descArea);
 
-        // File upload field
+        // Book file upload
         VBox fileBox = new VBox(5);
         Label fileLabel = new Label("Book File *");
         fileLabel.getStyleClass().add("muted");
@@ -253,6 +266,48 @@ public class PublishBookFX {
         selectedFileLabel = new Label();
         selectedFileLabel.getStyleClass().add("status-approved");
         selectedFileLabel.setVisible(false);
+
+        // Cover image upload with click-to-magnify
+        VBox coverBox = new VBox(5);
+        Label coverLabel = new Label("Book Cover Image (Optional - Click to magnify)");
+        coverLabel.getStyleClass().add("muted");
+        
+        HBox coverInputBox = new HBox(10);
+        coverImageField = new TextField();
+        coverImageField.setPromptText("Choose a cover image (JPG, PNG, max 5MB)");
+        coverImageField.getStyleClass().add("text-field");
+        coverImageField.setEditable(false);
+        HBox.setHgrow(coverImageField, Priority.ALWAYS);
+
+        browseCoverBtn = new Button("Browse");
+        browseCoverBtn.getStyleClass().addAll("button", "secondary-btn");
+        browseCoverBtn.setPrefWidth(100);
+
+        removeCoverBtn = new Button("Remove");
+        removeCoverBtn.getStyleClass().addAll("button", "danger-btn");
+        removeCoverBtn.setPrefWidth(80);
+        removeCoverBtn.setDisable(true);
+        
+        coverInputBox.getChildren().addAll(coverImageField, browseCoverBtn, removeCoverBtn);
+        
+        // Cover preview with click handler
+        HBox previewBox = new HBox(10);
+        previewBox.setAlignment(Pos.CENTER_LEFT);
+        coverPreview = new ImageView();
+        coverPreview.setFitWidth(80);
+        coverPreview.setFitHeight(100);
+        coverPreview.setPreserveRatio(true);
+        coverPreview.setStyle("-fx-border-color: #e2e8f0; -fx-border-radius: 4px; -fx-cursor: hand;");
+        
+        coverPreview.setOnMouseClicked(this::showMagnifiedImage);
+        
+        selectedCoverLabel = new Label();
+        selectedCoverLabel.getStyleClass().add("status-approved");
+        selectedCoverLabel.setVisible(false);
+        
+        previewBox.getChildren().addAll(coverPreview, selectedCoverLabel);
+        
+        coverBox.getChildren().addAll(coverLabel, coverInputBox, previewBox);
 
         messageLabel = new Label();
         messageLabel.setWrapText(true);
@@ -280,10 +335,10 @@ public class PublishBookFX {
         actionBox.getChildren().addAll(previewBtn, submitBtn, clearDraftBtn);
 
         formCard.getChildren().addAll(formTitle, titleBox, authorBox, genreBox, 
-                                      descBox, fileBox, selectedFileLabel, 
-                                      messageLabel, actionBox);
+                                      descBox, fileBox, selectedFileLabel,
+                                      coverBox, messageLabel, actionBox);
 
-        // Browse button action
+        // Browse button action for book file
         browseBtn.setOnAction(e -> {
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle("Select Book File");
@@ -300,6 +355,7 @@ public class PublishBookFX {
                 String filePath = selectedFile.getAbsolutePath();
                 fileField.setText(filePath);
                 hasUnsavedChanges = true;
+                saveScreenState();
                 
                 String fileName = selectedFile.getName();
                 if (isValidFileType(fileName)) {
@@ -314,8 +370,67 @@ public class PublishBookFX {
                 }
             }
         });
+        
+        // Browse button action for cover image
+        browseCoverBtn.setOnAction(e -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Select Cover Image");
+            
+            fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Image Files", "*.jpg", "*.jpeg", "*.png"),
+                new FileChooser.ExtensionFilter("All Files", "*.*")
+            );
 
-        // Submit button action
+            File selectedFile = fileChooser.showOpenDialog(stage);
+            if (selectedFile != null) {
+                String filePath = selectedFile.getAbsolutePath();
+                String fileName = selectedFile.getName();
+                
+                long fileSize = selectedFile.length();
+                if (fileSize > 5 * 1024 * 1024) {
+                    showMessage(messageLabel, "❌ Image too large. Maximum 5MB allowed.", "status-rejected");
+                    return;
+                }
+                
+                String ext = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
+                if (!ext.equals("jpg") && !ext.equals("jpeg") && !ext.equals("png")) {
+                    showMessage(messageLabel, "❌ Invalid image format. Allowed: JPG, PNG", "status-rejected");
+                    return;
+                }
+                
+                coverImageField.setText(filePath);
+                hasUnsavedChanges = true;
+                saveScreenState();
+                removeCoverBtn.setDisable(false);
+                
+                try {
+                    originalCoverImage = new Image(new File(filePath).toURI().toString(), true);
+                    Image previewImage = new Image(new File(filePath).toURI().toString(), 80, 100, true, true);
+                    coverPreview.setImage(previewImage);
+                    coverPreview.setVisible(true);
+                    selectedCoverLabel.setText("✅ " + fileName);
+                    selectedCoverLabel.setVisible(true);
+                } catch (Exception ex) {
+                    coverPreview.setVisible(false);
+                    selectedCoverLabel.setText("⚠️ Could not preview image");
+                    selectedCoverLabel.getStyleClass().setAll("status", "status-pending");
+                    selectedCoverLabel.setVisible(true);
+                }
+            }
+        });
+        
+        // Remove cover button action
+        removeCoverBtn.setOnAction(e -> {
+            coverImageField.clear();
+            coverPreview.setImage(null);
+            originalCoverImage = null;
+            coverPreview.setVisible(false);
+            selectedCoverLabel.setVisible(false);
+            removeCoverBtn.setDisable(true);
+            hasUnsavedChanges = true;
+            saveScreenState();
+        });
+
         submitBtn.setOnAction(e -> {
             if (validateForm()) {
                 submitBook();
@@ -325,40 +440,245 @@ public class PublishBookFX {
         return formCard;
     }
 
+    private void saveScreenState() {
+        String title = titleField.getText().trim();
+        List<String> selectedGenres = getSelectedGenres();
+        String description = descArea.getText().trim();
+        String filePath = fileField.getText().trim();
+        String coverPath = coverImageField.getText().trim();
+        
+        String state = String.join("|",
+            title,
+            String.join(",", selectedGenres),
+            description,
+            filePath,
+            coverPath
+        );
+        
+        SessionManager.saveScreenState("PUBLISH_BOOK", state);
+    }
+
+    private void showMagnifiedImage(MouseEvent event) {
+        if (originalCoverImage == null) return;
+        
+        Stage magnifyStage = new Stage();
+        magnifyStage.setTitle("Cover Image - Full Resolution");
+        
+        BorderPane root = new BorderPane();
+        root.setStyle("-fx-background-color: #1e293b;");
+        
+        ImageView largeImageView = new ImageView(originalCoverImage);
+        largeImageView.setPreserveRatio(true);
+        
+        double maxWidth = 600;
+        double maxHeight = 700;
+        double imgWidth = originalCoverImage.getWidth();
+        double imgHeight = originalCoverImage.getHeight();
+        
+        if (imgWidth > maxWidth || imgHeight > maxHeight) {
+            double scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
+            largeImageView.setFitWidth(imgWidth * scale);
+            largeImageView.setFitHeight(imgHeight * scale);
+        } else {
+            largeImageView.setFitWidth(imgWidth);
+            largeImageView.setFitHeight(imgHeight);
+        }
+        
+        ScrollPane scrollPane = new ScrollPane();
+        scrollPane.setContent(largeImageView);
+        scrollPane.setPannable(true);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        HBox zoomControls = new HBox(10);
+        zoomControls.setAlignment(Pos.CENTER);
+        zoomControls.setPadding(new Insets(10));
+        
+        Button zoomInBtn = new Button("🔍 +");
+        zoomInBtn.getStyleClass().addAll("button", "secondary-btn");
+        zoomInBtn.setOnAction(e -> {
+            largeImageView.setFitWidth(largeImageView.getFitWidth() * 1.2);
+            largeImageView.setFitHeight(largeImageView.getFitHeight() * 1.2);
+        });
+        
+        Button zoomOutBtn = new Button("🔍 -");
+        zoomOutBtn.getStyleClass().addAll("button", "secondary-btn");
+        zoomOutBtn.setOnAction(e -> {
+            largeImageView.setFitWidth(largeImageView.getFitWidth() / 1.2);
+            largeImageView.setFitHeight(largeImageView.getFitHeight() / 1.2);
+        });
+        
+        Button resetZoomBtn = new Button("⟳ Reset");
+        resetZoomBtn.getStyleClass().addAll("button", "secondary-btn");
+        resetZoomBtn.setOnAction(e -> {
+            if (imgWidth > maxWidth || imgHeight > maxHeight) {
+                double scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
+                largeImageView.setFitWidth(imgWidth * scale);
+                largeImageView.setFitHeight(imgHeight * scale);
+            } else {
+                largeImageView.setFitWidth(imgWidth);
+                largeImageView.setFitHeight(imgHeight);
+            }
+        });
+        
+        Button closeBtn = new Button("✕ Close");
+        closeBtn.getStyleClass().addAll("button", "primary-btn");
+        closeBtn.setOnAction(e -> magnifyStage.close());
+        
+        zoomControls.getChildren().addAll(zoomInBtn, zoomOutBtn, resetZoomBtn, closeBtn);
+        
+        root.setCenter(scrollPane);
+        root.setBottom(zoomControls);
+        
+        Scene scene = new Scene(root, 700, 750);
+        scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
+        
+        magnifyStage.setScene(scene);
+        magnifyStage.show();
+    }
+
     private VBox createPreviewCard() {
         VBox card = new VBox(15);
         card.getStyleClass().add("card");
-        card.setMaxWidth(700);
+        card.setMaxWidth(800);
         card.setPadding(new Insets(20));
 
         Label previewTitle2 = new Label("📖 Book Preview");
         previewTitle2.getStyleClass().add("card-title");
 
+        HBox previewLayout = new HBox(20);
+        previewLayout.setAlignment(Pos.TOP_LEFT);
+        
+        VBox coverBox = new VBox(5);
+        coverBox.setAlignment(Pos.CENTER);
+        previewCover = new ImageView();
+        previewCover.setFitWidth(100);
+        previewCover.setFitHeight(140);
+        previewCover.setPreserveRatio(true);
+        previewCover.setStyle("-fx-border-color: #e2e8f0; -fx-border-radius: 4px; -fx-cursor: hand;");
+        
+        previewCover.setOnMouseClicked(this::showMagnifiedFromPreview);
+        
+        Label noCoverLabel = new Label("No cover\nimage");
+        noCoverLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #94a3b8; -fx-alignment: center;");
+        noCoverLabel.setAlignment(Pos.CENTER);
+        StackPane coverStack = new StackPane(previewCover, noCoverLabel);
+        previewCover.visibleProperty().addListener((obs, old, val) -> {
+            noCoverLabel.setVisible(!val);
+        });
+        noCoverLabel.setVisible(true);
+        coverBox.getChildren().add(coverStack);
+        
+        VBox detailsBox = new VBox(10);
+        detailsBox.setAlignment(Pos.TOP_LEFT);
+        
         previewTitle = new Label();
-        previewTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
-
+        previewTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #0f172a;");
+        
         previewAuthor = new Label();
         previewAuthor.getStyleClass().add("muted");
-
+        
         previewGenres = new Label();
         previewGenres.getStyleClass().add("muted");
-
+        
         previewDescription = new Label();
         previewDescription.setWrapText(true);
-        previewDescription.setStyle("-fx-padding: 10 0 0 0;");
-
+        previewDescription.setStyle("-fx-padding: 10 0 0 0; -fx-text-fill: #334155;");
+        
         previewFile = new Label();
         previewFile.getStyleClass().add("muted");
-
-        // Close preview button
+        
+        detailsBox.getChildren().addAll(previewTitle, previewAuthor, previewGenres, previewDescription, previewFile);
+        previewLayout.getChildren().addAll(coverBox, detailsBox);
+        
         Button closePreviewBtn = new Button("Hide Preview");
         closePreviewBtn.getStyleClass().addAll("button", "secondary-btn");
         closePreviewBtn.setMaxWidth(200);
         closePreviewBtn.setOnAction(e -> previewCard.setVisible(false));
 
-        card.getChildren().addAll(previewTitle2, previewTitle, previewAuthor, 
-                                  previewGenres, previewDescription, previewFile, closePreviewBtn);
+        card.getChildren().addAll(previewTitle2, previewLayout, closePreviewBtn);
         return card;
+    }
+    
+    private void showMagnifiedFromPreview(MouseEvent event) {
+        if (originalCoverImage == null) return;
+        
+        Stage magnifyStage = new Stage();
+        magnifyStage.setTitle("Cover Image - Full Resolution");
+        
+        BorderPane root = new BorderPane();
+        root.setStyle("-fx-background-color: #1e293b;");
+        
+        ImageView largeImageView = new ImageView(originalCoverImage);
+        largeImageView.setPreserveRatio(true);
+        
+        double maxWidth = 600;
+        double maxHeight = 700;
+        double imgWidth = originalCoverImage.getWidth();
+        double imgHeight = originalCoverImage.getHeight();
+        
+        if (imgWidth > maxWidth || imgHeight > maxHeight) {
+            double scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
+            largeImageView.setFitWidth(imgWidth * scale);
+            largeImageView.setFitHeight(imgHeight * scale);
+        } else {
+            largeImageView.setFitWidth(imgWidth);
+            largeImageView.setFitHeight(imgHeight);
+        }
+        
+        ScrollPane scrollPane = new ScrollPane();
+        scrollPane.setContent(largeImageView);
+        scrollPane.setPannable(true);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        HBox zoomControls = new HBox(10);
+        zoomControls.setAlignment(Pos.CENTER);
+        zoomControls.setPadding(new Insets(10));
+        
+        Button zoomInBtn = new Button("🔍 +");
+        zoomInBtn.getStyleClass().addAll("button", "secondary-btn");
+        zoomInBtn.setOnAction(e -> {
+            largeImageView.setFitWidth(largeImageView.getFitWidth() * 1.2);
+            largeImageView.setFitHeight(largeImageView.getFitHeight() * 1.2);
+        });
+        
+        Button zoomOutBtn = new Button("🔍 -");
+        zoomOutBtn.getStyleClass().addAll("button", "secondary-btn");
+        zoomOutBtn.setOnAction(e -> {
+            largeImageView.setFitWidth(largeImageView.getFitWidth() / 1.2);
+            largeImageView.setFitHeight(largeImageView.getFitHeight() / 1.2);
+        });
+        
+        Button resetZoomBtn = new Button("⟳ Reset");
+        resetZoomBtn.getStyleClass().addAll("button", "secondary-btn");
+        resetZoomBtn.setOnAction(e -> {
+            if (imgWidth > maxWidth || imgHeight > maxHeight) {
+                double scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
+                largeImageView.setFitWidth(imgWidth * scale);
+                largeImageView.setFitHeight(imgHeight * scale);
+            } else {
+                largeImageView.setFitWidth(imgWidth);
+                largeImageView.setFitHeight(imgHeight);
+            }
+        });
+        
+        Button closeBtn = new Button("✕ Close");
+        closeBtn.getStyleClass().addAll("button", "primary-btn");
+        closeBtn.setOnAction(e -> magnifyStage.close());
+        
+        zoomControls.getChildren().addAll(zoomInBtn, zoomOutBtn, resetZoomBtn, closeBtn);
+        
+        root.setCenter(scrollPane);
+        root.setBottom(zoomControls);
+        
+        Scene scene = new Scene(root, 700, 750);
+        scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
+        
+        magnifyStage.setScene(scene);
+        magnifyStage.show();
     }
 
     private void togglePreview() {
@@ -368,10 +688,9 @@ public class PublishBookFX {
             updatePreview();
             previewCard.setVisible(true);
             
-            // Scroll to preview
             ScrollPane scrollPane = (ScrollPane) previewCard.getScene().lookup(".scroll-pane");
             if (scrollPane != null) {
-                scrollPane.setVvalue(1.0); // Scroll to bottom where preview is
+                scrollPane.setVvalue(1.0);
             }
         }
     }
@@ -381,6 +700,7 @@ public class PublishBookFX {
         List<String> selectedGenres = getSelectedGenres();
         String description = descArea.getText().trim();
         String file = fileField.getText().trim();
+        String coverPath = coverImageField.getText().trim();
 
         previewTitle.setText(title.isEmpty() ? "[No title provided]" : "📌 " + title);
         previewAuthor.setText("✍️ By: " + currentAuthor.getFullName());
@@ -388,6 +708,14 @@ public class PublishBookFX {
                               String.join(", ", selectedGenres)));
         previewDescription.setText("📝 " + (description.isEmpty() ? "[No description provided]" : description));
         previewFile.setText("📁 File: " + (file.isEmpty() ? "No file selected" : file));
+        
+        if (originalCoverImage != null) {
+            Image previewImg = new Image(originalCoverImage.getUrl(), 100, 140, true, true);
+            previewCover.setImage(previewImg);
+            previewCover.setVisible(true);
+        } else {
+            previewCover.setVisible(false);
+        }
     }
 
     private boolean validateForm() {
@@ -420,6 +748,7 @@ public class PublishBookFX {
         List<String> selectedGenres = getSelectedGenres();
         String description = descArea.getText().trim();
         String filePath = fileField.getText().trim();
+        String coverPath = coverImageField.getText().trim();
 
         AuthorPortalService.SubmissionResult result = authorService.submitBookForApproval(
             currentAuthor.getUsername(),
@@ -427,21 +756,38 @@ public class PublishBookFX {
             title,
             String.join(",", selectedGenres),
             description,
-            filePath
+            filePath,
+            coverPath
         );
 
         if (result.isSuccess()) {
             showMessage(messageLabel, "✅ " + result.getMessage(), "status-approved");
-            // Clear form
             titleField.clear();
             clearGenreSelections();
             descArea.clear();
             fileField.clear();
+            coverImageField.clear();
+            originalCoverImage = null;
+            coverPreview.setImage(null);
+            coverPreview.setVisible(false);
+            selectedCoverLabel.setVisible(false);
+            removeCoverBtn.setDisable(true);
             selectedFileLabel.setVisible(false);
             hasUnsavedChanges = false;
             draftIndicator.setVisible(false);
             previewCard.setVisible(false);
             authorService.clearDraft(currentAuthor.getUsername());
+            
+            if (onBookPublished != null) {
+                onBookPublished.accept(null);
+            }
+            
+            new Timer().schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    javafx.application.Platform.runLater(() -> stage.close());
+                }
+            }, 1500);
         } else {
             showMessage(messageLabel, "❌ " + result.getMessage(), "status-rejected");
         }
@@ -486,7 +832,6 @@ public class PublishBookFX {
         label.setVisible(true);
     }
 
-    // ========== AUTO-SAVE FEATURE ==========
     private void setupAutoSave() {
         autoSaveTimer = new Timer(true);
         autoSaveTimer.scheduleAtFixedRate(new TimerTask() {
@@ -507,17 +852,15 @@ public class PublishBookFX {
         List<String> selectedGenres = getSelectedGenres();
         String description = descArea.getText().trim();
         String filePath = fileField.getText().trim();
+        String coverPath = coverImageField.getText().trim();
 
-        // Save to service
-        authorService.saveDraft(currentAuthor.getUsername(), title, selectedGenres, description, filePath);
+        authorService.saveDraft(currentAuthor.getUsername(), title, selectedGenres, description, filePath, coverPath);
         
-        // Show indicator
-        if (!title.isEmpty() || !selectedGenres.isEmpty() || !description.isEmpty() || !filePath.isEmpty()) {
+        if (!title.isEmpty() || !selectedGenres.isEmpty() || !description.isEmpty() || !filePath.isEmpty() || !coverPath.isEmpty()) {
             draftIndicator.setText("📝 Draft saved at " + 
                 java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
             draftIndicator.setVisible(true);
             
-            // Fade out after 3 seconds
             new Timer().schedule(new TimerTask() {
                 @Override
                 public void run() {
@@ -533,24 +876,36 @@ public class PublishBookFX {
         isLoadingDraft = true;
         
         String[] draft = authorService.loadDraft(currentAuthor.getUsername());
-        if (draft != null && draft.length == 4) {
-            // [title, genres, description, filePath]
+        if (draft != null && draft.length >= 5) {
             titleField.setText(draft[0]);
             setSelectedGenres(draft[1]);
             descArea.setText(draft[2]);
-            if (!draft[3].isEmpty()) {
+            if (draft.length > 3 && !draft[3].isEmpty()) {
                 fileField.setText(draft[3]);
                 File file = new File(draft[3]);
                 selectedFileLabel.setText("✅ Loaded draft: " + file.getName());
                 selectedFileLabel.getStyleClass().setAll("status", "status-approved");
                 selectedFileLabel.setVisible(true);
             }
+            if (draft.length > 4 && !draft[4].isEmpty()) {
+                coverImageField.setText(draft[4]);
+                removeCoverBtn.setDisable(false);
+                try {
+                    originalCoverImage = new Image(new File(draft[4]).toURI().toString(), true);
+                    Image previewImage = new Image(new File(draft[4]).toURI().toString(), 80, 100, true, true);
+                    coverPreview.setImage(previewImage);
+                    coverPreview.setVisible(true);
+                    selectedCoverLabel.setText("✅ Loaded cover: " + new File(draft[4]).getName());
+                    selectedCoverLabel.setVisible(true);
+                } catch (Exception e) {
+                    // Ignore preview errors
+                }
+            }
             
             draftIndicator.setText("📝 Draft loaded from previous session");
             draftIndicator.getStyleClass().setAll("status", "status-approved");
             draftIndicator.setVisible(true);
             
-            // Hide after 5 seconds
             new Timer().schedule(new TimerTask() {
                 @Override
                 public void run() {
@@ -570,6 +925,12 @@ public class PublishBookFX {
         clearGenreSelections();
         descArea.clear();
         fileField.clear();
+        coverImageField.clear();
+        originalCoverImage = null;
+        coverPreview.setImage(null);
+        coverPreview.setVisible(false);
+        selectedCoverLabel.setVisible(false);
+        removeCoverBtn.setDisable(true);
         selectedFileLabel.setVisible(false);
         previewCard.setVisible(false);
         draftIndicator.setText("🗑️ Draft cleared");

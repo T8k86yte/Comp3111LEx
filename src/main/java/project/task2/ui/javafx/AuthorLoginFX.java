@@ -1,6 +1,7 @@
 package project.task2.ui.javafx;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -10,28 +11,64 @@ import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import project.task2.service.AuthorPortalService;
 import project.task2.model.AuthorAccount;
+import project.task2.utils.SessionManager;
 
 public class AuthorLoginFX extends Application {
     private AuthorPortalService authorService;
     private Stage primaryStage;
+    private String restoredScreen = null;
 
     @Override
     public void start(Stage primaryStage) {
         this.authorService = new AuthorPortalService();
         this.primaryStage = primaryStage;
-
-        // FIX: When X is clicked, only close this window
+        
+        // Handle window close event
         primaryStage.setOnCloseRequest(this::handleWindowClose);
-
-        showLoginScreen();
+        
+        // Load any saved session
+        SessionManager.loadSession();
+        
+        // Check for saved session and auto-restore
+        if (SessionManager.hasSavedSession()) {
+            String username = SessionManager.getCurrentUsername();
+            restoredScreen = SessionManager.getCurrentScreen();
+            System.out.println("🔄 Auto-restoring session for: " + username + " to screen: " + restoredScreen);
+            
+            // Only show restoration notification if there's a screen to restore (not just dashboard)
+            if (restoredScreen != null && !restoredScreen.equals("DASHBOARD")) {
+                Alert notification = new Alert(Alert.AlertType.INFORMATION);
+                notification.setTitle("Session Restored");
+                notification.setHeaderText("✅ Previous Session Detected");
+                notification.setContentText(
+                    "Welcome back!\n\n" +
+                    "Your previous session has been detected.\n" +
+                    "Please log in again to continue.\n" +
+                    "You were previously on: " + getScreenDisplayName(restoredScreen)
+                );
+                notification.showAndWait();
+            }
+            
+            // Show login screen with username pre-filled
+            showLoginScreenWithUsername(username);
+        } else {
+            restoredScreen = null;
+            showLoginScreenWithUsername(null);
+        }
     }
-
-    private void handleWindowClose(WindowEvent event) {
-        System.out.println("🚪 Closing Author Login window...");
-        // Let the window close naturally - no Platform.exit()
+    
+    private String getScreenDisplayName(String screen) {
+        switch (screen) {
+            case "PUBLISH_BOOK": return "Publish Book";
+            case "MY_BOOKS": return "My Books";
+            case "MY_SUBMISSIONS": return "My Submissions";
+            case "PROFILE": return "Profile Management";
+            case "NOTIFICATIONS": return "Notification Board";
+            default: return "Dashboard";
+        }
     }
-
-    private void showLoginScreen() {
+    
+    private void showLoginScreenWithUsername(String prefilledUsername) {
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
 
@@ -57,6 +94,9 @@ public class AuthorLoginFX extends Application {
         Label usernameLabel = new Label("Username");
         usernameLabel.getStyleClass().add("muted");
         TextField usernameField = new TextField();
+        if (prefilledUsername != null) {
+            usernameField.setText(prefilledUsername);
+        }
         usernameField.setPromptText("Enter your username");
         usernameField.getStyleClass().add("text-field");
         usernameBox.getChildren().addAll(usernameLabel, usernameField);
@@ -103,6 +143,10 @@ public class AuthorLoginFX extends Application {
             
             if (result.isSuccess()) {
                 showMessage(messageLabel, "Login successful!", "status-approved");
+                // Save session after successful login
+                SessionManager.setCurrentUser(username, result.getAuthor().getFullName());
+                SessionManager.setCurrentScreen("DASHBOARD", null);
+                
                 openDashboard(result.getAuthor());
             } else {
                 showMessage(messageLabel, result.getMessage(), "status-rejected");
@@ -113,7 +157,7 @@ public class AuthorLoginFX extends Application {
             AuthorRegistrationFX regUI = new AuthorRegistrationFX();
             try {
                 regUI.start(new Stage());
-                primaryStage.close(); // Close login window when opening registration
+                primaryStage.close();
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
@@ -127,11 +171,38 @@ public class AuthorLoginFX extends Application {
         primaryStage.show();
     }
 
+    private void handleWindowClose(WindowEvent event) {
+        System.out.println("🚪 Closing Author Login...");
+        Platform.exit();
+        System.exit(0);
+    }
+
     private void openDashboard(AuthorAccount author) {
         AuthorDashboardFX dashboard = new AuthorDashboardFX(author);
+        
+        final String targetScreen = restoredScreen;
+        
         try {
-            dashboard.start(new Stage());
-            primaryStage.close(); // Close login window when opening dashboard
+            Stage dashboardStage = new Stage();
+            dashboard.start(dashboardStage);
+            
+            // Only navigate if there's a saved screen and it's not the dashboard
+            if (targetScreen != null && !targetScreen.equals("DASHBOARD")) {
+                // Use a slight delay to ensure dashboard is fully loaded
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(800);
+                        Platform.runLater(() -> {
+                            System.out.println("🔄 Navigating to restored screen: " + targetScreen);
+                            dashboard.navigateToScreen(targetScreen);
+                        });
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }).start();
+            }
+            
+            primaryStage.close();
         } catch (Exception e) {
             e.printStackTrace();
         }

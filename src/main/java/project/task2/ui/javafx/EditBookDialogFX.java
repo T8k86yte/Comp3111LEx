@@ -5,7 +5,6 @@ import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import project.task2.model.BookSubmission;
-import project.task2.service.AuthorPortalService;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,11 +14,9 @@ import java.util.stream.Collectors;
 
 public class EditBookDialogFX {
     private final BookSubmission original;
-    private final AuthorPortalService authorService;
 
     public EditBookDialogFX(BookSubmission submission) {
         this.original = submission;
-        this.authorService = new AuthorPortalService();
     }
 
     public Optional<BookSubmission> showAndWait() {
@@ -103,22 +100,25 @@ public class EditBookDialogFX {
                     return null;
                 }
 
-                // Create updated submission (preserve original fields)
+                // Create updated submission with all fields
                 BookSubmission updated = new BookSubmission(
-                    original.getSubmissionId(),
-                    newTitle,
-                    original.getAuthorUsername(),
-                    original.getAuthorFullName(),
-                    String.join(",", newGenres),
-                    newDescription,
-                    original.getFilePath(),
-                    original.getSubmissionDate(),
-                    original.getStatus(),
-                    original.getRejectionReason(),
-                    original.getReviewedDate(),
-                    original.getReviewedBy(),
-                    false,
-                    original.getEditCount() + 1
+                    original.getSubmissionId(),           // submissionId
+                    newTitle,                             // title
+                    original.getAuthorUsername(),         // authorUsername
+                    original.getAuthorFullName(),         // authorFullName
+                    String.join(",", newGenres),          // genres
+                    newDescription,                       // description
+                    original.getFilePath(),               // filePath
+                    original.getCoverImagePath(),         // coverImagePath
+                    original.getSubmissionDate(),         // submissionDate
+                    original.getStatus(),                 // status
+                    original.getRejectionReason(),        // rejectionReason
+                    original.getReviewedDate(),           // reviewedDate
+                    original.getReviewedBy(),             // reviewedBy
+                    false,                                // isDraft
+                    original.getEditCount() + 1,          // editCount
+                    original.getTotalBorrowedCount(),     // totalBorrowedCount
+                    original.getCurrentlyBorrowedCount()  // currentlyBorrowedCount
                 );
                 return updated;
             }
