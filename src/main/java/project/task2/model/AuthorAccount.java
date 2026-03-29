@@ -11,9 +11,10 @@ public class AuthorAccount extends UserAccount {
             String fullName,
             String passwordSaltBase64,
             String passwordHashBase64,
+            boolean disabled,
             String bio
     ) {
-        super(username, fullName, passwordSaltBase64, passwordHashBase64, UserRole.AUTHOR);
+        super(username, fullName, passwordSaltBase64, passwordHashBase64, UserRole.AUTHOR, disabled);
         this.bio = bio != null ? bio : "";
     }
 
@@ -38,6 +39,7 @@ public class AuthorAccount extends UserAccount {
             getPasswordSaltBase64(),
             getPasswordHashBase64(),
             "AUTHOR",
+            isDisabled() ? "1" : "0",
             bio  // This will be empty string if no bio
         );
     }
@@ -49,13 +51,14 @@ public class AuthorAccount extends UserAccount {
         
         String[] parts = data.split("\\|", -1); // -1 keeps empty trailing fields
         
-        if (parts.length >= 6) {
+        if (parts.length >= 7) {
             return new AuthorAccount(
                 parts[0].trim(),  // username
                 parts[1].trim(),  // fullName
                 parts[2].trim(),  // passwordSaltBase64
                 parts[3].trim(),  // passwordHashBase64
-                parts[5].trim()   // bio (may be empty)
+                parts[5].trim().equals("1"),//disabled
+                parts[6].trim()   // bio (may be empty)
             );
         }
         return null;
