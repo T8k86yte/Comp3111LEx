@@ -27,6 +27,8 @@ import java.util.stream.Collectors;
 
 public class StudentStaffPortalService {
     private static final int MAX_BORROWED_BOOKS = 5;
+    private static final int MIN_BORROW_DAYS = 1;
+    private static final int MAX_BORROW_DAYS = 14;
     private static final int DEFAULT_BORROW_DAYS = 14;
     private static final String BORROW_HISTORY_FILE = "data/borrow_history.txt";
     private static final String BORROW_RECORDS_FILE = "data/task1/borrow_records.txt";
@@ -105,6 +107,32 @@ public class StudentStaffPortalService {
         return bookRepository.findAll();
     }
 
+    public List<Book> getBookScreenData(
+            String titleFilter,
+            String authorFilter,
+            String genreFilter,
+            LocalDate publishDateFilter,
+            String availabilityFilter
+    ) {
+        String title = safeTrim(titleFilter).toLowerCase();
+        String author = safeTrim(authorFilter).toLowerCase();
+        String genre = safeTrim(genreFilter).toLowerCase();
+        String availability = safeTrim(availabilityFilter).toUpperCase();
+        return bookRepository.findAll()
+                .stream()
+                .filter(book -> title.isEmpty() || book.getTitle().toLowerCase().contains(title))
+                .filter(book -> author.isEmpty() || book.getAuthor().toLowerCase().contains(author))
+                .filter(book -> genre.isEmpty() || book.getGenre().toLowerCase().contains(genre))
+                .filter(book -> publishDateFilter == null || publishDateFilter.equals(book.getPublishDate()))
+                .filter(book -> {
+                    if (availability.isEmpty() || "ALL".equals(availability)) return true;
+                    if ("AVAILABLE".equals(availability)) return book.isAvailable();
+                    if ("UNAVAILABLE".equals(availability)) return !book.isAvailable();
+                    return true;
+                })
+                .collect(Collectors.toList());
+    }
+
     public List<Book> getRecommendedBooks(int limit) {
         List<Book> popular = bookRepository.findTopRecommended(limit)
                 .stream()
@@ -122,28 +150,39 @@ public class StudentStaffPortalService {
     }
 
     public String buildBorrowConfirmation(String borrowerUsername, String bookId) {
+        return buildBorrowConfirmation(borrowerUsername, bookId, DEFAULT_BORROW_DAYS);
+    }
+
+    public String buildBorrowConfirmation(String borrowerUsername, String bookId, int borrowDays) {
         String normalizedBorrower = safeTrim(borrowerUsername);
         String normalizedBookId = safeTrim(bookId).toUpperCase();
         Optional<Book> bookOpt = bookRepository.findById(normalizedBookId);
         if (bookOpt.isEmpty()) {
             return "Book not found.";
         }
+        if (borrowDays < MIN_BORROW_DAYS || borrowDays > MAX_BORROW_DAYS) {
+            return "Invalid borrow duration. Please choose between " + MIN_BORROW_DAYS + " and " + MAX_BORROW_DAYS + " day(s).";
+        }
         Book book = bookOpt.get();
         int borrowedCount = (int) getCurrentBorrowedCount(normalizedBorrower);
         int remaining = Math.max(0, MAX_BORROWED_BOOKS - borrowedCount);
-        LocalDate dueDate = LocalDate.now().plusDays(DEFAULT_BORROW_DAYS);
+        LocalDate dueDate = LocalDate.now().plusDays(borrowDays);
         String warning = remaining <= 1
                 ? "Warning: borrow limit is nearly reached."
                 : "No borrow limit warning.";
         return "Book: " + book.getTitle()
                 + "\nBook ID: " + book.getId()
-                + "\nBorrow duration: " + DEFAULT_BORROW_DAYS + " days"
+                + "\nBorrow duration: " + borrowDays + " days"
                 + "\nDue date: " + dueDate
                 + "\nCurrent borrowed: " + borrowedCount + "/" + MAX_BORROWED_BOOKS
                 + "\n" + warning;
     }
 
     public OperationResult borrowBook(String borrowerUsername, String bookId) {
+        return borrowBook(borrowerUsername, bookId, DEFAULT_BORROW_DAYS);
+    }
+
+    public OperationResult borrowBook(String borrowerUsername, String bookId, int borrowDays) {
         String normalizedBorrower = safeTrim(borrowerUsername);
         String normalizedBookId = safeTrim(bookId).toUpperCase();
 
@@ -152,6 +191,11 @@ public class StudentStaffPortalService {
         }
         if (normalizedBookId.isEmpty()) {
             return OperationResult.failure("Borrow failed: book id is required.");
+        }
+        if (borrowDays < MIN_BORROW_DAYS || borrowDays > MAX_BORROW_DAYS) {
+            return OperationResult.failure(
+                    "Borrow failed: duration must be between " + MIN_BORROW_DAYS + " and " + MAX_BORROW_DAYS + " day(s)."
+            );
         }
         if (getCurrentBorrowedCount(normalizedBorrower) >= MAX_BORROWED_BOOKS) {
             return OperationResult.failure("Borrow failed: reached max limit of " + MAX_BORROWED_BOOKS + " books.");
@@ -177,7 +221,7 @@ public class StudentStaffPortalService {
                 book.getId(),
                 book.getTitle(),
                 LocalDate.now(),
-                LocalDate.now().plusDays(DEFAULT_BORROW_DAYS)
+                LocalDate.now().plusDays(borrowDays)
         );
         recordBorrowHistory(normalizedBorrower, book.getId(), book.getTitle());
         return OperationResult.success("Borrow successful: \"" + book.getTitle() + "\" has been borrowed.");
@@ -304,18 +348,87 @@ public class StudentStaffPortalService {
                 salt,
                 hash,
                 existing.getRole(),
-                existing.isDisabled()//Preserve the disabled state
+                existing.isDisabled()
         );
         studentstaffRepository.save(updated);
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
         return OperationResult.success("Profile updated successfully.");
     }
 
+    public ProfileUpdateResult updateProfileWithReAuth(
+            String username,
+            String newFullName,
+            String currentPassword,
+            String newPassword,
+            String confirmPassword
+    ) {
+        String normalizedUsername = safeTrim(username);
+        String normalizedFullName = safeTrim(newFullName);
+        String pwd = newPassword == null ? "" : newPassword;
+        String confirm = confirmPassword == null ? "" : confirmPassword;
+        String oldPwd = currentPassword == null ? "" : currentPassword;
+        if (normalizedUsername.isEmpty()) {
+            return ProfileUpdateResult.failure("Profile update failed: invalid user.", false);
+        }
+        Optional<StudentStaffAccount> existingOpt = studentstaffRepository.findByUsername(normalizedUsername);
+        if (existingOpt.isEmpty()) {
+            return ProfileUpdateResult.failure("Profile update failed: account not found.", false);
+        }
+        StudentStaffAccount existing = existingOpt.get();
+        if (normalizedFullName.isEmpty()) {
+            return ProfileUpdateResult.failure("Profile update failed: full name is required.", false);
+        }
+
+        if (oldPwd.isBlank()) {
+            return ProfileUpdateResult.failure("Profile update failed: current password is required.", false);
+        }
+        boolean currentPwdOk = project.task1.security.PasswordSecurity.verifyPassword(
+                oldPwd,
+                existing.getPasswordSaltBase64(),
+                existing.getPasswordHashBase64()
+        );
+        if (!currentPwdOk) {
+            return ProfileUpdateResult.failure("Profile update failed: current password is incorrect.", false);
+        }
+
+        String salt = existing.getPasswordSaltBase64();
+        String hash = existing.getPasswordHashBase64();
+        boolean passwordChanged = false;
+        if (!pwd.isBlank() || !confirm.isBlank()) {
+            if (!pwd.equals(confirm)) {
+                return ProfileUpdateResult.failure("Profile update failed: passwords do not match.", false);
+            }
+            if (!isStrongPassword(pwd)) {
+                return ProfileUpdateResult.failure("Profile update failed: weak password.", false);
+            }
+            salt = project.task1.security.PasswordSecurity.generateSaltBase64();
+            hash = project.task1.security.PasswordSecurity.hashPasswordBase64(pwd, salt);
+            passwordChanged = true;
+        }
+        StudentStaffAccount updated = new StudentStaffAccount(
+                existing.getUsername(),
+                normalizedFullName,
+                salt,
+                hash,
+                existing.getRole(),
+                existing.isDisabled()//Preserve the disabled state
+        );
+        studentstaffRepository.save(updated);
+        appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
+        return ProfileUpdateResult.success("Profile updated successfully.", passwordChanged);
+    }
+
     public List<NotificationView> getNotificationBoard(String username) {
+        return getNotificationBoard(username, "", "ALL");
+    }
+
+    public List<NotificationView> getNotificationBoard(String username, String searchFilter, String categoryFilter) {
         String normalized = safeTrim(username);
         if (normalized.isEmpty()) {
             return List.of();
         }
+        String search = safeTrim(searchFilter).toLowerCase();
+        String category = safeTrim(categoryFilter).toUpperCase();
 
         List<NotificationView> notifications = new ArrayList<>();
         LocalDate today = LocalDate.now();
@@ -333,8 +446,20 @@ public class StudentStaffPortalService {
         }
 
         notifications.addAll(loadStoredNotifications(normalized));
-        notifications.sort(Comparator.comparing(NotificationView::timestamp).reversed());
-        return notifications;
+        return notifications.stream()
+                .filter(n -> search.isEmpty()
+                        || n.message().toLowerCase().contains(search)
+                        || n.category().toLowerCase().contains(search))
+                .filter(n -> category.isEmpty()
+                        || "ALL".equals(category)
+                        || n.category().equalsIgnoreCase(category))
+                .sorted((a, b) -> {
+                    boolean ap = isPriorityCategory(a.category());
+                    boolean bp = isPriorityCategory(b.category());
+                    if (ap != bp) return ap ? -1 : 1;
+                    return b.timestamp().compareTo(a.timestamp());
+                })
+                .collect(Collectors.toList());
     }
 
     public void notifyBookDeletedForBorrowers(String bookId, String bookTitle) {
@@ -677,6 +802,11 @@ public class StudentStaffPortalService {
         return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
+    private static boolean isPriorityCategory(String category) {
+        String c = safeTrim(category).toUpperCase();
+        return c.contains("DUE") || c.contains("DELETION") || c.contains("URGENT") || c.contains("AUTO_RETURN");
+    }
+
     private static String decode(String value) {
         return new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8);
     }
@@ -688,6 +818,16 @@ public class StudentStaffPortalService {
 
         public static OperationResult failure(String message) {
             return new OperationResult(false, message);
+        }
+    }
+
+    public record ProfileUpdateResult(boolean success, String message, boolean passwordChanged) {
+        public static ProfileUpdateResult success(String message, boolean passwordChanged) {
+            return new ProfileUpdateResult(true, message, passwordChanged);
+        }
+
+        public static ProfileUpdateResult failure(String message, boolean passwordChanged) {
+            return new ProfileUpdateResult(false, message, passwordChanged);
         }
     }
 

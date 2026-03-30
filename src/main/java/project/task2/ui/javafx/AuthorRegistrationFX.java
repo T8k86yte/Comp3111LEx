@@ -28,8 +28,9 @@ public class AuthorRegistrationFX extends Application {
 
     private void handleWindowClose(WindowEvent event) {
         System.out.println("🚪 Closing Author Registration...");
-        Platform.exit();
-        System.exit(0);
+        if (primaryStage != null) {
+            primaryStage.close();
+        }
     }
 
     private void showRegistrationScreen() {

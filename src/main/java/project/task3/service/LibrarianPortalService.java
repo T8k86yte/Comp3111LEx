@@ -49,6 +49,7 @@ public class LibrarianPortalService {
     private static final String TASK1_NOTIFICATIONS_FILE = "data/task1/notifications.txt";
     private static final String TASK2_NOTIFICATIONS_FILE = "data/task2/notifications.txt";
     private static final String TASK3_NOTIFICATIONS_FILE = "data/task3/notifications.txt";
+    private static final String BORROW_RECORDS_FILE = "data/task1/borrow_records.txt";
     private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     public LibrarianPortalService(LibrarianRepository librarianRepository, StudentStaffRepository studentStaffRepository, AuthorRepository authorRepository, BookRepository bookRepository, SubmissionRepository bookSubmissionRepository) {
@@ -333,6 +334,59 @@ public class LibrarianPortalService {
         ));
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
         return OperationResult.success(passwordUpdated ? "Profile updated successfully with password changed." : "Profile updated successfully.");
+    }
+
+    public ProfileUpdateResult updateProfile(String username, String currentPassword, String newFullName, String newPassword, String confirmNewPassword, String newEmployeeID) {
+        String normalizedUsername = safeTrim(username);
+        String normalizedCurrentPassword = currentPassword == null ? "" : currentPassword;
+        String normalizedFullName = safeTrim(newFullName);
+        String pwd = newPassword == null ? "" : newPassword;
+        String confirm = confirmNewPassword == null ? "" : confirmNewPassword;
+        String normalizedEmployeeID = safeTrim(newEmployeeID);
+
+        if (normalizedUsername.isEmpty()) return ProfileUpdateResult.failure("Profile update failed: invalid user.", false);
+        Optional<LibrarianAccount> existingOpt = librarianRepository.findByUsername(normalizedUsername);
+        if (existingOpt.isEmpty()) return ProfileUpdateResult.failure("Profile update failed: account not found.", false);
+        LibrarianAccount existing = existingOpt.get();
+        if (normalizedFullName.isEmpty()) return ProfileUpdateResult.failure("Profile update failed: full name is required.", false);
+        if (normalizedCurrentPassword.isBlank()) return ProfileUpdateResult.failure("Profile update failed: current password is required.", false);
+        boolean currentPwdOk = project.task1.security.PasswordSecurity.verifyPassword(
+                normalizedCurrentPassword,
+                existing.getPasswordSaltBase64(),
+                existing.getPasswordHashBase64()
+        );
+        if (!currentPwdOk) return ProfileUpdateResult.failure("Profile update failed: current password is incorrect.", false);
+
+        String salt = existing.getPasswordSaltBase64();
+        String hash = existing.getPasswordHashBase64();
+        boolean passwordChanged = false;
+        if (!pwd.isBlank() || !confirm.isBlank()) {
+            if (!pwd.equals(confirm)) return ProfileUpdateResult.failure("Profile update failed: passwords do not match.", false);
+            if (!isStrongPassword(pwd)) return ProfileUpdateResult.failure("Profile update failed: weak password.", false);
+            salt = project.task1.security.PasswordSecurity.generateSaltBase64();
+            hash = project.task1.security.PasswordSecurity.hashPasswordBase64(pwd, salt);
+            passwordChanged = true;
+        }
+
+        int eID = existing.getEmployeeID();
+        if (!normalizedEmployeeID.isBlank()) {
+            try {
+                eID = Integer.parseInt(normalizedEmployeeID);
+            } catch (Exception e) {
+                return ProfileUpdateResult.failure("Profile update failed: employee ID must be an integer", false);
+            }
+        }
+
+        librarianRepository.save(new LibrarianAccount(
+                existing.getUsername(),
+                normalizedFullName,
+                salt,
+                hash,
+                existing.isDisabled(),
+                eID
+        ));
+        appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
+        return ProfileUpdateResult.success("Profile updated successfully.", passwordChanged);
     }
 
     public OperationResult editUserAccount(String username, String newFullName, String newPassword, String confirmNewPassword) {
@@ -848,4 +902,24 @@ public class LibrarianPortalService {
         if (user == null) return null;
         return new SharedAuthFacade.UserPrincipal(username, user.getFullName(), user.getRole().name());
     }
+
+    public record ProfileUpdateResult(boolean success, String message, boolean passwordChanged) {
+        public static ProfileUpdateResult success(String message, boolean passwordChanged) {
+            return new ProfileUpdateResult(true, message, passwordChanged);
+        }
+
+        public static ProfileUpdateResult failure(String message, boolean passwordChanged) {
+            return new ProfileUpdateResult(false, message, passwordChanged);
+        }
+    }
+
+    public record BorrowedBookRecordView(
+            String bookId,
+            String bookTitle,
+            String borrowerUsername,
+            LocalDate borrowDate,
+            LocalDate returnDate,
+            String status,
+            boolean overdue
+    ) {}
 }

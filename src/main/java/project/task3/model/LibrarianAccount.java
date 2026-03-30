@@ -2,7 +2,6 @@ package project.task3.model;
 
 import project.task1.model.UserAccount;
 import project.task1.model.UserRole;
-import project.task2.model.AuthorAccount;
 
 public class LibrarianAccount extends UserAccount {
     private final int employeeID;
@@ -37,7 +36,7 @@ public class LibrarianAccount extends UserAccount {
     }
 
     public static LibrarianAccount fromString(String data) {
-        String[] parts = data.split("\\|");
+        String[] parts = data.split("\\|", -1);
         if (parts.length >= 7) {
             return new LibrarianAccount(
                     parts[0],

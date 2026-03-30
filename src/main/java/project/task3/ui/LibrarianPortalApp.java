@@ -16,13 +16,13 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import project.shared.SharedAuthFacade;
-import project.task1.model.Book;
+import project.shared.CrashSimulationManager;
 import project.task1.repo.StudentStaffRepository;
-import project.task1.service.StudentStaffPortalService;
 import project.task1.model.UserAccount;
 import project.task2.model.BookSubmission;
 import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
+import project.task2.utils.SessionManager;
 import project.task3.model.LibrarianAccount;
 import project.task1.repo.InMemoryBookRepository;
 import project.task3.repo.LibrarianRepository;
@@ -30,8 +30,10 @@ import project.task3.service.LibrarianPortalService;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -122,6 +124,7 @@ public class LibrarianPortalApp extends Application {
     private DatePicker bookTablePublishedMax;
     private TextField bookTableSummaryFilter;
     private TextField bookTableBorrowedByFilter;
+    private ComboBox<String> bookTableStatusFilter;
     private Label bookTableStatusLabel;
 
     private Timer autoSaveTimer;
@@ -192,11 +195,6 @@ public class LibrarianPortalApp extends Application {
                 authorRepository,
                 librarianRepository
         );
-    }
-
-    @Override
-    public void stop() {
-        System.out.println("stop() called");
     }
 
     @Override
@@ -657,7 +655,7 @@ public class LibrarianPortalApp extends Application {
         authorFullNameCol.setCellValueFactory(new PropertyValueFactory<>("authorFullName"));
 
         TableColumn<BookSubmission, String> genreCol = new TableColumn<>("Genre");
-        genreCol.setCellValueFactory(new PropertyValueFactory<>("GenresAsString"));
+        genreCol.setCellValueFactory(new PropertyValueFactory<>("genresAsString"));
 
         TableColumn<BookSubmission, Object> dateCol = new TableColumn<>("Submitted Date");
         dateCol.setCellValueFactory(new PropertyValueFactory<>("submissionDate"));
