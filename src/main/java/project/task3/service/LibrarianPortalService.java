@@ -174,40 +174,68 @@ public class LibrarianPortalService {
                 .filter(s -> filterBorrowedBook(s, titleP, authorUsernameP, publishedMin, publishedMax, summaryP, borrowedByP))
                 .collect(Collectors.toList());
     }
+    public List<BorrowedBookRecordView> getBorrowedBookRecords(
+            String titleFilter,
+            String borrowerFilter,
+            String statusFilter
+    ) {
+        String title = safeTrim(titleFilter).toLowerCase();
+        String borrower = safeTrim(borrowerFilter).toLowerCase();
+        String status = safeTrim(statusFilter).toUpperCase();
+        List<BorrowedBookRecordView> records = new ArrayList<>();
+        Path path = Paths.get(BORROW_RECORDS_FILE);
+        if (!Files.exists(path)) {
+            return records;
+        }
+        try {
+            for (String line : Files.readAllLines(path)) {
+                if (line == null || line.trim().isEmpty()) continue;
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 7) continue;
+                String username = decode(parts[0]);
+                String bookId = decode(parts[1]);
+                String bookTitle = decode(parts[2]);
+                LocalDate borrowDate = LocalDate.parse(parts[3]);
+                LocalDate dueDate = LocalDate.parse(parts[4]);
+                LocalDate returnDate = parts[5].isBlank() ? null : LocalDate.parse(parts[5]);
+                String rowStatus = returnDate == null ? (dueDate.isBefore(LocalDate.now()) ? "OVERDUE" : "BORROWED") : "RETURNED";
+                if (!title.isEmpty() && !bookTitle.toLowerCase().contains(title)) continue;
+                if (!borrower.isEmpty() && !username.toLowerCase().contains(borrower)) continue;
+                if (!status.isEmpty() && !"ALL".equals(status) && !rowStatus.equals(status)) continue;
+                records.add(new BorrowedBookRecordView(bookId, bookTitle, username, borrowDate, returnDate, rowStatus, dueDate.isBefore(LocalDate.now()) && returnDate == null));
+            }
+        } catch (Exception ignored) {
+            return List.of();
+        }
+        records.sort(Comparator.comparing(BorrowedBookRecordView::borrowDate).reversed());
+        return records;
+    }
     public OperationResult exportBorrowedBooksData(File file,
                                                    String titleFilter,
-                                                   String authorUsernameFilter,
-                                                   LocalDate publishedMin,
-                                                   LocalDate publishedMax,
-                                                   String summaryFilter,
-                                                   String borrowedByFilter) {
-        List<Book> data = getBorrowedBooksScreenData(
+                                                   String borrowedByFilter,
+                                                   String statusFilter) {
+        List<BorrowedBookRecordView> data = getBorrowedBookRecords(
                 titleFilter,
-                authorUsernameFilter,
-                publishedMin,
-                publishedMax,
-                summaryFilter,
-                borrowedByFilter
+                borrowedByFilter,
+                statusFilter
         );
 
         try (HSSFWorkbook book = new HSSFWorkbook(); FileOutputStream fos = new FileOutputStream(file)) {
             HSSFSheet sheet = book.createSheet("Borrowed Books");
 
             HSSFRow headerRow = sheet.createRow(0);
-            String[] headers = new String[]{ "Id", "Title", "Author", "Publish Date", "Summary", "Borrowed By", "Borrowed Count", "Due Date" };
+            String[] headers = new String[]{ "Id", "Title", "Borrowed Date", "Borrowed By", "Due Date", "Status" };
             for (int i = 0; i < headers.length; i++) headerRow.createCell(i).setCellValue(headers[i]);
 
             int j = 1;
-            for (Book b : data) {
+            for (BorrowedBookRecordView b : data) {
                 HSSFRow thisRow = sheet.createRow(j);
-                thisRow.createCell(0).setCellValue(b.getId());//ID
-                thisRow.createCell(1).setCellValue(b.getTitle());//Title
-                thisRow.createCell(2).setCellValue(b.getAuthor());//Author
-                thisRow.createCell(3).setCellValue(b.getPublishDate().toString());//Publish Date
-                thisRow.createCell(4).setCellValue(b.getSummary());//Summary
-                thisRow.createCell(5).setCellValue(b.getBorrowedByUsername());//Borrowed By
-                thisRow.createCell(6).setCellValue(b.getBorrowCount());//Borrowed Count
-                thisRow.createCell(7).setCellValue("");//Due Date, temporarily blank, TO DO
+                thisRow.createCell(0).setCellValue(b.bookId());//ID
+                thisRow.createCell(1).setCellValue(b.bookTitle());//Title
+                thisRow.createCell(3).setCellValue(b.borrowDate().toString());//Borrowed Date
+                thisRow.createCell(5).setCellValue(b.borrowerUsername());//Borrowed By
+                thisRow.createCell(7).setCellValue(b.returnDate());//Due Date
+                thisRow.createCell(6).setCellValue(b.status());//Status
                 j++;
             }
 
@@ -218,6 +246,35 @@ public class LibrarianPortalService {
 
         return OperationResult.success("Successfully stored filtered borrowed books data to \"" + file.getName() + "\".");
     }
+
+    public OperationResult exportBorrowedRecordsCsv(Path outputPath, List<BorrowedBookRecordView> rows) {
+        if (outputPath == null) {
+            return OperationResult.failure("Export failed: invalid output path.");
+        }
+        try {
+            List<String> lines = new ArrayList<>();
+            lines.add("Book ID,Book Title,Borrower Username,Borrow Date,Return Date,Status,Overdue");
+            for (BorrowedBookRecordView row : rows) {
+                lines.add(csv(row.bookId()) + ","
+                        + csv(row.bookTitle()) + ","
+                        + csv(row.borrowerUsername()) + ","
+                        + csv(row.borrowDate().toString()) + ","
+                        + csv(row.returnDate() == null ? "" : row.returnDate().toString()) + ","
+                        + csv(row.status()) + ","
+                        + csv(row.overdue() ? "Yes" : "No"));
+            }
+            Files.write(outputPath, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            return OperationResult.success("Export successful: " + outputPath);
+        } catch (Exception e) {
+            return OperationResult.failure("Export failed: " + e.getMessage());
+        }
+    }
+
+    private static String csv(String value) {
+        String v = value == null ? "" : value;
+        return "\"" + v.replace("\"", "\"\"") + "\"";
+    }
+
 
     public OperationResult validateBookSubmissionId(String subId) {
         if (bookSubmissionRepository.findById(subId).isEmpty()) return OperationResult.failure("Invalid book submission Id: " + subId);

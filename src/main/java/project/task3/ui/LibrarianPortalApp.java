@@ -120,10 +120,6 @@ public class LibrarianPortalApp extends Application {
 
     private TableView<BorrowedBookRecordView> borrowedBooksTable;
     private TextField bookTableTitleFilter;
-    private TextField bookTableAuthorUsernameFilter;
-    private DatePicker bookTablePublishedMin;
-    private DatePicker bookTablePublishedMax;
-    private TextField bookTableSummaryFilter;
     private TextField bookTableBorrowedByFilter;
     private ComboBox<String> bookTableStatusFilter;
     private Label bookTableStatusLabel;
@@ -924,11 +920,8 @@ public class LibrarianPortalApp extends Application {
 
 
         bookTableTitleFilter = new TextField();
-        bookTableAuthorUsernameFilter = new TextField();
-        bookTablePublishedMin = new DatePicker();
-        bookTablePublishedMax = new DatePicker();
-        bookTableSummaryFilter = new TextField();
         bookTableBorrowedByFilter = new TextField();
+        bookTableStatusFilter = new ComboBox<>(FXCollections.observableArrayList("", ""));
 
         Button refreshBtn = new Button("Refresh Table");
         refreshBtn.getStyleClass().add("primary-btn");
@@ -1486,11 +1479,8 @@ public class LibrarianPortalApp extends Application {
         LibrarianPortalService.OperationResult result = portalService.exportBorrowedBooksData(
                 file,
                 bookTableTitleFilter.getText(),
-                bookTableAuthorUsernameFilter.getText(),
-                bookTablePublishedMin.getValue(),
-                bookTablePublishedMax.getValue(),
-                bookTableSummaryFilter.getText(),
-                bookTableBorrowedByFilter.getText()
+                bookTableBorrowedByFilter.getText(),
+                bookTableStatusFilter.getValue()
         );
         if (!result.success()) showErrorPopup("Export Borrowed Books", "Action failed", result.message());
         setStatus(result.message());
