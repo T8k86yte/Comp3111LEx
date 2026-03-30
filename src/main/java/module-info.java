@@ -1,6 +1,7 @@
 module project.library {
     requires javafx.controls;
     requires java.desktop;
+    requires org.apache.poi.poi;
 
     exports project;
     exports project.ui;

@@ -24,6 +24,7 @@ import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
 import project.task2.utils.SessionManager;
 import project.task3.model.LibrarianAccount;
+import project.task3.service.LibrarianPortalService.*;
 import project.task1.repo.InMemoryBookRepository;
 import project.task3.repo.LibrarianRepository;
 import project.task3.service.LibrarianPortalService;
@@ -117,7 +118,7 @@ public class LibrarianPortalApp extends Application {
     private DatePicker notificationDateMax;
     private ComboBox<String> notificationUrgencyFilter;
 
-    private TableView<Book> borrowedBooksTable;
+    private TableView<BorrowedBookRecordView> borrowedBooksTable;
     private TextField bookTableTitleFilter;
     private TextField bookTableAuthorUsernameFilter;
     private DatePicker bookTablePublishedMin;
@@ -868,25 +869,25 @@ public class LibrarianPortalApp extends Application {
         borrowedBooksTable = new TableView<>();
         borrowedBooksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
 
-        TableColumn<Book, String> IdCol = new TableColumn<>("Id");
+        TableColumn<BorrowedBookRecordView, String> IdCol = new TableColumn<>("Id");
         IdCol.setCellValueFactory(new PropertyValueFactory<>("id"));
 
-        TableColumn<Book, String> titleCol = new TableColumn<>("Title");
+        TableColumn<BorrowedBookRecordView, String> titleCol = new TableColumn<>("Title");
         titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
 
-        TableColumn<Book, String> authorCol = new TableColumn<>("Author");
+        TableColumn<BorrowedBookRecordView, String> authorCol = new TableColumn<>("Author");
         authorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
 
-        TableColumn<Book, Object> publishDateCol = new TableColumn<>("Published Date");
+        TableColumn<BorrowedBookRecordView, Object> publishDateCol = new TableColumn<>("Published Date");
         publishDateCol.setCellValueFactory(new PropertyValueFactory<>("publishDate"));
 
-        TableColumn<Book, String> summaryCol = new TableColumn<>("Summary");
+        TableColumn<BorrowedBookRecordView, String> summaryCol = new TableColumn<>("Summary");
         summaryCol.setCellValueFactory(new PropertyValueFactory<>("summary"));
 
-        TableColumn<Book, String> borrowedByCol = new TableColumn<>("Borrowed By");
+        TableColumn<BorrowedBookRecordView, String> borrowedByCol = new TableColumn<>("Borrowed By");
         borrowedByCol.setCellValueFactory(new PropertyValueFactory<>("borrowedByUsername"));
 
-        TableColumn<Book, String> borrowCountCol = new TableColumn<>("Borrow Count");
+        TableColumn<BorrowedBookRecordView, String> borrowCountCol = new TableColumn<>("Borrow Count");
         borrowCountCol.setCellValueFactory(new PropertyValueFactory<>("borrowCount"));
 
         titleCol.setCellFactory(column -> new TableCell<>() {
@@ -898,10 +899,10 @@ public class LibrarianPortalApp extends Application {
                     setStyle("");
                     return;
                 }
-                Book rowBook = getTableRow() == null ? null : (Book) getTableRow().getItem();
+                BorrowedBookRecordView rowBook = getTableRow() == null ? null : getTableRow().getItem();
 
                 setText(item);
-                if (rowBook != null && !rowBook.isAvailable()) {
+                if (rowBook != null && rowBook.overdue()) {
                     setStyle("-fx-text-fill: #dc2626; -fx-font-weight: 600;");
                 } else {
                     setStyle("-fx-text-fill: #111827;");

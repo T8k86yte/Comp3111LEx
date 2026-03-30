@@ -335,7 +335,7 @@ public class LibrarianPortalService {
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
         return OperationResult.success(passwordUpdated ? "Profile updated successfully with password changed." : "Profile updated successfully.");
     }
-
+    /*
     public ProfileUpdateResult updateProfile(String username, String currentPassword, String newFullName, String newPassword, String confirmNewPassword, String newEmployeeID) {
         String normalizedUsername = safeTrim(username);
         String normalizedCurrentPassword = currentPassword == null ? "" : currentPassword;
@@ -388,6 +388,7 @@ public class LibrarianPortalService {
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
         return ProfileUpdateResult.success("Profile updated successfully.", passwordChanged);
     }
+    */
 
     public OperationResult editUserAccount(String username, String newFullName, String newPassword, String confirmNewPassword) {
         String normalizedUsername = safeTrim(username);
