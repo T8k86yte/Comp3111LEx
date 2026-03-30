@@ -1,5 +1,6 @@
 package project.task3.service;
 
+import org.apache.poi.hssf.usermodel.helpers.HSSFRowShifter;
 import project.task1.model.StudentStaffAccount;
 import project.task1.model.UserAccount;
 import project.task1.model.UserRole;
@@ -7,6 +8,7 @@ import project.task1.model.Book;
 import project.task1.repo.BookRepository;
 import project.task1.repo.StudentStaffRepository;
 import project.shared.SharedAuthFacade;
+import project.task1.security.PasswordSecurity;
 import project.task1.service.StudentStaffPortalService;
 import project.task2.model.AuthorAccount;
 import project.task2.model.BookSubmission;
@@ -15,6 +17,9 @@ import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
 import project.task3.repo.LibrarianRepository;
 
+import java.awt.*;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,11 +28,15 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.List;
 import java.util.regex.Pattern;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 import java.time.chrono.*;
+
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.hssf.usermodel.*;
 
 public class LibrarianPortalService {
     private final LibrarianRepository librarianRepository;
@@ -164,9 +173,53 @@ public class LibrarianPortalService {
                 .filter(s -> filterBorrowedBook(s, titleP, authorUsernameP, publishedMin, publishedMax, summaryP, borrowedByP))
                 .collect(Collectors.toList());
     }
+    public OperationResult exportBorrowedBooksData(File file,
+                                                   String titleFilter,
+                                                   String authorUsernameFilter,
+                                                   LocalDate publishedMin,
+                                                   LocalDate publishedMax,
+                                                   String summaryFilter,
+                                                   String borrowedByFilter) {
+        List<Book> data = getBorrowedBooksScreenData(
+                titleFilter,
+                authorUsernameFilter,
+                publishedMin,
+                publishedMax,
+                summaryFilter,
+                borrowedByFilter
+        );
+
+        try (HSSFWorkbook book = new HSSFWorkbook(); FileOutputStream fos = new FileOutputStream(file)) {
+            HSSFSheet sheet = book.createSheet("Borrowed Books");
+
+            HSSFRow headerRow = sheet.createRow(0);
+            String[] headers = new String[]{ "Id", "Title", "Author", "Publish Date", "Summary", "Borrowed By", "Borrowed Count", "Due Date" };
+            for (int i = 0; i < headers.length; i++) headerRow.createCell(i).setCellValue(headers[i]);
+
+            int j = 1;
+            for (Book b : data) {
+                HSSFRow thisRow = sheet.createRow(j);
+                thisRow.createCell(0).setCellValue(b.getId());//ID
+                thisRow.createCell(1).setCellValue(b.getTitle());//Title
+                thisRow.createCell(2).setCellValue(b.getAuthor());//Author
+                thisRow.createCell(3).setCellValue(b.getPublishDate().toString());//Publish Date
+                thisRow.createCell(4).setCellValue(b.getSummary());//Summary
+                thisRow.createCell(5).setCellValue(b.getBorrowedByUsername());//Borrowed By
+                thisRow.createCell(6).setCellValue(b.getBorrowCount());//Borrowed Count
+                thisRow.createCell(7).setCellValue("");//Due Date, temporarily blank, TO DO
+                j++;
+            }
+
+            book.write(fos);
+        } catch (Exception e) {
+            return OperationResult.failure("Export failed: directory not found or resource issue.");
+        }
+
+        return OperationResult.success("Successfully stored filtered borrowed books data to \"" + file.getName() + "\".");
+    }
 
     public OperationResult validateBookSubmissionId(String subId) {
-        if (bookSubmissionRepository.findById(subId).isEmpty()) return OperationResult.failure("Invalid book submission Id.");
+        if (bookSubmissionRepository.findById(subId).isEmpty()) return OperationResult.failure("Invalid book submission Id: " + subId);
         else return OperationResult.success("");
     }
 
@@ -176,12 +229,14 @@ public class LibrarianPortalService {
         if (user == null) return OperationResult.failure("Approve failed: No user logged in.");
 
         BookSubmission s = sub.get();
+        if (!s.isPending()) return OperationResult.failure("Approve failed: \"" + s.getTitle() + "\" is not a pending book submission.");
+
         s.approve(user.getUsername());
         bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), s.getGenre());//Note that description is just an alias of summary for book
         bookSubmissionRepository.update(s);//Changes should be saved once there are updates
 
-        appendNotificationTo(s.getAuthorUsername(), "ANNOUNCEMENT", "Your Book Submission \"" + s.getTitle() + "\" was approved.", UserRole.AUTHOR);//Send notification to the author
-        return OperationResult.success("Approve successful: \"" + sub.get().getTitle() + "\" is approved and created.");
+        appendNotificationTo(s.getAuthorUsername(), "RESPONSE", "Your Book Submission \"" + s.getTitle() + "\" was approved.", UserRole.AUTHOR);//Send notification to the author
+        return OperationResult.success("Approve successful: \"" + s.getTitle() + "\" is approved and created.");
     }
     public OperationResult approveBookSubmission(String subId, String Username) {
         Optional<LibrarianAccount> l = librarianRepository.findByUsername(Username);
@@ -191,15 +246,17 @@ public class LibrarianPortalService {
 
     public OperationResult rejectBookSubmission(String subId, LibrarianAccount user, String reason) {
         Optional<BookSubmission> sub = bookSubmissionRepository.findById(subId);
-        if (sub.isEmpty()) return OperationResult.failure("Approve failed: Invalid submission ID.");
-        if (user == null) return OperationResult.failure("Approve failed: No user logged in.");
+        if (sub.isEmpty()) return OperationResult.failure("Rejection failed: Invalid submission ID.");
+        if (user == null) return OperationResult.failure("Rejection failed: No user logged in.");
 
         BookSubmission s = sub.get();
+        if (!s.isPending()) return OperationResult.failure("Rejection failed: \"" + s.getTitle() + "\" is not a pending book submission.");
+
         s.reject(user.getUsername(), reason);
         bookSubmissionRepository.update(s);
 
-        appendNotificationTo(s.getAuthorUsername(), "ANNOUNCEMENT", "Your Book Submission \"" + s.getTitle() + "\" was rejected.\nRejection reason:" + reason, UserRole.AUTHOR);//Send notification to the author
-        return OperationResult.success("Reject successful: \"" + sub.get().getTitle() + "\" is rejected.");
+        appendNotificationTo(s.getAuthorUsername(), "RESPONSE", "Your Book Submission \"" + s.getTitle() + "\" was rejected.\nRejection reason:" + reason, UserRole.AUTHOR);//Send notification to the author
+        return OperationResult.success("Rejection successful: \"" + s.getTitle() + "\" is rejected.");
     }
     public OperationResult rejectBookSubmission(String subId, String Username, String reason) {
         Optional<LibrarianAccount> l = librarianRepository.findByUsername(Username);
@@ -207,7 +264,26 @@ public class LibrarianPortalService {
         return rejectBookSubmission(subId, l.get(), reason);
     }
 
-    public OperationResult updateProfile(String username, String newFullName, String newPassword, String confirmNewPassword, String newEmployeeID) {
+    public OperationResult previewBookSubmission(String subId) {
+        Optional<BookSubmission> sub = bookSubmissionRepository.findById(subId);
+        if (sub.isEmpty()) return OperationResult.failure("Preview failed: Invalid submission ID.");
+        String path = sub.get().getFilePath();
+        if (path.isEmpty()) return OperationResult.failure("Preview failed: No file was included for this submission. submission ID: " + subId);
+
+        File pdfFile = new File(path);
+
+        if (!pdfFile.exists()) return OperationResult.failure("Preview failed: File path does not exist.");
+        if (!Desktop.isDesktopSupported()) return OperationResult.failure("Preview failed: File cannot be opened.");
+        try {
+            Desktop.getDesktop().open(pdfFile);
+        } catch (IOException e) {
+            return OperationResult.failure("Preview failed: cannot open target file. Error message: " + e.getMessage());
+        }
+
+        return OperationResult.success("Successfully opened file: " + path);
+    }
+
+    public OperationResult updateProfile(String username, String newFullName, String oldPassword, String newPassword, String confirmNewPassword, String newEmployeeID) {
         String normalizedUsername = safeTrim(username);
         String normalizedFullName = safeTrim(newFullName);
         String pwd = newPassword == null ? "" : newPassword;
@@ -218,11 +294,20 @@ public class LibrarianPortalService {
         Optional<LibrarianAccount> existingOpt = librarianRepository.findByUsername(normalizedUsername);
         if (existingOpt.isEmpty()) return OperationResult.failure("Profile update failed: account not found.");
         LibrarianAccount existing = existingOpt.get();
+
+        if (!PasswordSecurity.verifyPassword(
+                oldPassword,
+                existing.getPasswordSaltBase64(),
+                existing.getPasswordHashBase64()
+        )) return OperationResult.failure("Profile update failed: the old password is wrong.");
+
+
         if (normalizedFullName.isEmpty()) return OperationResult.failure("Profile update failed: full name is required.");
 
         String salt = existing.getPasswordSaltBase64();
         String hash = existing.getPasswordHashBase64();
-        if (!pwd.isBlank() || !confirm.isBlank()) {
+        boolean passwordUpdated = !pwd.isBlank() || !confirm.isBlank();
+        if (passwordUpdated) {
             if (!pwd.equals(confirm)) return OperationResult.failure("Profile update failed: passwords do not match.");
             if (!isStrongPassword(pwd)) return OperationResult.failure("Profile update failed: weak password.");
             salt = project.task1.security.PasswordSecurity.generateSaltBase64();
@@ -247,7 +332,7 @@ public class LibrarianPortalService {
                 eID
         ));
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
-        return OperationResult.success("Profile updated successfully.");
+        return OperationResult.success(passwordUpdated ? "Profile updated successfully with password changed." : "Profile updated successfully.");
     }
 
     public OperationResult editUserAccount(String username, String newFullName, String newPassword, String confirmNewPassword) {
@@ -365,6 +450,35 @@ public class LibrarianPortalService {
 
         return "Username: " + user.getUsername() + "\nFull Name: "+ user.getFullName() + " -> " + newFullName + "\nRole: " + user.getRole();
     }
+    public String getUserDisableConfirmDetail(String username) {
+        String normalizedUsername = safeTrim(username);
+
+        UserAccount user;
+        do
+        {
+            Optional<StudentStaffAccount> userStudentStaff = studentStaffRepository.findByUsername(normalizedUsername);
+            if (userStudentStaff.isPresent()) {
+                user = userStudentStaff.get();
+                break;
+            }
+
+            Optional<AuthorAccount> userAuthor = authorRepository.findByUsername(normalizedUsername);
+            if (userAuthor.isPresent()) {
+                user = userAuthor.get();
+                break;
+            }
+
+            Optional<LibrarianAccount> userLibrarian = librarianRepository.findByUsername(normalizedUsername);
+            if (userLibrarian.isPresent()) {
+                user = userLibrarian.get();
+                break;
+            }
+
+            return "";
+        } while (false);
+
+        return "Username: " + user.getUsername() + "\nFull Name: "+ user.getFullName() + "\nRole: " + user.getRole();
+    }
     public OperationResult validateUsername(String username) {//Validate username used for editing
         String normalizedUsername = safeTrim(username);
         do
@@ -465,6 +579,107 @@ public class LibrarianPortalService {
 
         return OperationResult.success("Successfully disabled target user account.");
     }
+    public OperationResult validateActivatedUsername(String username) {//Validate username, then check whether it is disabled
+        String normalizedUsername = safeTrim(username);
+
+        UserAccount user;
+        Optional<StudentStaffAccount> userStudentStaff;
+        Optional<AuthorAccount> userAuthor;
+        Optional<LibrarianAccount> userLibrarian;
+        do
+        {
+            userStudentStaff = studentStaffRepository.findByUsername(normalizedUsername);
+            if (userStudentStaff.isPresent()) {
+                user = userStudentStaff.get();
+                break;
+            }
+
+            userAuthor = authorRepository.findByUsername(normalizedUsername);
+            if (userAuthor.isPresent()) {
+                user = userAuthor.get();
+                break;
+            }
+
+            userLibrarian = librarianRepository.findByUsername(normalizedUsername);
+            if (userLibrarian.isPresent()) {
+                user = userLibrarian.get();
+                break;
+            }
+
+            return OperationResult.failure("User does not exist.");
+        } while (false);
+
+        if (!user.isDisabled()) return OperationResult.failure("The user account is not disabled.");
+
+        return OperationResult.success("");
+    }
+    public OperationResult activateUser(String username) {
+        String normalizedUsername = safeTrim(username);
+
+        if (normalizedUsername.isEmpty()) return OperationResult.failure("Activation failed: invalid username.");
+
+        UserAccount user;
+        Optional<StudentStaffAccount> userStudentStaff = Optional.empty();
+        Optional<AuthorAccount> userAuthor = Optional.empty();
+        Optional<LibrarianAccount> userLibrarian = Optional.empty();
+        UserRole role;
+        do
+        {
+            userStudentStaff = studentStaffRepository.findByUsername(normalizedUsername);
+            if (userStudentStaff.isPresent()) {
+                role = UserRole.STUDENT;//Use STUDENT to represent both student and staff here
+                user = userStudentStaff.get();
+                break;
+            }
+
+            userAuthor = authorRepository.findByUsername(normalizedUsername);
+            if (userAuthor.isPresent()) {
+                role = UserRole.AUTHOR;
+                user = userAuthor.get();
+                break;
+            }
+
+            userLibrarian = librarianRepository.findByUsername(normalizedUsername);
+            if (userLibrarian.isPresent()) {
+                role = UserRole.LIBRARIAN;
+                user = userLibrarian.get();
+                break;
+            }
+
+            return OperationResult.failure("Edit failed: account not found.");
+        } while (false);
+
+        user.setDisabled(false);
+
+        switch (role) {
+            case STUDENT:
+                studentStaffRepository.save(userStudentStaff.get());
+                break;
+            case AUTHOR:
+                authorRepository.save(userAuthor.get());
+                break;
+            case LIBRARIAN:
+                librarianRepository.save(userLibrarian.get());
+                break;
+        }
+        appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your account was activated.", role);
+
+        return OperationResult.success("Successfully activated target user account.");
+    }
+
+    public OperationResult createUser(String type, String username, String fullName, String password, String passwordConfirm, String additional) {//Use the parameter additional to contain Bio for authors or employee id for librarians
+        SharedAuthFacade.AuthResult authResult = sharedAuthFacade.register(
+                username,
+                fullName,
+                password,
+                passwordConfirm,
+                type,
+                additional,
+                additional
+        );
+        if (!authResult.success()) return OperationResult.failure(authResult.message());
+        return OperationResult.success(authResult.message());
+    }
 
     public String getConfirmDetail(String subId) {
         BookSubmission sub = bookSubmissionRepository.findById(subId).get();
@@ -513,14 +728,36 @@ public class LibrarianPortalService {
                 && password.matches(".*[A-Z].*");
     }
 
+    private static boolean filterNotification(NotificationView notification,
+                                              String categoryFilter,
+                                              LocalDateTime timeMin,
+                                              LocalDateTime timeMax,
+                                              String urgencyFilter) {
+        if (!(categoryFilter.equals("ALL") || categoryFilter.equals(notification.category()))) return false;
+        if (timeMin != null && notification.timestamp().isBefore(timeMin)) return false;
+        if (timeMax != null && notification.timestamp().isAfter(timeMax)) return false;
+        return true;//TO DO: Add urgency to the NotificationView class, and replace this by urgencyFilter.equals("ALL") || urgencyFilter.equals(notification.urgency());
+    }
 
     public List<NotificationView> getNotificationBoard(String username) {
+        return getNotificationBoard(username, "ALL", null, null, "ALL");
+    }
+    public List<NotificationView> getNotificationBoard(
+            String username,
+            String categoryFilter,
+            LocalDateTime dateMin,
+            LocalDateTime dateMax,
+            String urgencyFilter) {
         String normalized = safeTrim(username);
         if (normalized.isEmpty()) return List.of();
 
         List<NotificationView> notifications = loadStoredNotifications(normalized);
         notifications.sort(Comparator.comparing(NotificationView::timestamp).reversed());
-        return notifications;
+        //TO DO: Sort by urgency
+        return notifications
+                .stream()
+                .filter(n -> filterNotification(n, categoryFilter, dateMin, dateMax, urgencyFilter))
+                .collect(Collectors.toList());
     }
 
     private void appendNotification(String username, String category, String message) {
@@ -604,4 +841,11 @@ public class LibrarianPortalService {
             String category,
             String message
     ) {}
+
+    public SharedAuthFacade.UserPrincipal getLibrarianPrinciple(String username) {
+        if (username == null) return null;
+        LibrarianAccount user = librarianRepository.findByUsername(username).orElse(null);
+        if (user == null) return null;
+        return new SharedAuthFacade.UserPrincipal(username, user.getFullName(), user.getRole().name());
+    }
 }
