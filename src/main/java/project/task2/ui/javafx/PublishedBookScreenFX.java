@@ -225,7 +225,7 @@ public class PublishedBookScreenFX {
     private TableView<BookSubmission> createBookTable() {
         TableView<BookSubmission> table = new TableView<>();
         table.getStyleClass().add("table-view");
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
 
         TableColumn<BookSubmission, String> idCol = new TableColumn<>("ID");
         idCol.setCellValueFactory(new PropertyValueFactory<>("submissionId"));

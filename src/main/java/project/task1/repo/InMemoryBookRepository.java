@@ -106,7 +106,7 @@ public class InMemoryBookRepository implements BookRepository {
         String idstr = Integer.toString(nextid);
         if (idstr.length() < 3) idstr = "0".repeat(3 - idstr.length()).concat(idstr);
         idstr = "B".concat(idstr);
-        booksById.put(idstr, new Book(idstr, title, author, publishDate, summary, true));
+        booksById.put(idstr, new Book(idstr, title, author, genre, publishDate, summary, true));
         nextid++;
         saveBooks();
     }
@@ -164,6 +164,7 @@ public class InMemoryBookRepository implements BookRepository {
                 encodeField(book.getId()),
                 encodeField(book.getTitle()),
                 encodeField(book.getAuthor()),
+                encodeField(book.getGenre()),
                 book.getPublishDate().toString(),
                 encodeField(book.getSummary()),
                 Boolean.toString(book.isAvailable()),
@@ -182,21 +183,23 @@ public class InMemoryBookRepository implements BookRepository {
             String id = decodeField(parts[0]);
             String title = decodeField(parts[1]);
             String author = decodeField(parts[2]);
-            LocalDate publishDate = LocalDate.parse(parts[3]);
-            String summary = decodeField(parts[4]);
-            boolean available = Boolean.parseBoolean(parts[5]);
-            String borrowedBy = decodeField(parts[6]);
+            int indexOffset = parts.length >= 9 ? 1 : 0;
+            String genre = indexOffset == 1 ? decodeField(parts[3]) : "";
+            LocalDate publishDate = LocalDate.parse(parts[3 + indexOffset]);
+            String summary = decodeField(parts[4 + indexOffset]);
+            boolean available = Boolean.parseBoolean(parts[5 + indexOffset]);
+            String borrowedBy = decodeField(parts[6 + indexOffset]);
             if (borrowedBy.isEmpty()) {
                 borrowedBy = null;
             }
             int borrowCount = 0;
-            if (parts.length >= 8) {
-                borrowCount = Integer.parseInt(parts[7]);
+            if (parts.length >= (8 + indexOffset)) {
+                borrowCount = Integer.parseInt(parts[7 + indexOffset]);
             } else if (!available) {
                 // Backward compatibility with old data format.
                 borrowCount = 1;
             }
-            return new Book(id, title, author, publishDate, summary, available, borrowedBy, borrowCount);
+            return new Book(id, title, author, genre, publishDate, summary, available, borrowedBy, borrowCount);
         } catch (Exception e) {
             return null;
         }

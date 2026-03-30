@@ -70,6 +70,7 @@ public class AuthorPortalService {
                 fullName.trim(),
                 salt,
                 hash,
+                false,
                 bio != null ? bio.trim() : ""
             );
 

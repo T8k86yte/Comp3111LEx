@@ -47,6 +47,12 @@ public class AuthorLoginFX extends Application {
                     "You were previously on: " + getScreenDisplayName(restoredScreen)
                 );
                 notification.showAndWait();
+            } else {
+                Alert notification = new Alert(Alert.AlertType.INFORMATION);
+                notification.setTitle("Session Restored");
+                notification.setHeaderText("✅ Previous Session Detected");
+                notification.setContentText("Session data found. Please log in to restore your last state.");
+                notification.showAndWait();
             }
             
             // Show login screen with username pre-filled
@@ -194,7 +200,20 @@ public class AuthorLoginFX extends Application {
                         Thread.sleep(800);
                         Platform.runLater(() -> {
                             System.out.println("🔄 Navigating to restored screen: " + targetScreen);
-                            dashboard.navigateToScreen(targetScreen);
+                            if (isKnownScreen(targetScreen)) {
+                                dashboard.navigateToScreen(targetScreen);
+                                Alert ok = new Alert(Alert.AlertType.INFORMATION);
+                                ok.setTitle("Restore Complete");
+                                ok.setHeaderText("✅ Restored successfully");
+                                ok.setContentText("Returned to: " + getScreenDisplayName(targetScreen));
+                                ok.showAndWait();
+                            } else {
+                                Alert fail = new Alert(Alert.AlertType.ERROR);
+                                fail.setTitle("Restore Failed");
+                                fail.setHeaderText("Could not restore last screen");
+                                fail.setContentText("Fallback to dashboard.");
+                                fail.showAndWait();
+                            }
                         });
                     } catch (InterruptedException e) {
                         e.printStackTrace();
@@ -206,6 +225,15 @@ public class AuthorLoginFX extends Application {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private boolean isKnownScreen(String screen) {
+        return "DASHBOARD".equals(screen)
+                || "PUBLISH_BOOK".equals(screen)
+                || "MY_BOOKS".equals(screen)
+                || "MY_SUBMISSIONS".equals(screen)
+                || "PROFILE".equals(screen)
+                || "NOTIFICATIONS".equals(screen);
     }
 
     private void showMessage(Label label, String message, String styleClass) {

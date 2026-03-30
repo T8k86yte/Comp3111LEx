@@ -80,7 +80,8 @@ public class SharedAuthFacade {
                         normalizedFullName,
                         salt,
                         hash,
-                        role
+                        role,
+                        false
                 );
                 studentStaffRepository.save(account);
                 return AuthResult.success("Registration successful for " + normalizedUsername + ".", new UserPrincipal(
@@ -88,13 +89,14 @@ public class SharedAuthFacade {
                 ));
             }
             case "AUTHOR" -> {
-                String salt = PasswordSecurity.generateSaltBase64();
-                String hash = PasswordSecurity.hashPasswordBase64(password, salt);
+                String salt = PasswordUtils.generateSalt();
+                String hash = PasswordUtils.hashPassword(password, salt);
                 AuthorAccount account = new AuthorAccount(
                         normalizedUsername,
                         normalizedFullName,
                         salt,
                         hash,
+                        false,
                         bio == null ? "" : bio.trim()
                 );
                 authorRepository.save(account);
@@ -111,13 +113,14 @@ public class SharedAuthFacade {
                         return AuthResult.failure("Registration failed: employee ID must be a number.");
                     }
                 }
-                String salt = PasswordUtils.generateSalt();
-                String hash = PasswordUtils.hashPassword(password, salt);
+                String salt = PasswordSecurity.generateSaltBase64();
+                String hash = PasswordSecurity.hashPasswordBase64(password, salt);
                 LibrarianAccount account = new LibrarianAccount(
                         normalizedUsername,
                         normalizedFullName,
                         salt,
                         hash,
+                        false,
                         employeeId
                 );
                 librarianRepository.save(account);
@@ -158,6 +161,13 @@ public class SharedAuthFacade {
                         account.get().getPasswordHashBase64()
                 );
                 if (!ok) {
+                    ok = PasswordUtils.verifyPassword(
+                            password,
+                            account.get().getPasswordSaltBase64(),
+                            account.get().getPasswordHashBase64()
+                    );
+                }
+                if (!ok) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }
                 return AuthResult.success(
@@ -188,11 +198,19 @@ public class SharedAuthFacade {
                 if (account.isEmpty()) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }
-                boolean ok = PasswordUtils.verifyPassword(
+                boolean ok = PasswordSecurity.verifyPassword(
                         password,
                         account.get().getPasswordSaltBase64(),
                         account.get().getPasswordHashBase64()
                 );
+                // Backward compatibility for old librarian accounts hashed with task2 utility.
+                if (!ok) {
+                    ok = project.task2.utils.PasswordUtils.verifyPassword(
+                            password,
+                            account.get().getPasswordSaltBase64(),
+                            account.get().getPasswordHashBase64()
+                    );
+                }
                 if (!ok) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }

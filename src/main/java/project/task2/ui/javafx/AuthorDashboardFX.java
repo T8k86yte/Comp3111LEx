@@ -13,6 +13,7 @@ import project.task2.model.AuthorAccount;
 import project.task2.model.BookSubmission;
 import project.task2.service.AuthorPortalService;
 import project.task2.utils.SessionManager;
+import project.shared.CrashSimulationManager;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -33,6 +34,7 @@ public class AuthorDashboardFX extends Application {
     private HBox statsBox;
     private List<Stage> childWindows = new ArrayList<>();
     private Label welcomeLabel;
+    private boolean randomCrashEnabled = false;
     
     // Track currently open screen
     private String currentActiveScreen = "DASHBOARD";
@@ -261,6 +263,7 @@ public class AuthorDashboardFX extends Application {
         // Row 3 - Crash Test button
         Button crashBtn = createMenuButton("💥 Crash Test", "Simulate application crash");
         crashBtn.getStyleClass().addAll("button", "danger-btn");
+        Button randomCrashBtn = createMenuButton("🎲 Random Crash: OFF", "Toggle random runtime crashes");
 
         // Publish Book button
         publishBtn.setOnAction(e -> {
@@ -347,6 +350,18 @@ public class AuthorDashboardFX extends Application {
         
         // Crash Test button action
         crashBtn.setOnAction(e -> simulateCrash());
+        randomCrashBtn.setOnAction(e -> {
+            randomCrashEnabled = !randomCrashEnabled;
+            if (randomCrashEnabled) {
+                CrashSimulationManager.enableRandomCrash(30, 120, SessionManager::autoSave);
+                randomCrashBtn.setText("🎲 Random Crash: ON\nToggle random runtime crashes");
+                showAlert("Random Crash", "Random crash simulation enabled (30-120s window).", Alert.AlertType.INFORMATION);
+            } else {
+                CrashSimulationManager.disableRandomCrash();
+                randomCrashBtn.setText("🎲 Random Crash: OFF\nToggle random runtime crashes");
+                showAlert("Random Crash", "Random crash simulation disabled.", Alert.AlertType.INFORMATION);
+            }
+        });
 
         // Add buttons to grid
         menuGrid.add(publishBtn, 0, 0);
@@ -355,6 +370,7 @@ public class AuthorDashboardFX extends Application {
         menuGrid.add(profileBtn, 0, 1);
         menuGrid.add(notifBtn, 1, 1);
         menuGrid.add(crashBtn, 2, 1);
+        menuGrid.add(randomCrashBtn, 0, 2);
 
         return menuGrid;
     }
@@ -539,9 +555,7 @@ public class AuthorDashboardFX extends Application {
                 );
                 crashAlert.showAndWait();
                 
-                // Force exit
-                Platform.exit();
-                System.exit(0);
+                CrashSimulationManager.triggerCrashNow(SessionManager::autoSave);
             }
         });
     }
@@ -558,6 +572,8 @@ public class AuthorDashboardFX extends Application {
 
         stopRefreshTimer();
         stopAutoSave();
+        CrashSimulationManager.disableRandomCrash();
+        randomCrashEnabled = false;
 
         if (submissionsStage != null && submissionsStage.isShowing()) {
             submissionsStage.close();
@@ -657,6 +673,8 @@ public class AuthorDashboardFX extends Application {
         System.out.println("🛑 Author Dashboard stopped");
         stopRefreshTimer();
         stopAutoSave();
+        CrashSimulationManager.disableRandomCrash();
+        randomCrashEnabled = false;
     }
 
     public static void main(String[] args) {

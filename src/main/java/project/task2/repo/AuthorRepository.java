@@ -80,6 +80,10 @@ public class AuthorRepository {
         return new ArrayList<>(authorsByUsername.values());
     }
 
+    public List<AuthorAccount> getAllUsers() {
+        return findAll();
+    }
+
     public Optional<AuthorAccount> findByUsername(String username) {
         return Optional.ofNullable(authorsByUsername.get(username));
     }

@@ -73,4 +73,8 @@ public class StudentStaffRepository {
     public Optional<StudentStaffAccount> findByUsername(String username) {
         return Optional.ofNullable(studentstaffsByUsername.get(username));
     }
+
+    public List<StudentStaffAccount> getAllUsers() {
+        return studentstaffsByUsername.values().stream().toList();
+    }
 }

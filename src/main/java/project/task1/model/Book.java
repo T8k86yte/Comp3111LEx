@@ -7,6 +7,7 @@ public final class Book {
     private final String id;
     private final String title;
     private final String author;
+    private final String genre;
     private final LocalDate publishDate;
     private final String summary;
     private boolean available;
@@ -14,7 +15,7 @@ public final class Book {
     private int borrowCount;
 
     public Book(String id, String title, String author, LocalDate publishDate, String summary, boolean available) {
-        this(id, title, author, publishDate, summary, available, null, 0);
+        this(id, title, author, "", publishDate, summary, available, null, 0);
     }
 
     public Book(
@@ -26,13 +27,26 @@ public final class Book {
             boolean available,
             String borrowedByUsername
     ) {
-        this(id, title, author, publishDate, summary, available, borrowedByUsername, 0);
+        this(id, title, author, "", publishDate, summary, available, borrowedByUsername, 0);
     }
 
     public Book(
             String id,
             String title,
             String author,
+            String genre,
+            LocalDate publishDate,
+            String summary,
+            boolean available
+    ) {
+        this(id, title, author, genre, publishDate, summary, available, null, 0);
+    }
+
+    public Book(
+            String id,
+            String title,
+            String author,
+            String genre,
             LocalDate publishDate,
             String summary,
             boolean available,
@@ -42,6 +56,7 @@ public final class Book {
         this.id = Objects.requireNonNull(id, "id must not be null");
         this.title = Objects.requireNonNull(title, "title must not be null");
         this.author = Objects.requireNonNull(author, "author must not be null");
+        this.genre = genre == null ? "" : genre;
         this.publishDate = Objects.requireNonNull(publishDate, "publishDate must not be null");
         this.summary = Objects.requireNonNull(summary, "summary must not be null");
         this.available = available;
@@ -59,6 +74,10 @@ public final class Book {
 
     public String getAuthor() {
         return author;
+    }
+
+    public String getGenre() {
+        return genre;
     }
 
     public LocalDate getPublishDate() {

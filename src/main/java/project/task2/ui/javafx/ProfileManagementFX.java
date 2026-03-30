@@ -375,6 +375,7 @@ public class ProfileManagementFX {
                     newFullName,
                     currentAuthor.getPasswordSalt(),
                     currentAuthor.getPasswordHash(),
+                    currentAuthor.isDisabled(),
                     newBio
                 );
                 
@@ -595,6 +596,7 @@ public class ProfileManagementFX {
                     currentFullName,
                     salt,
                     hash,
+                    currentAuthor.isDisabled(),
                     currentBio
                 );
                 

@@ -83,6 +83,7 @@ public class BookSubmission {
     public String getAuthorFullName() { return authorFullName; }
     public List<String> getGenres() { return genres; }
     public String getGenresAsString() { return genresToString(); }
+    public String getGenre() { return genresToString(); }
     public String getDescription() { return description; }
     public String getFilePath() { return filePath; }
     public String getCoverImagePath() { return coverImagePath; }

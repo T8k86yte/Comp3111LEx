@@ -5,61 +5,25 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Phase2 task1 update">
-      <change afterPath="$PROJECT_DIR$/src/main/java/project/task1/model/UserAccount.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/project/task1/model/UserRole.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/project/task1/security/PasswordSecurity.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/project/shared/SharedAuthFacade.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/shared/SharedAuthFacade.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/model/Book.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/model/Book.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/model/StudentStaffAccount.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/model/StudentStaffAccount.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/repo/InMemoryBookRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/repo/InMemoryBookRepository.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/repo/StudentStaffRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/repo/StudentStaffRepository.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/shared/CrossRoleAccountService.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/shared/SharedAuthFacade$AuthResult.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/shared/SharedAuthFacade$UserPrincipal.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/shared/SharedAuthFacade.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/model/Book.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/model/StudentStaffAccount$1.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/model/StudentStaffAccount.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/repo/BookRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/repo/InMemoryBookRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/repo/StudentStaffRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService$BorrowRecord.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService$BorrowRecordView.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService$LoginResult.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService$NotificationView.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService$OperationResult.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService$ReadingProgress.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService$ReadingProgressView.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/service/StudentStaffPortalService.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/ui/StudentStaffPortalApp$1.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/ui/StudentStaffPortalApp$2.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/ui/StudentStaffPortalApp$3.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/ui/StudentStaffPortalApp.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/AuthorPortalFX.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/model/Notification.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/model/UserAccount.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/model/UserRole.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/repo/AuthorRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/repo/DraftRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/repo/NotificationRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/repo/SubmissionRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/EditBookDialogFX.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/NotificationBoardFX.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/PublishBookFX$1.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/PublishBookFX$2.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/PublishBookFX$3.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/PublishBookFX$4.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/PublishBookFX.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/utils/FileHandler.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/utils/PasswordUtils.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/model/LibrarianAccount.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/repo/LibrarianRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$LoginResult.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$OperationResult.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp$1.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalConsole.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/ui/StudentStaffPortalApp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/ui/StudentStaffPortalApp.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/model/BookSubmission.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/model/BookSubmission.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/repo/AuthorRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/repo/AuthorRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/service/AuthorPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/service/AuthorPortalService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/AuthorDashboardFX.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/AuthorDashboardFX.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/AuthorLoginFX.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/AuthorLoginFX.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/ProfileManagementFX.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/ProfileManagementFX.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/PublishedBookScreenFX.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/PublishedBookScreenFX.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/model/LibrarianAccount.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/model/LibrarianAccount.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/ProfileManagementFX.class" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -124,6 +88,17 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="RunManager">
+    <configuration default="true" type="JetRunConfigurationType">
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
+      <option name="filePath" />
+      <method v="2" />
+    </configuration>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -349,7 +324,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774413657857</updated>
     </task>
-    <option name="localTasksCounter" value="25" />
+    <task id="LOCAL-00025" summary="Phase2 task1 update">
+      <option name="closed" value="true" />
+      <created>1774773246732</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1774773246732</updated>
+    </task>
+    <option name="localTasksCounter" value="26" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

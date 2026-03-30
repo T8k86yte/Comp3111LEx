@@ -25,8 +25,8 @@ public class StudentStaffAccount extends UserAccount {
     }
 
     public static StudentStaffAccount fromString(String data) {
-        String[] parts = data.split("\\|");
-        if (parts.length >= 5) {
+        String[] parts = data.split("\\|", -1);
+        if (parts.length >= 6) {
             return new StudentStaffAccount(
                     parts[0],
                     parts[1],
