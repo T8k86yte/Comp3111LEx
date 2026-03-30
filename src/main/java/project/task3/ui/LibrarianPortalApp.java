@@ -38,6 +38,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import static javafx.application.Platform.exit;
 
@@ -122,6 +124,7 @@ public class LibrarianPortalApp extends Application {
     private TextField bookTableBorrowedByFilter;
     private Label bookTableStatusLabel;
 
+    private Timer autoSaveTimer;
     private static final String TASK3_PROGRESS_FILE = "data/task3/progress.txt";
     private static final String[] progressData = new String[] {
             "currentUser.username",
@@ -211,13 +214,8 @@ public class LibrarianPortalApp extends Application {
         stage.show();
         this.stage = stage;
 
-        //If the application is exited without
-        stage.setOnCloseRequest(event -> {
-            System.out.println("Exiting application, exiting event type: " + event.getEventType().getName());
-            if (!event.getEventType().getName().equals("WINDOW_CLOSE_REQUEST")) {
-
-            }
-        });
+        //Save progress regularly
+        startAutoSave();
 
         setStatus("Ready.");
 
@@ -1839,5 +1837,23 @@ public class LibrarianPortalApp extends Application {
             System.err.println("Error loading progress: " + e.getMessage());
         }
         return true;
+    }
+
+    private void startAutoSave() {
+        stopAutoSave();
+        autoSaveTimer = new Timer(true);
+        autoSaveTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                Platform.runLater(() -> saveProgress());
+            }
+        }, 1000, 1000);
+    }
+
+    private void stopAutoSave() {
+        if (autoSaveTimer != null) {
+            autoSaveTimer.cancel();
+            autoSaveTimer = null;
+        }
     }
 }
