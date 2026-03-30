@@ -1,7 +1,6 @@
 module project.library {
     requires javafx.controls;
     requires java.desktop;
-    requires java.sql;
 
     exports project;
     exports project.ui;

@@ -102,6 +102,16 @@ public class InMemoryBookRepository implements BookRepository {
     }
 
     @Override
+    public boolean deleteBook(String bookId) {
+        Book removed = booksById.remove(bookId);
+        if (removed == null) {
+            return false;
+        }
+        saveBooks();
+        return true;
+    }
+
+    @Override
     public void addApprovedBook(String title, String author, LocalDate publishDate, String summary, String genre) {
         String idstr = Integer.toString(nextid);
         if (idstr.length() < 3) idstr = "0".repeat(3 - idstr.length()).concat(idstr);
