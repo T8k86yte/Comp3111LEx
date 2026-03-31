@@ -9,21 +9,33 @@ import project.task2.repo.DraftRepository;
 import project.task2.repo.NotificationRepository;
 import project.task2.model.Notification;
 import project.task2.utils.FileHandler;
+import project.task1.repo.InMemoryBookRepository;
+import project.task1.model.Book;
+import project.task1.repo.StudentStaffRepository;
+import project.task1.service.StudentStaffPortalService;
+import project.task3.repo.LibrarianRepository;
+import project.shared.notification.UnifiedNotificationStore;
 
 import java.util.List;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.HashMap;
 
 public class AuthorPortalService {
     private final AuthorRepository authorRepository;
     private final SubmissionRepository submissionRepository;
     private final DraftRepository draftRepository;
     private final NotificationRepository notificationRepository;
+    private final LibrarianRepository librarianRepository;
+    private final UnifiedNotificationStore notificationStore;
 
     public AuthorPortalService() {
         this.authorRepository = new AuthorRepository();
         this.submissionRepository = new SubmissionRepository();
         this.draftRepository = new DraftRepository();
         this.notificationRepository = new NotificationRepository();
+        this.librarianRepository = new LibrarianRepository();
+        this.notificationStore = new UnifiedNotificationStore();
     }
 
     // ========== REGISTRATION ==========
@@ -197,6 +209,7 @@ public class AuthorPortalService {
                 "Your book '" + title + "' has been submitted and is pending review by a librarian.",
                 "BOOK_SUBMITTED",
                 submission.getSubmissionId());
+            notifyLibrariansOfNewSubmission(submission);
 
             return SubmissionResult.success(
                 "Book '" + title + "' submitted successfully!\n" +
@@ -228,7 +241,75 @@ public class AuthorPortalService {
 
     public List<BookSubmission> getAuthorSubmissions(String authorUsername) {
         submissionRepository.refreshFromFile();
-        return submissionRepository.findByAuthor(authorUsername);
+        List<BookSubmission> submissions = submissionRepository.findByAuthor(authorUsername);
+        syncBorrowTrackingFromLibraryBooks(submissions);
+        return submissions;
+    }
+
+    private void syncBorrowTrackingFromLibraryBooks(List<BookSubmission> submissions) {
+        if (submissions == null || submissions.isEmpty()) {
+            return;
+        }
+
+        InMemoryBookRepository bookRepository = new InMemoryBookRepository();
+        List<Book> libraryBooks = bookRepository.findAll();
+        Map<String, Book> byTitleAuthor = new HashMap<>();
+        for (Book book : libraryBooks) {
+            String key = buildTitleAuthorKey(book.getTitle(), book.getAuthor());
+            byTitleAuthor.putIfAbsent(key, book);
+        }
+
+        boolean changed = false;
+        for (BookSubmission sub : submissions) {
+            if (sub == null || !sub.isApproved()) {
+                continue;
+            }
+            String key = buildTitleAuthorKey(sub.getTitle(), sub.getAuthorFullName());
+            Book matchedBook = byTitleAuthor.get(key);
+            if (matchedBook == null) {
+                continue;
+            }
+            int latestTotal = Math.max(0, matchedBook.getBorrowCount());
+            int latestCurrent = matchedBook.isAvailable() ? 0 : 1;
+            if (sub.getTotalBorrowedCount() != latestTotal || sub.getCurrentlyBorrowedCount() != latestCurrent) {
+                sub.setBorrowTrackingCounts(latestTotal, latestCurrent);
+                submissionRepository.update(sub);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            submissionRepository.refreshFromFile();
+        }
+    }
+
+    private String buildTitleAuthorKey(String title, String author) {
+        return normalizeMatchValue(title) + "|" + normalizeMatchValue(author);
+    }
+
+    private String normalizeMatchValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().toLowerCase();
+    }
+
+    private void notifyLibrariansOfNewSubmission(BookSubmission submission) {
+        if (submission == null) {
+            return;
+        }
+        for (var librarian : librarianRepository.getAllUsers()) {
+            notificationStore.create(
+                    "TASK3",
+                    librarian.getUsername(),
+                    "🆕 New Book Submission",
+                    "New submission received: '" + submission.getTitle() + "' by " + submission.getAuthorFullName() + ".",
+                    "NEW_BOOK_SUBMISSION",
+                    "NEW_BOOK_SUBMISSION",
+                    true,
+                    submission.getSubmissionId()
+            );
+        }
     }
 
     // ========== PROFILE MANAGEMENT ==========
@@ -255,11 +336,46 @@ public class AuthorPortalService {
 
     public boolean deleteSubmission(String submissionId) {
         try {
+            var existing = submissionRepository.findById(submissionId);
+            if (existing.isEmpty()) {
+                return false;
+            }
             submissionRepository.delete(submissionId);
+            existing.ifPresent(sub -> {
+                removeApprovedLibraryCopies(sub);
+                sendNotification(
+                        sub.getAuthorUsername(),
+                        "🗑️ Book Deleted: " + sub.getTitle(),
+                        "Your submission '" + sub.getTitle() + "' was deleted.",
+                        "BOOK_DELETED",
+                        sub.getSubmissionId()
+                );
+            });
             return true;
         } catch (Exception e) {
             System.err.println("❌ Task2: Error deleting submission: " + e.getMessage());
             return false;
+        }
+    }
+
+    private void removeApprovedLibraryCopies(BookSubmission submission) {
+        if (submission == null || !submission.isApproved()) {
+            return;
+        }
+        InMemoryBookRepository bookRepository = new InMemoryBookRepository();
+        StudentStaffPortalService studentService = new StudentStaffPortalService(
+                new StudentStaffRepository(),
+                bookRepository,
+                authorRepository,
+                librarianRepository
+        );
+        String key = buildTitleAuthorKey(submission.getTitle(), submission.getAuthorFullName());
+        List<Book> matches = bookRepository.findAll().stream()
+                .filter(book -> buildTitleAuthorKey(book.getTitle(), book.getAuthor()).equals(key))
+                .toList();
+        for (Book book : matches) {
+            studentService.handleBookDeleted(book.getId(), book.getTitle());
+            bookRepository.deleteBook(book.getId());
         }
     }
 
@@ -272,6 +388,10 @@ public class AuthorPortalService {
 
     public List<Notification> getNotifications(String authorUsername) {
         return notificationRepository.findByAuthor(authorUsername);
+    }
+
+    public List<Notification> getUnreadNotifications(String authorUsername) {
+        return notificationRepository.findUnreadByAuthor(authorUsername);
     }
 
     public int getUnreadNotificationCount(String authorUsername) {

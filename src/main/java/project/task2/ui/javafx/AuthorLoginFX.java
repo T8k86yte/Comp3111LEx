@@ -152,6 +152,7 @@ public class AuthorLoginFX extends Application {
                 // Save session after successful login
                 SessionManager.setCurrentUser(username, result.getAuthor().getFullName());
                 SessionManager.setCurrentScreen("DASHBOARD", null);
+                showAuthorNewNotificationPopup(username);
                 
                 openDashboard(result.getAuthor());
             } else {
@@ -179,8 +180,7 @@ public class AuthorLoginFX extends Application {
 
     private void handleWindowClose(WindowEvent event) {
         System.out.println("🚪 Closing Author Login...");
-        Platform.exit();
-        System.exit(0);
+        // Let JavaFX close only this window so the unified portal stays alive.
     }
 
     private void openDashboard(AuthorAccount author) {
@@ -240,6 +240,25 @@ public class AuthorLoginFX extends Application {
         label.setText(message);
         label.getStyleClass().setAll("status", styleClass);
         label.setVisible(true);
+    }
+
+    private void showAuthorNewNotificationPopup(String username) {
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        var unread = authorService.getUnreadNotifications(username);
+        if (unread == null || unread.isEmpty()) {
+            return;
+        }
+        String content = unread.stream()
+                .limit(5)
+                .map(n -> "[" + n.getType() + "] " + n.getMessage())
+                .collect(java.util.stream.Collectors.joining("\n\n"));
+        Alert popup = new Alert(Alert.AlertType.INFORMATION);
+        popup.setTitle("New Notifications");
+        popup.setHeaderText("You have " + unread.size() + " unread notification(s)");
+        popup.setContentText(content);
+        popup.showAndWait();
     }
 
     @Override

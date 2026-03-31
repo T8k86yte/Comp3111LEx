@@ -1,2 +1,2 @@
 task1.lastView=NOTIFICATIONS
-lastPortal=TASK3
+lastPortal=TASK1

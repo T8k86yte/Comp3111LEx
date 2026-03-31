@@ -6,9 +6,13 @@ import project.task1.model.UserAccount;
 import project.task1.repo.BookRepository;
 import project.task1.repo.StudentStaffRepository;
 import project.shared.SharedAuthFacade;
+import project.shared.notification.UnifiedNotification;
+import project.shared.notification.UnifiedNotificationStore;
 import project.task2.repo.AuthorRepository;
+import project.task2.repo.SubmissionRepository;
 import project.task3.repo.LibrarianRepository;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -32,13 +36,16 @@ public class StudentStaffPortalService {
     private static final int DEFAULT_BORROW_DAYS = 14;
     private static final String BORROW_HISTORY_FILE = "data/borrow_history.txt";
     private static final String BORROW_RECORDS_FILE = "data/task1/borrow_records.txt";
-    private static final String TASK1_NOTIFICATIONS_FILE = "data/task1/notifications.txt";
+    private static final String LEGACY_TASK1_NOTIFICATIONS_FILE = "data/task1/notifications.txt";
+    private static final String TASK1_NOTIFICATION_SCOPE = "TASK1";
     private static final String TASK1_READING_PROGRESS_FILE = "data/task1/reading_progress.txt";
     private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     private final StudentStaffRepository studentstaffRepository;
     private final BookRepository bookRepository;
     private final SharedAuthFacade sharedAuthFacade;
+    private final SubmissionRepository submissionRepository;
+    private final UnifiedNotificationStore notificationStore;
 
     public StudentStaffPortalService(StudentStaffRepository studentstaffRepository, BookRepository bookRepository) {
         this(studentstaffRepository, bookRepository, new AuthorRepository(), new LibrarianRepository());
@@ -57,6 +64,46 @@ public class StudentStaffPortalService {
                 authorRepository,
                 librarianRepository
         );
+        this.submissionRepository = new SubmissionRepository();
+        this.notificationStore = new UnifiedNotificationStore();
+        migrateLegacyTask1Notifications();
+    }
+
+    private void migrateLegacyTask1Notifications() {
+        Path path = Paths.get(LEGACY_TASK1_NOTIFICATIONS_FILE);
+        if (!Files.exists(path)) {
+            return;
+        }
+        try {
+            for (String line : Files.readAllLines(path)) {
+                if (line == null || line.trim().isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 4) {
+                    continue;
+                }
+                String username = decode(parts[0]);
+                String category = decode(parts[1]);
+                String message = decode(parts[2]);
+                LocalDateTime createdAt = LocalDateTime.parse(parts[3], HISTORY_TIME_FORMAT);
+                String legacyId = "LEGACY_TASK1_" + Integer.toUnsignedString(line.hashCode());
+                notificationStore.upsert(new UnifiedNotification(
+                        legacyId,
+                        TASK1_NOTIFICATION_SCOPE,
+                        username,
+                        category,
+                        message,
+                        category,
+                        category,
+                        false,
+                        isPriorityCategory(category),
+                        "",
+                        createdAt
+                ));
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     public OperationResult registerStaffStudent(String username, String fullName, String rawPassword, String roleText) {
@@ -254,6 +301,12 @@ public class StudentStaffPortalService {
             return OperationResult.failure("Return failed: unable to complete return.");
         }
         closeBorrowRecord(normalizedBorrower, normalizedBookId, LocalDate.now(), "SELF_RETURN");
+        clearReadingProgressForBook(normalizedBookId);
+        appendNotification(
+                normalizedBorrower,
+                "BOOK_RETURN",
+                "You returned \"" + book.getTitle() + "\" successfully."
+        );
         return OperationResult.success("Return successful: \"" + book.getTitle() + "\" has been returned.");
     }
 
@@ -285,9 +338,10 @@ public class StudentStaffPortalService {
                 boolean returned = bookRepository.returnBook(record.bookId(), record.username());
                 if (returned) {
                     records.set(i, record.withReturnDate(today, "AUTO_RETURN"));
+                    clearReadingProgressForBook(record.bookId());
                     appendNotification(
                             record.username(),
-                            "DUE_REMINDER",
+                            "AUTO_RETURN",
                             "Book \"" + record.bookTitle() + "\" was auto-returned after due date (" + record.dueDate() + ")."
                     );
                     returnedCount++;
@@ -338,6 +392,14 @@ public class StudentStaffPortalService {
             }
             if (!isStrongPassword(pwd)) {
                 return OperationResult.failure("Profile update failed: weak password.");
+            }
+            boolean sameAsCurrent = project.task1.security.PasswordSecurity.verifyPassword(
+                    pwd,
+                    existing.getPasswordSaltBase64(),
+                    existing.getPasswordHashBase64()
+            );
+            if (sameAsCurrent) {
+                return OperationResult.failure("Profile update failed: new password cannot be the same as the current password.");
             }
             salt = project.task1.security.PasswordSecurity.generateSaltBase64();
             hash = project.task1.security.PasswordSecurity.hashPasswordBase64(pwd, salt);
@@ -401,6 +463,17 @@ public class StudentStaffPortalService {
             if (!isStrongPassword(pwd)) {
                 return ProfileUpdateResult.failure("Profile update failed: weak password.", false);
             }
+            boolean sameAsCurrent = project.task1.security.PasswordSecurity.verifyPassword(
+                    pwd,
+                    existing.getPasswordSaltBase64(),
+                    existing.getPasswordHashBase64()
+            );
+            if (sameAsCurrent) {
+                return ProfileUpdateResult.failure(
+                        "Profile update failed: new password cannot be the same as the current password.",
+                        false
+                );
+            }
             salt = project.task1.security.PasswordSecurity.generateSaltBase64();
             hash = project.task1.security.PasswordSecurity.hashPasswordBase64(pwd, salt);
             passwordChanged = true;
@@ -441,7 +514,14 @@ public class StudentStaffPortalService {
                 String msg = daysLeft < 0
                         ? "Book \"" + record.bookTitle() + "\" is overdue since " + record.dueDate() + "."
                         : "Book \"" + record.bookTitle() + "\" is due on " + record.dueDate() + " (" + daysLeft + " day(s) left).";
-                notifications.add(new NotificationView(LocalDateTime.now(), "DUE_REMINDER", msg));
+                notifications.add(new NotificationView(
+                        "DUE-" + record.bookId() + "-" + record.dueDate(),
+                        LocalDateTime.now(),
+                        "DUE_REMINDER",
+                        msg,
+                        false,
+                        false
+                ));
             }
         }
 
@@ -454,12 +534,63 @@ public class StudentStaffPortalService {
                         || "ALL".equals(category)
                         || n.category().equalsIgnoreCase(category))
                 .sorted((a, b) -> {
-                    boolean ap = isPriorityCategory(a.category());
-                    boolean bp = isPriorityCategory(b.category());
+                    boolean ap = a.isUrgent();
+                    boolean bp = b.isUrgent();
                     if (ap != bp) return ap ? -1 : 1;
                     return b.timestamp().compareTo(a.timestamp());
                 })
                 .collect(Collectors.toList());
+    }
+
+    public List<NotificationView> getUnreadNotifications(String username, int limit) {
+        String normalized = safeTrim(username);
+        if (normalized.isEmpty()) {
+            return List.of();
+        }
+        return loadStoredNotifications(normalized).stream()
+                .filter(n -> !n.read())
+                .sorted((a, b) -> {
+                    if (a.isUrgent() != b.isUrgent()) {
+                        return a.isUrgent() ? -1 : 1;
+                    }
+                    return b.timestamp().compareTo(a.timestamp());
+                })
+                .limit(Math.max(0, limit))
+                .collect(Collectors.toList());
+    }
+
+    public void markNotificationAsRead(String username, String notificationId) {
+        String normalized = safeTrim(username);
+        String normalizedId = safeTrim(notificationId);
+        if (normalized.isEmpty() || normalizedId.isEmpty()) {
+            return;
+        }
+        boolean owned = notificationStore.findByScopeAndUser(TASK1_NOTIFICATION_SCOPE, normalized).stream()
+                .anyMatch(n -> n.id().equals(normalizedId));
+        if (owned) {
+            notificationStore.markRead(TASK1_NOTIFICATION_SCOPE, normalizedId);
+        }
+    }
+
+    public void deleteNotification(String username, String notificationId) {
+        String normalized = safeTrim(username);
+        String normalizedId = safeTrim(notificationId);
+        if (normalized.isEmpty() || normalizedId.isEmpty()) {
+            return;
+        }
+        boolean owned = notificationStore.findByScopeAndUser(TASK1_NOTIFICATION_SCOPE, normalized).stream()
+                .anyMatch(n -> n.id().equals(normalizedId));
+        if (owned) {
+            notificationStore.deleteById(TASK1_NOTIFICATION_SCOPE, normalizedId);
+        }
+    }
+
+    public void deleteReadNotifications(String username) {
+        String normalized = safeTrim(username);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        notificationStore.deleteReadByUser(TASK1_NOTIFICATION_SCOPE, normalized);
     }
 
     public void notifyBookDeletedForBorrowers(String bookId, String bookTitle) {
@@ -478,6 +609,32 @@ public class StudentStaffPortalService {
                         "BOOK_DELETION",
                         "Book \"" + title + "\" (" + normalizedBookId + ") was deleted from library."
                 ));
+    }
+
+    public void handleBookDeleted(String bookId, String bookTitle) {
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        if (normalizedBookId.isEmpty()) {
+            return;
+        }
+        notifyBookDeletedForBorrowers(normalizedBookId, bookTitle);
+        List<BorrowRecord> records = loadBorrowRecords();
+        boolean changed = false;
+        LocalDate today = LocalDate.now();
+        for (int i = 0; i < records.size(); i++) {
+            BorrowRecord record = records.get(i);
+            if (record.returnDate() != null) {
+                continue;
+            }
+            if (!normalizedBookId.equalsIgnoreCase(record.bookId())) {
+                continue;
+            }
+            records.set(i, record.withReturnDate(today, "BOOK_DELETED"));
+            changed = true;
+        }
+        if (changed) {
+            saveBorrowRecords(records);
+        }
+        clearReadingProgressForBook(normalizedBookId);
     }
 
     public OperationResult setBorrowedBookPdfPath(String username, String bookId, String pdfPath) {
@@ -512,6 +669,62 @@ public class StudentStaffPortalService {
                 .filter(r -> normalizedUser.equals(r.username()) && normalizedBookId.equalsIgnoreCase(r.bookId()))
                 .map(ReadingProgress::pdfPath)
                 .filter(p -> p != null && !p.isBlank())
+                .findFirst()
+                .orElse("");
+    }
+
+    public String resolveBorrowedBookPdfPath(String username, String bookId) {
+        String normalizedUser = safeTrim(username);
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        if (normalizedUser.isEmpty() || normalizedBookId.isEmpty()) {
+            return "";
+        }
+
+        String linkedPath = getBorrowedBookPdfPath(normalizedUser, normalizedBookId);
+        if (!linkedPath.isBlank()) {
+            File linkedFile = new File(linkedPath);
+            if (linkedFile.exists()) {
+                return linkedPath;
+            }
+        }
+
+        Optional<Book> borrowedBook = bookRepository.findById(normalizedBookId);
+        if (borrowedBook.isEmpty()) {
+            return "";
+        }
+
+        String autoPath = findApprovedSubmissionPdfPath(
+                borrowedBook.get().getTitle(),
+                borrowedBook.get().getAuthor()
+        );
+        if (autoPath.isBlank()) {
+            return "";
+        }
+
+        File autoFile = new File(autoPath);
+        if (!autoFile.exists()) {
+            return "";
+        }
+
+        setBorrowedBookPdfPath(normalizedUser, normalizedBookId, autoPath);
+        return autoPath;
+    }
+
+    private String findApprovedSubmissionPdfPath(String bookTitle, String authorFullName) {
+        String normalizedTitle = safeTrim(bookTitle).toLowerCase();
+        String normalizedAuthor = safeTrim(authorFullName).toLowerCase();
+        if (normalizedTitle.isEmpty() || normalizedAuthor.isEmpty()) {
+            return "";
+        }
+
+        submissionRepository.refreshFromFile();
+        return submissionRepository.findAll()
+                .stream()
+                .filter(sub -> sub != null && sub.isApproved())
+                .filter(sub -> normalizedTitle.equals(safeTrim(sub.getTitle()).toLowerCase()))
+                .filter(sub -> normalizedAuthor.equals(safeTrim(sub.getAuthorFullName()).toLowerCase()))
+                .map(sub -> safeTrim(sub.getFilePath()))
+                .filter(path -> !path.isBlank())
                 .findFirst()
                 .orElse("");
     }
@@ -659,53 +872,30 @@ public class StudentStaffPortalService {
     }
 
     private void appendNotification(String username, String category, String message) {
-        try {
-            Files.createDirectories(Paths.get("data/task1"));
-            String line = String.join("|",
-                    encode(username),
-                    encode(category),
-                    encode(message),
-                    LocalDateTime.now().format(HISTORY_TIME_FORMAT)
-            );
-            Files.write(
-                    Paths.get(TASK1_NOTIFICATIONS_FILE),
-                    List.of(line),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND
-            );
-        } catch (IOException ignored) {
-        }
+        notificationStore.create(
+                TASK1_NOTIFICATION_SCOPE,
+                username,
+                category,
+                message,
+                category,
+                category,
+                isPriorityCategory(category),
+                ""
+        );
     }
 
     private List<NotificationView> loadStoredNotifications(String username) {
-        Path path = Paths.get(TASK1_NOTIFICATIONS_FILE);
-        if (!Files.exists(path)) {
-            return List.of();
-        }
-        try {
-            List<NotificationView> list = new ArrayList<>();
-            for (String line : Files.readAllLines(path)) {
-                if (line == null || line.trim().isEmpty()) {
-                    continue;
-                }
-                String[] parts = line.split("\\|", -1);
-                if (parts.length < 4) {
-                    continue;
-                }
-                String u = decode(parts[0]);
-                if (!username.equals(u)) {
-                    continue;
-                }
-                list.add(new NotificationView(
-                        LocalDateTime.parse(parts[3], HISTORY_TIME_FORMAT),
-                        decode(parts[1]),
-                        decode(parts[2])
-                ));
-            }
-            return list;
-        } catch (Exception e) {
-            return List.of();
-        }
+        return notificationStore.findByScopeAndUser(TASK1_NOTIFICATION_SCOPE, username)
+                .stream()
+                .map(n -> new NotificationView(
+                        n.id(),
+                        n.createdAt(),
+                        n.category().isBlank() ? n.type() : n.category(),
+                        n.message(),
+                        n.read(),
+                        n.priority()
+                ))
+                .collect(Collectors.toList());
     }
 
     private OperationResult updateReadingProgress(String username, String bookId, String bookmark, String highlight) {
@@ -789,6 +979,18 @@ public class StudentStaffPortalService {
         }
     }
 
+    private void clearReadingProgressForBook(String bookId) {
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        if (normalizedBookId.isEmpty()) {
+            return;
+        }
+        List<ReadingProgress> remaining = loadReadingProgress()
+                .stream()
+                .filter(r -> !normalizedBookId.equalsIgnoreCase(r.bookId()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        saveReadingProgress(remaining);
+    }
+
     private static boolean isStrongPassword(String password) {
         if (password == null || password.length() < 8) {
             return false;
@@ -804,7 +1006,7 @@ public class StudentStaffPortalService {
 
     private static boolean isPriorityCategory(String category) {
         String c = safeTrim(category).toUpperCase();
-        return c.contains("DUE") || c.contains("DELETION") || c.contains("URGENT") || c.contains("AUTO_RETURN");
+        return c.contains("DELETION") || c.contains("AUTO_RETURN") || c.contains("URGENT");
     }
 
     private static String decode(String value) {
@@ -864,10 +1066,17 @@ public class StudentStaffPortalService {
     ) {}
 
     public record NotificationView(
+            String notificationId,
             LocalDateTime timestamp,
             String category,
-            String message
-    ) {}
+            String message,
+            boolean read,
+            boolean urgent
+    ) {
+        public boolean isUrgent() {
+            return urgent;
+        }
+    }
 
     private record ReadingProgress(
             String username,

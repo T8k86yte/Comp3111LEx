@@ -7,26 +7,26 @@
     <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Temporary2">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/data/authors.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/authors.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/books.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/books.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/session.dat" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/borrow_history.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/borrow_history.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/librarians.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/librarians.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/data/session_recovery.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/session_recovery.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/module-info.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/module-info.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/repo/AuthorRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/repo/AuthorRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/ui/AuthorLoginUI.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/ui/AuthorLoginUI.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/ui/PublishBookUI.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/ui/PublishBookUI.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/studentstaffs.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/studentstaffs.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/task1/borrow_records.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/task1/borrow_records.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/task1/notifications.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/task1/notifications.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/ui/StudentStaffPortalApp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/ui/StudentStaffPortalApp.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/model/BookSubmission.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/model/BookSubmission.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/repo/NotificationRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/repo/NotificationRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/service/AuthorPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/service/AuthorPortalService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/service/BorrowTrackingService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/AuthorLoginFX.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/AuthorLoginFX.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/PublishedBookScreenFX.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/ui/javafx/PublishedBookScreenFX.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/module-info.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/module-info.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/AuthorLoginUI.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/AuthorLoginUI.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/PublishBookUI.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/PublishBookUI.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX$2.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX$2.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorLoginFX.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorLoginFX.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$LoginResult.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$LoginResult.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$OperationResult.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$OperationResult.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp$1.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp.class" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -85,7 +85,7 @@
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "git-widget-placeholder": "Task3",
+    "git-widget-placeholder": "master",
     "ignore.virus.scanning.warn.message": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "C:/Users/zyang/IdeaProjects/Comp3111LEx",
@@ -400,7 +400,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java</url>
-          <line>448</line>
+          <line>528</line>
           <option name="timeStamp" value="4" />
         </line-breakpoint>
       </breakpoints>
