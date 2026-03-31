@@ -81,6 +81,12 @@ public class PublishBookUI {
         System.out.print("   Enter file path: ");
         String filePath = scanner.nextLine().trim();
 
+        // File path (simulated - in real app would be file chooser)
+        System.out.println("\n📁 Book Cover Page Upload:");
+        System.out.println("   Supported formats: JPG, PNG");
+        System.out.print("   Enter file path: ");
+        String coverFilePath = scanner.nextLine().trim();
+
         // Show summary
         System.out.println("\n" + "─".repeat(60));
         System.out.println("📋 SUBMISSION SUMMARY:");
@@ -90,6 +96,7 @@ public class PublishBookUI {
         System.out.println("   Description: " + (description.length() > 50 ? 
             description.substring(0, 50) + "..." : description));
         System.out.println("   File: " + filePath);
+        System.out.println("   Cover Page File: " + coverFilePath);
         System.out.println("─".repeat(60));
 
         System.out.print("\n❓ Submit for librarian approval? (y/n): ");
@@ -103,7 +110,8 @@ public class PublishBookUI {
                 title,
                 genre,
                 description,
-                filePath
+                filePath,
+                coverFilePath
             );
 
             System.out.println("\n" + "═".repeat(60));
