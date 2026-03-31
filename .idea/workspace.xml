@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Phase2 task1 update">
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/ProfileManagementFX.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/ProfileManagementFX.class" afterDir="false" />
-    </list>
+    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Phase2 task1 update" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -322,7 +320,23 @@
       <option name="project" value="LOCAL" />
       <updated>1774847218014</updated>
     </task>
-    <option name="localTasksCounter" value="27" />
+    <task id="LOCAL-00027" summary="Phase2 task1 update">
+      <option name="closed" value="true" />
+      <created>1774847335145</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1774847335145</updated>
+    </task>
+    <task id="LOCAL-00028" summary="Phase2 task1 update">
+      <option name="closed" value="true" />
+      <created>1774847339522</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1774847339522</updated>
+    </task>
+    <option name="localTasksCounter" value="29" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
