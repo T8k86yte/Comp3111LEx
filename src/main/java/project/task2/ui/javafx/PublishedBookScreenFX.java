@@ -275,7 +275,7 @@ public class PublishedBookScreenFX {
                     setText(String.valueOf(count));
                     if (count > 0) {
                         setStyle("-fx-text-fill: #dc2626; -fx-font-weight: bold;");
-                        setTooltip(new Tooltip("This book is currently borrowed"));
+                        setTooltip(new Tooltip("This book is currently borrowed and cannot be deleted"));
                     } else {
                         setStyle("-fx-text-fill: #22c55e;");
                     }
@@ -375,6 +375,27 @@ public class PublishedBookScreenFX {
             showAlert("No Selection", "Please select a book to delete.", Alert.AlertType.WARNING);
             return;
         }
+        
+        if (!selected.canBeDeleted()) {
+            if (selected.isApproved() && selected.getCurrentlyBorrowedCount() > 0) {
+                showAlert("Cannot Delete",
+                        "❌ This book is currently borrowed by " + selected.getCurrentlyBorrowedCount()
+                                + " reader(s) and has not been returned.\n\n"
+                                + "Books that are currently borrowed cannot be deleted.\n"
+                                + "Please wait until all copies are returned before deleting.\n\n"
+                                + "Currently borrowed: " + selected.getCurrentlyBorrowedCount() + " copy/copies",
+                        Alert.AlertType.WARNING);
+            } else if (selected.isRejected()) {
+                showAlert("Cannot Delete",
+                        "Rejected books cannot be deleted. They are kept for record purposes.",
+                        Alert.AlertType.WARNING);
+            } else {
+                showAlert("Cannot Delete",
+                        "This book cannot be deleted because it is in " + selected.getStatus() + " status.",
+                        Alert.AlertType.WARNING);
+            }
+            return;
+        }
         confirmDelete(selected);
     }
     
@@ -386,10 +407,6 @@ public class PublishedBookScreenFX {
             message = "This book is currently pending review.";
             additionalInfo = "\n\n⚠️ This book has not been reviewed yet.\n" +
                             "It can be deleted safely as no readers have access to it.";
-        } else if (selected.isApproved() && selected.getCurrentlyBorrowedCount() > 0) {
-            message = "This approved book is currently borrowed by " + selected.getCurrentlyBorrowedCount() + " reader(s).";
-            additionalInfo = "\n\nDeleting it will remove the book from library immediately.\n" +
-                    "Active borrow records will be closed automatically and borrowers will receive deletion notifications.";
         } else if (selected.isApproved() && selected.getCurrentlyBorrowedCount() == 0) {
             message = "This book is APPROVED and currently not borrowed by anyone.";
             additionalInfo = "\n\n📌 Since no readers are currently borrowing this book, you can delete it.\n" +

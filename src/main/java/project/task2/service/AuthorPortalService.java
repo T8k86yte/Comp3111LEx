@@ -340,6 +340,9 @@ public class AuthorPortalService {
             if (existing.isEmpty()) {
                 return false;
             }
+            if (!existing.get().canBeDeleted()) {
+                return false;
+            }
             submissionRepository.delete(submissionId);
             existing.ifPresent(sub -> {
                 removeApprovedLibraryCopies(sub);
