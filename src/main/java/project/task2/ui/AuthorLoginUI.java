@@ -32,8 +32,6 @@ public class AuthorLoginUI {
                         break;
                     case "2":
                         System.out.println("\nOpening Registration Portal...");
-                        AuthorRegistrationUI regUI = new AuthorRegistrationUI();
-                        regUI.start();
                         break;
                     case "0":
                         running = false;

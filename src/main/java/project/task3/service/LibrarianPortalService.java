@@ -224,7 +224,7 @@ public class LibrarianPortalService {
             HSSFSheet sheet = book.createSheet("Borrowed Books");
 
             HSSFRow headerRow = sheet.createRow(0);
-            String[] headers = new String[]{ "Id", "Title", "Borrowed Date", "Borrowed By", "Due Date", "Status" };
+            String[] headers = new String[]{ "Id", "Title", "Borrowed By", "Borrowed Date", "Return Date", "Status", "Overdue" };
             for (int i = 0; i < headers.length; i++) headerRow.createCell(i).setCellValue(headers[i]);
 
             int j = 1;
@@ -232,10 +232,11 @@ public class LibrarianPortalService {
                 HSSFRow thisRow = sheet.createRow(j);
                 thisRow.createCell(0).setCellValue(b.bookId());//ID
                 thisRow.createCell(1).setCellValue(b.bookTitle());//Title
-                thisRow.createCell(3).setCellValue(b.borrowDate().toString());//Borrowed Date
-                thisRow.createCell(5).setCellValue(b.borrowerUsername());//Borrowed By
-                thisRow.createCell(7).setCellValue(b.returnDate());//Due Date
-                thisRow.createCell(6).setCellValue(b.status());//Status
+                thisRow.createCell(2).setCellValue(b.borrowerUsername());//Borrowed By
+                thisRow.createCell(3).setCellValue(b.borrowDate() == null ? "" : b.borrowDate().toString());//Borrowed Date
+                thisRow.createCell(4).setCellValue(b.returnDate == null ? "" : b.returnDate().toString());//Due Date
+                thisRow.createCell(5).setCellValue(b.status());//Status
+                thisRow.createCell(6).setCellValue(b.overdue());//Overdue
                 j++;
             }
 
@@ -865,7 +866,7 @@ public class LibrarianPortalService {
 
         List<NotificationView> notifications = loadStoredNotifications(normalized);
         notifications.sort(Comparator.comparing(NotificationView::timestamp).reversed());
-        //TO DO: Sort by urgency
+        notifications.sort((n1, n2) -> (n1.isUrgent() ? 1 : 0) - (n2.isUrgent() ? 1 : 0));
         return notifications
                 .stream()
                 .filter(n -> filterNotification(n, categoryFilter, dateMin, dateMax, urgencyFilter))
@@ -952,7 +953,12 @@ public class LibrarianPortalService {
             LocalDateTime timestamp,
             String category,
             String message
-    ) {}
+    )
+    {
+        public boolean isUrgent() {
+            return category.equals("Profile Change");
+        }
+    }
 
     public SharedAuthFacade.UserPrincipal getLibrarianPrinciple(String username) {
         if (username == null) return null;
@@ -979,5 +985,14 @@ public class LibrarianPortalService {
             LocalDate returnDate,
             String status,
             boolean overdue
-    ) {}
+    )
+    {
+        public String getBookId() { return bookId; }
+        public String getBookTitle() { return bookTitle; }
+        public String getBorrowerUsername() { return borrowerUsername; }
+        public LocalDate getBorrowDate() { return borrowDate; }
+        public LocalDate getReturnDate() { return returnDate; }
+        public String getStatusAlt() { return status; }
+        public boolean getOverdue() { return overdue; }
+    }
 }

@@ -2,6 +2,7 @@ module project.library {
     requires javafx.controls;
     requires java.desktop;
     requires org.apache.poi.poi;
+    requires java.sql;
 
     exports project;
     exports project.ui;
@@ -11,4 +12,5 @@ module project.library {
 
     opens project.task1.model to javafx.base;
     opens project.task2.model to javafx.base;
+    opens project.task3.service to javafx.base;
 }

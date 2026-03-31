@@ -92,8 +92,4 @@ public class AuthorRepository {
     public int getCount() {
         return authorsByUsername.size();
     }
-
-    public List<AuthorAccount> getAllUsers() {
-        return authorsByUsername.values().stream().toList();
-    }
 }

@@ -22,7 +22,6 @@ import project.task1.model.UserAccount;
 import project.task2.model.BookSubmission;
 import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
-import project.task2.utils.SessionManager;
 import project.task3.model.LibrarianAccount;
 import project.task3.service.LibrarianPortalService.*;
 import project.task1.repo.InMemoryBookRepository;
@@ -31,10 +30,7 @@ import project.task3.service.LibrarianPortalService;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -127,9 +123,7 @@ public class LibrarianPortalApp extends Application {
     private Timer autoSaveTimer;
     private static final String TASK3_PROGRESS_FILE = "data/task3/progress.txt";
     private static final String[] progressData = new String[] {
-            "currentUser.username",
-            "currentUser.fullName",
-            "currentUser.role",
+            "currentUser",
             "currentScene",
             "tableTitleFilter",
             "tableAuthorUsernameFilter",
@@ -168,11 +162,8 @@ public class LibrarianPortalApp extends Application {
             "notificationDateMax",
             "notificationUrgencyFilter",
             "bookTableTitleFilter",
-            "bookTableAuthorUsernameFilter",
-            "bookTablePublishedMin",
-            "bookTablePublishedMax",
-            "bookTableSummaryFilter",
-            "bookTableBorrowedByFilter"
+            "bookTableBorrowedByFilter",
+            "bookTableStatusFilter"
     };
 
 
@@ -208,6 +199,14 @@ public class LibrarianPortalApp extends Application {
         stage.setScene(loginRegisterScene);
         stage.show();
         this.stage = stage;
+
+        stage.setOnCloseRequest(event -> {
+            try {
+                stopAutoSave();
+                if (event.getEventType().getName().equals("WINDOW_CLOSE_REQUEST")) Files.deleteIfExists(Paths.get(TASK3_PROGRESS_FILE));
+            } catch (Exception e) {
+                setStatus("Unable to delete the progress data file: " + e.getMessage());
+            }});
 
         //Save progress regularly
         startAutoSave();
@@ -866,25 +865,25 @@ public class LibrarianPortalApp extends Application {
         borrowedBooksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
 
         TableColumn<BorrowedBookRecordView, String> IdCol = new TableColumn<>("Id");
-        IdCol.setCellValueFactory(new PropertyValueFactory<>("id"));
+        IdCol.setCellValueFactory(new PropertyValueFactory<>("bookId"));
 
         TableColumn<BorrowedBookRecordView, String> titleCol = new TableColumn<>("Title");
-        titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
-
-        TableColumn<BorrowedBookRecordView, String> authorCol = new TableColumn<>("Author");
-        authorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
-
-        TableColumn<BorrowedBookRecordView, Object> publishDateCol = new TableColumn<>("Published Date");
-        publishDateCol.setCellValueFactory(new PropertyValueFactory<>("publishDate"));
-
-        TableColumn<BorrowedBookRecordView, String> summaryCol = new TableColumn<>("Summary");
-        summaryCol.setCellValueFactory(new PropertyValueFactory<>("summary"));
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("bookTitle"));
 
         TableColumn<BorrowedBookRecordView, String> borrowedByCol = new TableColumn<>("Borrowed By");
-        borrowedByCol.setCellValueFactory(new PropertyValueFactory<>("borrowedByUsername"));
+        borrowedByCol.setCellValueFactory(new PropertyValueFactory<>("borrowerUsername"));
 
-        TableColumn<BorrowedBookRecordView, String> borrowCountCol = new TableColumn<>("Borrow Count");
-        borrowCountCol.setCellValueFactory(new PropertyValueFactory<>("borrowCount"));
+        TableColumn<BorrowedBookRecordView, Object> borrowDateCol = new TableColumn<>("Borrowed Date");
+        borrowDateCol.setCellValueFactory(new PropertyValueFactory<>("borrowDate"));
+
+        TableColumn<BorrowedBookRecordView, Object> returnDateCol = new TableColumn<>("Returning Date");
+        returnDateCol.setCellValueFactory(new PropertyValueFactory<>("returnDate"));
+
+        TableColumn<BorrowedBookRecordView, String> stateCol = new TableColumn<>("State");
+        stateCol.setCellValueFactory(new PropertyValueFactory<>("statusAlt"));
+
+        TableColumn<BorrowedBookRecordView, String> overdueCol = new TableColumn<>("Overdue");
+        overdueCol.setCellValueFactory(new PropertyValueFactory<>("overdue"));
 
         titleCol.setCellFactory(column -> new TableCell<>() {
             @Override
@@ -906,7 +905,7 @@ public class LibrarianPortalApp extends Application {
             }
         });
 
-        borrowedBooksTable.getColumns().addAll(IdCol, titleCol, authorCol, publishDateCol, summaryCol, borrowedByCol, borrowCountCol);
+        borrowedBooksTable.getColumns().addAll(IdCol, titleCol, borrowedByCol, borrowDateCol, returnDateCol, stateCol, overdueCol);
 
         VBox card = new VBox(10);
         card.getStyleClass().add("card");
@@ -921,37 +920,28 @@ public class LibrarianPortalApp extends Application {
 
         bookTableTitleFilter = new TextField();
         bookTableBorrowedByFilter = new TextField();
-        bookTableStatusFilter = new ComboBox<>(FXCollections.observableArrayList("", ""));
+        bookTableStatusFilter = new ComboBox<>(FXCollections.observableArrayList("ALL", "BORROWED", "RETURNED", "OVERDUE"));
+        bookTableStatusFilter.setValue("ALL");
 
         Button refreshBtn = new Button("Refresh Table");
         refreshBtn.getStyleClass().add("primary-btn");
         refreshBtn.setOnAction(event -> refreshBorrowedBooks());
-        Button readSummaryBtn = new Button("Read Summary");
-        readSummaryBtn.getStyleClass().add("primary-btn");
-        readSummaryBtn.setOnAction(event -> readBookSummary());
         Button exportBtn = new Button("Export Record");
         exportBtn.getStyleClass().add("primary-btn");
         exportBtn.setOnAction(event -> handleExportBorrowedBooks());
 
-        HBox filters1 = new HBox(5);
-        HBox filters2 = new HBox(5);
-        filters1.getChildren().add(new Label("Title: "));
-        filters1.getChildren().add(bookTableTitleFilter);
-        filters1.getChildren().add(new Label("Author: "));
-        filters1.getChildren().add(bookTableAuthorUsernameFilter);
-        filters1.getChildren().add(new Label("Published min: "));
-        filters1.getChildren().add(bookTablePublishedMin);
-        filters1.getChildren().add(new Label("Published max: "));
-        filters1.getChildren().add(bookTablePublishedMax);
-        filters2.getChildren().add(new Label("Summary: "));
-        filters2.getChildren().add(bookTableSummaryFilter);
-        filters2.getChildren().add(new Label("Borrowed By: "));
-        filters2.getChildren().add(bookTableBorrowedByFilter);
-        filters2.getChildren().add(refreshBtn);
-        filters2.getChildren().add(readSummaryBtn);
-        filters2.getChildren().add(exportBtn);
+        HBox filters = new HBox(5);
+        HBox actions = new HBox(5);
+        filters.getChildren().add(new Label("Title: "));
+        filters.getChildren().add(bookTableTitleFilter);
+        filters.getChildren().add(new Label("Borrowed By: "));
+        filters.getChildren().add(bookTableBorrowedByFilter);
+        filters.getChildren().add(new Label("Status: "));
+        filters.getChildren().add(bookTableStatusFilter);
+        actions.getChildren().add(refreshBtn);
+        actions.getChildren().add(exportBtn);
 
-        card.getChildren().addAll(heading, hint, filters1, filters2);
+        card.getChildren().addAll(heading, hint, filters, actions);
 
         VBox.setVgrow(borrowedBooksTable, Priority.ALWAYS);
         wrapper.getChildren().addAll(card, heading, borrowedBooksTable);
@@ -1489,13 +1479,10 @@ public class LibrarianPortalApp extends Application {
 
     private void refreshBorrowedBooks() {
         borrowedBooksTable.setItems(FXCollections.observableArrayList(
-                portalService.getBorrowedBooksScreenData(
+                portalService.getBorrowedBookRecords(
                         bookTableTitleFilter.getText(),
-                        bookTableAuthorUsernameFilter.getText(),
-                        bookTablePublishedMin.getValue(),
-                        bookTablePublishedMax.getValue(),
-                        bookTableSummaryFilter.getText(),
-                        bookTableBorrowedByFilter.getText())));
+                        bookTableBorrowedByFilter.getText(),
+                        bookTableStatusFilter.getValue())));
     }
 
     private void refreshEditUsers() {
@@ -1553,12 +1540,6 @@ public class LibrarianPortalApp extends Application {
         updatePasswordHint(profilePasswordField, profileConfirmPasswordField, profilePasswordHintLabel);
     }
 
-    private void readBookSummary() {
-        Book selected = borrowedBooksTable.getSelectionModel().selectedItemProperty().get();
-        if (selected == null) showErrorPopup("Book Summary", "Action failed.", "No book is Selected currently.");
-        else showSummaryPopup(selected);
-    }
-
     static private void updatePasswordHint(TextField passwordField, TextField confirmPasswordField, Label hint) {
         if (hint == null) return;
         String password = passwordField == null ? "" : passwordField.getText();
@@ -1609,19 +1590,6 @@ public class LibrarianPortalApp extends Application {
         alert.setContentText(content);
 
         return alert.showAndWait().get() == ButtonType.OK;
-    }
-
-    private void showSummaryPopup(Book selected) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Quick Summary");
-        alert.setHeaderText(selected.getTitle() + " - " + selected.getAuthor());
-        TextArea area = new TextArea(selected.getSummary());
-        area.setEditable(false);
-        area.setWrapText(true);
-        area.setPrefColumnCount(48);
-        area.setPrefRowCount(12);
-        alert.getDialogPane().setContent(area);
-        alert.showAndWait();
     }
 
 
@@ -1697,17 +1665,8 @@ public class LibrarianPortalApp extends Application {
             case "notificationUrgencyFilter" -> { return notificationUrgencyFilter.getValue(); }
 
             case "bookTableTitleFilter" -> { return bookTableTitleFilter.getText(); }
-            case "bookTableAuthorUsernameFilter" -> { return bookTableAuthorUsernameFilter.getText(); }
-            case "bookTablePublishedMin" -> {
-                LocalDate v = bookTablePublishedMin.getValue();
-                return v == null ? "" : v.toString();
-            }
-            case "bookTablePublishedMax" -> {
-                LocalDate v = bookTablePublishedMax.getValue();
-                return v == null ? "" : v.toString();
-            }
-            case "bookTableSummaryFilter" -> { return bookTableSummaryFilter.getText(); }
             case "bookTableBorrowedByFilter" -> { return bookTableBorrowedByFilter.getText(); }
+            case "bookTableStatusFilter" -> { return bookTableStatusFilter.getValue(); }
         }
         return null;
     }
@@ -1772,11 +1731,8 @@ public class LibrarianPortalApp extends Application {
                 case "notificationUrgencyFilter" -> { notificationUrgencyFilter.setValue(value); }
 
                 case "bookTableTitleFilter" -> { bookTableTitleFilter.setText(value); }
-                case "bookTableAuthorUsernameFilter" -> { bookTableAuthorUsernameFilter.setText(value); }
-                case "bookTablePublishedMin" -> { bookTablePublishedMin.setValue(value.isEmpty() ? null : LocalDate.parse(value)); }
-                case "bookTablePublishedMax" -> { bookTablePublishedMax.setValue(value.isEmpty() ? null : LocalDate.parse(value)); }
-                case "bookTableSummaryFilter" -> { bookTableSummaryFilter.setText(value); }
                 case "bookTableBorrowedByFilter" -> { bookTableBorrowedByFilter.setText(value); }
+                case "bookTableStatusFilter" -> { bookTableStatusFilter.setValue(value); }
             }
         } catch (Exception e) {
             return false;
