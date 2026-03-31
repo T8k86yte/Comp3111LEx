@@ -12,6 +12,7 @@ import project.task1.security.PasswordSecurity;
 import project.task1.service.StudentStaffPortalService;
 import project.task2.model.AuthorAccount;
 import project.task2.model.BookSubmission;
+import project.task2.model.Notification;
 import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
@@ -47,7 +48,7 @@ public class LibrarianPortalService {
     private final SubmissionRepository bookSubmissionRepository;
 
     private static final String TASK1_NOTIFICATIONS_FILE = "data/task1/notifications.txt";
-    private static final String TASK2_NOTIFICATIONS_FILE = "data/task2/notifications.txt";
+    private static final String TASK2_NOTIFICATIONS_FILE = "data/notifications.txt";
     private static final String TASK3_NOTIFICATIONS_FILE = "data/task3/notifications.txt";
     private static final String BORROW_RECORDS_FILE = "data/task1/borrow_records.txt";
     private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -294,7 +295,7 @@ public class LibrarianPortalService {
         bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), s.getGenre());//Note that description is just an alias of summary for book
         bookSubmissionRepository.update(s);//Changes should be saved once there are updates
 
-        appendNotificationTo(s.getAuthorUsername(), "RESPONSE", "Your Book Submission \"" + s.getTitle() + "\" was approved.", UserRole.AUTHOR);//Send notification to the author
+        appendNotificationForAuthors(s.getAuthorUsername(), "Submission approved", "Your Book Submission \"" + s.getTitle() + "\" was approved.", "Book Approved", s.getSubmissionId());//Send notification to the author
         return OperationResult.success("Approve successful: \"" + s.getTitle() + "\" is approved and created.");
     }
     public OperationResult approveBookSubmission(String subId, String Username) {
@@ -314,7 +315,7 @@ public class LibrarianPortalService {
         s.reject(user.getUsername(), reason);
         bookSubmissionRepository.update(s);
 
-        appendNotificationTo(s.getAuthorUsername(), "RESPONSE", "Your Book Submission \"" + s.getTitle() + "\" was rejected.\nRejection reason:" + reason, UserRole.AUTHOR);//Send notification to the author
+        appendNotificationForAuthors(s.getAuthorUsername(), "Submission rejected", "Your Book Submission \"" + s.getTitle() + "\" was rejected. Rejection reason:" + reason, "Book Rejected", s.getSubmissionId());//Send notification to the author
         return OperationResult.success("Rejection successful: \"" + s.getTitle() + "\" is rejected.");
     }
     public OperationResult rejectBookSubmission(String subId, String Username, String reason) {
@@ -530,7 +531,8 @@ public class LibrarianPortalService {
                 ));
                 break;
         }
-        appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your profile was edited.", role);
+        if (role == UserRole.AUTHOR) appendNotificationForAuthors(normalizedUsername, "Profile edited", "Your profile was edited.", "Urgent", "");//Send notification to the author
+        else appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your profile was edited.", role);
 
         return OperationResult.success("Successfully edited target user account.");
     }
@@ -688,7 +690,8 @@ public class LibrarianPortalService {
                 librarianRepository.save(userLibrarian.get());
                 break;
         }
-        appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your account was disabled.", role);
+        if (role == UserRole.AUTHOR) appendNotificationForAuthors(normalizedUsername, "Account disabled", "Your account was disabled.", "Urgent", "");//Send notification to the author
+        else appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your account was disabled.", role);
 
         return OperationResult.success("Successfully disabled target user account.");
     }
@@ -775,7 +778,8 @@ public class LibrarianPortalService {
                 librarianRepository.save(userLibrarian.get());
                 break;
         }
-        appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your account was activated.", role);
+        if (role == UserRole.AUTHOR) appendNotificationForAuthors(normalizedUsername, "Account activated", "Your account was activated.", "Urgent", "");//Send notification to the author
+        else appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your account was activated.", role);
 
         return OperationResult.success("Successfully activated target user account.");
     }
@@ -893,16 +897,14 @@ public class LibrarianPortalService {
     }
 
     private void appendNotificationTo(String username, String category, String message, UserRole role) {
+        if (role == UserRole.AUTHOR) return;
+
         String file = "";
         String folder = "";
         switch (role) {
             case STUDENT, STAFF:
                 file = TASK1_NOTIFICATIONS_FILE;
                 folder = "data/task1";
-                break;
-            case AUTHOR:
-                file = TASK2_NOTIFICATIONS_FILE;
-                folder = "data/task2";
                 break;
             case LIBRARIAN:
                 file = TASK3_NOTIFICATIONS_FILE;
@@ -918,6 +920,19 @@ public class LibrarianPortalService {
             );
             Files.write(
                     Paths.get(file),
+                    List.of(line),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND
+            );
+        } catch (IOException ignored) {
+        }
+    }
+    private void appendNotificationForAuthors(String username, String title, String message, String type, String subId) {
+        try {
+            Files.createDirectories(Paths.get("data"));
+            String line = new Notification(username, title, message, type, subId).toString();
+            Files.write(
+                    Paths.get("data/notifications.txt"),
                     List.of(line),
                     StandardOpenOption.CREATE,
                     StandardOpenOption.APPEND

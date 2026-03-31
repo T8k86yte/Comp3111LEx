@@ -4,30 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Temporary2">
+    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Removed redundant code">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/authors.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/authors.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/data/books.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/books.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/session.dat" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/session_recovery.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/session_recovery.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/module-info.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/module-info.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/repo/AuthorRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/repo/AuthorRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/ui/AuthorLoginUI.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/ui/AuthorLoginUI.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task2/ui/PublishBookUI.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task2/ui/PublishBookUI.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/module-info.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/module-info.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/AuthorLoginUI.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/AuthorLoginUI.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/PublishBookUI.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/PublishBookUI.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX$2.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX$2.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorLoginFX.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorLoginFX.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$LoginResult.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$LoginResult.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$OperationResult.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$OperationResult.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp.class" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -357,7 +340,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774887566233</updated>
     </task>
-    <option name="localTasksCounter" value="28" />
+    <task id="LOCAL-00028" summary="Removed redundant code">
+      <option name="closed" value="true" />
+      <created>1774947539947</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1774947539947</updated>
+    </task>
+    <option name="localTasksCounter" value="29" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -393,7 +384,8 @@
     <MESSAGE value="Use case diagram for task1 using plantUML" />
     <MESSAGE value="Phase2 task1 update" />
     <MESSAGE value="Temporary" />
-    <option name="LAST_COMMIT_MESSAGE" value="Temporary" />
+    <MESSAGE value="Removed redundant code" />
+    <option name="LAST_COMMIT_MESSAGE" value="Removed redundant code" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
