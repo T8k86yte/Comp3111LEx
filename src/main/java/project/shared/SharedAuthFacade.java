@@ -146,7 +146,12 @@ public class SharedAuthFacade {
             return AuthResult.failure("Login failed: invalid username or password.");
         }
         if (!ownerRole.get().equalsIgnoreCase(normalizedRole)) {
-            return AuthResult.failure("Login failed: username belongs to " + ownerRole.get() + " account.");
+            //Student and staff accounts are equivalent when logging in
+            if (!((ownerRole.get().equalsIgnoreCase("STUDENT")
+                    && normalizedRole.equalsIgnoreCase("STAFF"))
+                    || (ownerRole.get().equalsIgnoreCase("STAFF")
+                    && normalizedRole.equalsIgnoreCase("STUDENT"))))
+                return AuthResult.failure("Login failed: username belongs to " + ownerRole.get() + " account.");
         }
 
         switch (normalizedRole) {
@@ -155,6 +160,7 @@ public class SharedAuthFacade {
                 if (account.isEmpty()) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }
+                if (account.get().isDisabled()) return AuthResult.failure("Login failed: The account is disabled.");
                 boolean ok = PasswordSecurity.verifyPassword(
                         password,
                         account.get().getPasswordSaltBase64(),
@@ -180,6 +186,7 @@ public class SharedAuthFacade {
                 if (account.isEmpty()) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }
+                if (account.get().isDisabled()) return AuthResult.failure("Login failed: The account is disabled.");
                 boolean ok = PasswordSecurity.verifyPassword(
                         password,
                         account.get().getPasswordSaltBase64(),
@@ -198,6 +205,7 @@ public class SharedAuthFacade {
                 if (account.isEmpty()) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }
+                if (account.get().isDisabled()) return AuthResult.failure("Login failed: The account is disabled.");
                 boolean ok = PasswordSecurity.verifyPassword(
                         password,
                         account.get().getPasswordSaltBase64(),
