@@ -343,6 +343,24 @@ public class LibrarianPortalService {
         return OperationResult.success("Successfully opened file: " + path);
     }
 
+    public OperationResult modifyBook(
+            String bookId,
+            String newTitle,
+            String newAuthor,
+            String newGenre,
+            String newDescription,
+            String newFilePath,
+            String newCoverPath) {
+        Optional<Book> bookO = bookRepository.findById(bookId);
+        if (bookO.isEmpty()) return OperationResult.failure("Modification failed: Invalid book ID.");
+
+        Book book = bookO.get();
+        Book newBook = new Book(bookId, newTitle, newAuthor, newGenre, book.getPublishDate(),
+                newDescription, book.isAvailable(), book.getBorrowedByUsername(), book.getBorrowCount());
+
+        return OperationResult.success("");
+    }
+
     public OperationResult updateProfile(String username, String newFullName, String oldPassword, String newPassword, String confirmNewPassword, String newEmployeeID) {
         String normalizedUsername = safeTrim(username);
         String normalizedFullName = safeTrim(newFullName);

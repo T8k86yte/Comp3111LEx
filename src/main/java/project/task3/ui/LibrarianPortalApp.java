@@ -17,6 +17,7 @@ import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import project.shared.SharedAuthFacade;
 import project.shared.CrashSimulationManager;
+import project.task1.model.Book;
 import project.task1.repo.StudentStaffRepository;
 import project.task1.model.UserAccount;
 import project.task2.model.BookSubmission;
@@ -119,6 +120,16 @@ public class LibrarianPortalApp extends Application {
     private TextField bookTableBorrowedByFilter;
     private ComboBox<String> bookTableStatusFilter;
     private Label bookTableStatusLabel;
+
+    private TableView<Book> publishedBooksTable;
+    private TextField publishedBookSelectedId;
+    private TextField publishedBookTitle;
+    private TextField publishedBookAuthorName;
+    private TextField publishedBookGenre;
+    private TextField publishedBookDescription;
+    private TextField publishedBookFilePath;
+    private TextField publishedBookCoverPath;
+    private Label publishedBookStatusLabel;
 
     private Timer autoSaveTimer;
     private static final String TASK3_PROGRESS_FILE = "data/task3/progress.txt";
@@ -327,6 +338,22 @@ public class LibrarianPortalApp extends Application {
         root.setCenter(buildBorrowedBooksView());
         bookTableStatusLabel = new Label();
         root.setBottom(buildStatusBar(bookTableStatusLabel));
+
+        Scene scene = new Scene(root, 1060, 700);
+        scene.getStylesheets().add(
+                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
+        );
+
+        return scene;
+    }
+
+    private Scene buildPublishedBooksScene() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setTop(new HBox(18, buildSceneSelector(4)));
+        root.setCenter(buildPublishedBooksView());
+        publishedBookStatusLabel = new Label();
+        root.setBottom(buildStatusBar(publishedBookStatusLabel));
 
         Scene scene = new Scene(root, 1060, 700);
         scene.getStylesheets().add(
@@ -949,6 +976,86 @@ public class LibrarianPortalApp extends Application {
         return wrapper;
     }
 
+    private VBox buildPublishedBooksView() {
+        VBox wrapper = new VBox(10);
+        wrapper.setPadding(new Insets(8, 18, 18, 18));
+        Label heading = new Label("Published Books");
+        heading.getStyleClass().add("section-title");
+
+        publishedBooksTable = new TableView<>();
+        publishedBooksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+
+        TableColumn<Book, String> IdCol = new TableColumn<>("Id");
+        IdCol.setCellValueFactory(new PropertyValueFactory<>("Id"));
+
+        TableColumn<Book, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("Title"));
+
+        TableColumn<Book, String> authorNameCol = new TableColumn<>("Author");
+        authorNameCol.setCellValueFactory(new PropertyValueFactory<>("Author"));
+
+        TableColumn<Book, String> genreCol = new TableColumn<>("Genre");
+        genreCol.setCellValueFactory(new PropertyValueFactory<>("Genre"));
+
+        TableColumn<Book, String> descriptionCol = new TableColumn<>("Description");
+        descriptionCol.setCellValueFactory(new PropertyValueFactory<>("Summary"));
+
+        TableColumn<Book, String> availableCol = new TableColumn<>("Available");
+        availableCol.setCellValueFactory(new PropertyValueFactory<>("isAvailable"));
+
+        publishedBooksTable.getColumns().addAll(IdCol, titleCol, authorNameCol, genreCol, descriptionCol, availableCol);
+        publishedBooksTable.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Book>() {
+            @Override
+            public void changed(ObservableValue<? extends Book> obs, Book oldBook, Book newBook) {
+                publishedBookSelectedId.setText(publishedBooksTable.getSelectionModel().getSelectedItem().getId());
+            }
+        });
+
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        card.setPrefWidth(320);
+
+        Label cardHeading = new Label("Published Books");
+        cardHeading.getStyleClass().add("card-title");
+        Label hint = new Label("Modify book details or create new books.");
+        hint.getStyleClass().add("muted");
+
+
+
+        publishedBookTitle = new TextField();
+        publishedBookAuthorName = new TextField();
+        publishedBookGenre = new TextField();
+        publishedBookDescription = new TextField();
+        publishedBookFilePath = new TextField();
+        publishedBookCoverPath = new TextField();
+
+        Button modifyBtn = new Button("Modify Book");
+        modifyBtn.getStyleClass().add("primary-btn");
+        modifyBtn.setOnAction(event -> handleModifyBook());
+        Button createBtn = new Button("Create Book");
+        createBtn.getStyleClass().add("primary-btn");
+        createBtn.setOnAction(event -> handleCreateBook());
+
+        HBox fields1 = new HBox(5);
+        HBox fields2 = new HBox(5);
+        HBox actions = new HBox(5);
+        fields1.getChildren().add(publishedBookTitle);
+        fields1.getChildren().add(publishedBookAuthorName);
+        fields1.getChildren().add(publishedBookGenre);
+        fields2.getChildren().add(publishedBookDescription);
+        fields2.getChildren().add(publishedBookFilePath);
+        fields2.getChildren().add(publishedBookCoverPath);
+        actions.getChildren().add(modifyBtn);
+        actions.getChildren().add(createBtn);
+
+        card.getChildren().addAll(heading, hint, fields1, fields2, actions);
+
+        VBox.setVgrow(publishedBooksTable, Priority.ALWAYS);
+        wrapper.getChildren().addAll(card, heading, publishedBooksTable);
+
+        return wrapper;
+    }
+
     private HBox buildStatusBar(Label s) {
         HBox statusBar = new HBox();
         statusBar.setPadding(new Insets(10, 18, 12, 18));
@@ -1474,6 +1581,19 @@ public class LibrarianPortalApp extends Application {
         );
         if (!result.success()) showErrorPopup("Export Borrowed Books", "Action failed", result.message());
         setStatus(result.message());
+    }
+
+    private void handleModifyBook() {
+        if (currentUser == null) {
+            showErrorPopup("Modify Book", "User not logged in", "Please log in first.");
+            return;
+        }
+
+
+    }
+
+    private void handleCreateBook() {
+
     }
 
 
