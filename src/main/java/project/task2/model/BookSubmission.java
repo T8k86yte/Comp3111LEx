@@ -109,6 +109,11 @@ public class BookSubmission {
             this.currentlyBorrowedCount--;
         }
     }
+
+    public void setBorrowTrackingCounts(int totalBorrowedCount, int currentlyBorrowedCount) {
+        this.totalBorrowedCount = Math.max(0, totalBorrowedCount);
+        this.currentlyBorrowedCount = Math.max(0, currentlyBorrowedCount);
+    }
     
     public void setGenres(List<String> newGenres) { this.genres = newGenres; this.editCount++; }
     

@@ -14,7 +14,6 @@ import javafx.stage.Stage;
 import project.task2.model.AuthorAccount;
 import project.task2.model.BookSubmission;
 import project.task2.service.AuthorPortalService;
-import project.task2.service.BorrowTrackingService;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
@@ -23,7 +22,6 @@ import java.util.function.Consumer;
 
 public class PublishedBookScreenFX {
     private AuthorPortalService authorService;
-    private BorrowTrackingService borrowTrackingService;
     private AuthorAccount currentAuthor;
     private Stage stage;
     private TableView<BookSubmission> bookTable;
@@ -39,7 +37,6 @@ public class PublishedBookScreenFX {
     public PublishedBookScreenFX(AuthorAccount author, Consumer<Void> onDataChanged) {
         this.currentAuthor = author;
         this.authorService = new AuthorPortalService();
-        this.borrowTrackingService = new BorrowTrackingService();
         this.stage = new Stage();
         this.masterData = FXCollections.observableArrayList();
         this.onDataChanged = onDataChanged;
@@ -378,38 +375,27 @@ public class PublishedBookScreenFX {
             showAlert("No Selection", "Please select a book to delete.", Alert.AlertType.WARNING);
             return;
         }
-
-        // Check if deletion is allowed
-        boolean canDelete = borrowTrackingService.canDeleteBook(selected.getSubmissionId());
         
-        if (!canDelete) {
-            // Provide specific reason why deletion is not allowed
+        if (!selected.canBeDeleted()) {
             if (selected.isApproved() && selected.getCurrentlyBorrowedCount() > 0) {
-                showAlert("Cannot Delete", 
-                    "❌ This book is currently borrowed by " + selected.getCurrentlyBorrowedCount() + 
-                    " reader(s) and has not been returned.\n\n" +
-                    "Books that are currently borrowed cannot be deleted.\n" +
-                    "Please wait until all copies are returned before deleting.\n\n" +
-                    "Currently borrowed: " + selected.getCurrentlyBorrowedCount() + " copy/copies",
-                    Alert.AlertType.WARNING);
-            } else if (selected.isApproved() && selected.getCurrentlyBorrowedCount() == 0) {
-                // This should not happen if canDelete returns true, but just in case
-                showAlert("Cannot Delete", 
-                    "This book is approved but cannot be deleted for an unknown reason.",
-                    Alert.AlertType.WARNING);
+                showAlert("Cannot Delete",
+                        "❌ This book is currently borrowed by " + selected.getCurrentlyBorrowedCount()
+                                + " reader(s) and has not been returned.\n\n"
+                                + "Books that are currently borrowed cannot be deleted.\n"
+                                + "Please wait until all copies are returned before deleting.\n\n"
+                                + "Currently borrowed: " + selected.getCurrentlyBorrowedCount() + " copy/copies",
+                        Alert.AlertType.WARNING);
             } else if (selected.isRejected()) {
-                showAlert("Cannot Delete", 
-                    "Rejected books cannot be deleted. They are kept for record purposes.",
-                    Alert.AlertType.WARNING);
+                showAlert("Cannot Delete",
+                        "Rejected books cannot be deleted. They are kept for record purposes.",
+                        Alert.AlertType.WARNING);
             } else {
-                showAlert("Cannot Delete", 
-                    "This book cannot be deleted because it is in " + selected.getStatus() + " status.",
-                    Alert.AlertType.WARNING);
+                showAlert("Cannot Delete",
+                        "This book cannot be deleted because it is in " + selected.getStatus() + " status.",
+                        Alert.AlertType.WARNING);
             }
             return;
         }
-        
-        // If deletion is allowed, confirm with the user
         confirmDelete(selected);
     }
     
@@ -427,6 +413,9 @@ public class PublishedBookScreenFX {
                             "Historical borrow records (" + selected.getTotalBorrowedCount() + 
                             " total borrows) will be kept for reference.\n" +
                             "The book will be permanently removed from the library.";
+        } else if (selected.isRejected()) {
+            message = "This book is REJECTED.";
+            additionalInfo = "\n\nIt will be removed from your submissions list.";
         }
         
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);

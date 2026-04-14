@@ -108,7 +108,7 @@ public class LibrarianPortalApp extends Application {
     private PasswordField createUsersPasswordConfirm;
     private TextField createUsersBioOrEmployeeId;
 
-    private ListView<String> notificationList;
+    private ListView<LibrarianPortalService.NotificationView> notificationList;
     private Label notificationStatusLabel;
     private ComboBox<String> notificationCategoryFilter;
     private DatePicker notificationDateMin;
@@ -442,8 +442,40 @@ public class LibrarianPortalApp extends Application {
         Label hint = new Label("Timestamped and categorized notifications.");
         hint.getStyleClass().add("muted");
         notificationList = new ListView<>();
+        notificationList.setCellFactory(list -> new javafx.scene.control.ListCell<LibrarianPortalService.NotificationView>() {
+            @Override
+            protected void updateItem(LibrarianPortalService.NotificationView item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    return;
+                }
+                String c = item.category() == null ? "" : item.category().toUpperCase();
+                boolean urgent = c.equals("NEW_BOOK_SUBMISSION")
+                        || c.equals("USER_ACCOUNT_UPDATE")
+                        || c.equals("BOOK_REJECTED")
+                        || c.equals("RESPONSE")
+                        || c.contains("URGENT");
+                String urgentTag = urgent ? "[URGENT] " : "";
+                String readTag = item.read() ? "" : "[NEW] ";
+                setText(readTag + urgentTag
+                        + "[" + item.timestamp().toLocalDate() + " " + item.timestamp().toLocalTime().withNano(0) + "] "
+                        + "[" + item.category() + "] " + item.message());
+            }
+        });
+        Button markReadBtn = new Button("Mark Selected Read");
+        markReadBtn.getStyleClass().add("secondary-btn");
+        markReadBtn.setOnAction(e -> handleMarkTask3NotificationRead());
+        Button deleteBtn = new Button("Delete Selected");
+        deleteBtn.getStyleClass().add("secondary-btn");
+        deleteBtn.setOnAction(e -> handleDeleteTask3Notification());
+        Button deleteReadBtn = new Button("Delete Read");
+        deleteReadBtn.getStyleClass().add("secondary-btn");
+        deleteReadBtn.setOnAction(e -> handleDeleteTask3ReadNotifications());
+        HBox actions = new HBox(8, markReadBtn, deleteBtn, deleteReadBtn);
+        actions.setAlignment(Pos.CENTER_LEFT);
         VBox.setVgrow(notificationList, Priority.ALWAYS);
-        card.getChildren().addAll(heading, hint, buildNotificationFilterCard(), notificationList);
+        card.getChildren().addAll(heading, hint, buildNotificationFilterCard(), notificationList, actions);
         return card;
     }
 
@@ -637,7 +669,12 @@ public class LibrarianPortalApp extends Application {
         heading.getStyleClass().add("card-title");
 
 
-        notificationCategoryFilter = new ComboBox<>(FXCollections.observableArrayList("ALL", "ANNOUNCEMENT", "RESPONSE"));
+        notificationCategoryFilter = new ComboBox<>(FXCollections.observableArrayList(
+                "ALL",
+                "ANNOUNCEMENT",
+                "NEW_BOOK_SUBMISSION",
+                "USER_ACCOUNT_UPDATE"
+        ));
         notificationCategoryFilter.setValue("ALL");
         notificationDateMin = new DatePicker();
         notificationDateMax = new DatePicker();
@@ -1162,6 +1199,7 @@ public class LibrarianPortalApp extends Application {
         currentUserLabel.setText("Current user: " + currentUser.username() + " (" + currentUser.role() + ")");
         loginPasswordField.clear();
         stage.setScene(acceptRejectScene);
+        showTask3NewNotificationPopup();
         showInfoPopup("Login", "Welcome", result.message());
     }
 
@@ -1621,25 +1659,82 @@ public class LibrarianPortalApp extends Application {
         if (notificationList == null || currentUser == null) return;
         LocalDate minDate = notificationDateMin.getValue();
         LocalDate maxDate = notificationDateMax.getValue();
-        List<String> rows = portalService.getNotificationBoard(
+        List<LibrarianPortalService.NotificationView> rows = portalService.getNotificationBoard(
                         currentUser.username(),
                         notificationCategoryFilter.getValue(),
                         minDate == null ? null : minDate.atStartOfDay(),
                         maxDate == null ? null : maxDate.atTime(23, 59, 59),
-                        notificationUrgencyFilter.getValue())
-                .stream()
-                .map(n -> formatNotificationRow(n.timestamp(), n.category(), n.message()))
-                .collect(java.util.stream.Collectors.toList());
+                        notificationUrgencyFilter.getValue());
         if (rows.isEmpty()) {
-            notificationList.setItems(FXCollections.observableArrayList("No notifications."));
+            notificationList.setItems(FXCollections.observableArrayList());
             return;
         }
         notificationList.setItems(FXCollections.observableArrayList(rows));
     }
 
     private String formatNotificationRow(LocalDateTime timestamp, String category, String message) {
-        return "[" + timestamp.toLocalDate() + " " + timestamp.toLocalTime().withNano(0) + "] "
+        String c = category == null ? "" : category.toUpperCase();
+        boolean urgent = c.equals("NEW_BOOK_SUBMISSION")
+                || c.equals("USER_ACCOUNT_UPDATE")
+                || c.equals("BOOK_REJECTED")
+                || c.equals("RESPONSE")
+                || c.contains("URGENT");
+        String urgentTag = urgent ? "[URGENT] " : "";
+        return urgentTag
+                + "[" + timestamp.toLocalDate() + " " + timestamp.toLocalTime().withNano(0) + "] "
                 + "[" + category + "] " + message;
+    }
+
+    private void handleMarkTask3NotificationRead() {
+        if (currentUser == null || notificationList == null) {
+            return;
+        }
+        LibrarianPortalService.NotificationView selected = notificationList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showErrorPopup("Notifications", "No selection.", "Select a notification first.");
+            return;
+        }
+        portalService.markNotificationAsRead(currentUser.username(), selected.notificationId());
+        refreshNotifications();
+    }
+
+    private void handleDeleteTask3Notification() {
+        if (currentUser == null || notificationList == null) {
+            return;
+        }
+        LibrarianPortalService.NotificationView selected = notificationList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showErrorPopup("Notifications", "No selection.", "Select a notification first.");
+            return;
+        }
+        portalService.deleteNotification(currentUser.username(), selected.notificationId());
+        refreshNotifications();
+    }
+
+    private void handleDeleteTask3ReadNotifications() {
+        if (currentUser == null) {
+            return;
+        }
+        portalService.deleteReadNotifications(currentUser.username());
+        refreshNotifications();
+    }
+
+    private void showTask3NewNotificationPopup() {
+        if (currentUser == null) {
+            return;
+        }
+        List<LibrarianPortalService.NotificationView> unread = portalService.getUnreadNotifications(currentUser.username(), 5);
+        if (unread.isEmpty()) {
+            return;
+        }
+        String content = unread.stream()
+                .map(n -> "[" + n.category() + "] " + n.message())
+                .collect(java.util.stream.Collectors.joining("\n\n"));
+        showInfoPopup(
+                "New Notifications",
+                "You have " + unread.size() + " unread notification(s)",
+                content
+        );
     }
 
     private void setStatus(String message) {

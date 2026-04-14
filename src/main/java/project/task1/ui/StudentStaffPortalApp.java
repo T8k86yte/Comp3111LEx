@@ -23,13 +23,13 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.input.Clipboard;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import project.task1.model.Book;
 import project.task1.repo.InMemoryBookRepository;
@@ -45,6 +45,7 @@ import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.Timer;
@@ -100,7 +101,7 @@ public class StudentStaffPortalApp extends Application {
     private PasswordField profilePasswordField;
     private PasswordField profileConfirmPasswordField;
     private Label profilePasswordHintLabel;
-    private ListView<String> notificationList;
+    private ListView<StudentStaffPortalService.NotificationView> notificationList;
     private PasswordField profileCurrentPasswordField;
     private TextField bookFilterTitleField;
     private TextField bookFilterAuthorField;
@@ -629,7 +630,7 @@ public class StudentStaffPortalApp extends Application {
         readingInfoLabel = new Label("Select one borrowed book to manage PDF/bookmark/highlight.");
         readingInfoLabel.getStyleClass().add("muted");
 
-        Button openPdfBtn = new Button("Open/Link PDF");
+        Button openPdfBtn = new Button("Open PDF");
         openPdfBtn.getStyleClass().add("secondary-btn");
         openPdfBtn.setOnAction(e -> handleOpenPdfForBorrowedBook());
         Button bookmarkBtn = new Button("Save Bookmark");
@@ -646,11 +647,13 @@ public class StudentStaffPortalApp extends Application {
             if (newValue == null || currentUser == null) {
                 return;
             }
+            String resolvedPdfPath = portalService.resolveBorrowedBookPdfPath(currentUser.username(), newValue.bookId());
             StudentStaffPortalService.ReadingProgressView reading = portalService.getReadingProgress(currentUser.username(), newValue.bookId());
             bookmarkField.setText(reading.bookmark());
-            readingInfoLabel.setText(reading.pdfPath().isBlank()
+            highlightField.setText(reading.highlightNotes());
+            readingInfoLabel.setText(resolvedPdfPath.isBlank()
                     ? "No PDF linked yet for " + newValue.bookId() + "."
-                    : "PDF linked: " + reading.pdfPath());
+                    : "PDF linked: " + resolvedPdfPath);
         });
 
         HBox actions = new HBox(10, openPdfBtn, bookmarkBtn, highlightBtn, returnSelectedBtn);
@@ -711,15 +714,48 @@ public class StudentStaffPortalApp extends Application {
         HBox filterRow = new HBox(8);
         notificationSearchField = new TextField();
         notificationSearchField.setPromptText("Search notifications");
-        notificationCategoryFilterBox = new ComboBox<>(FXCollections.observableArrayList("All", "DUE_REMINDER", "BOOK_DELETION", "ANNOUNCEMENT"));
+        notificationCategoryFilterBox = new ComboBox<>(FXCollections.observableArrayList(
+                "All",
+                "DUE_REMINDER",
+                "AUTO_RETURN",
+                "BOOK_RETURN",
+                "BOOK_DELETION",
+                "ANNOUNCEMENT"
+        ));
         notificationCategoryFilterBox.setValue("All");
         Button applyBtn = new Button("Apply Filter");
         applyBtn.getStyleClass().add("secondary-btn");
         applyBtn.setOnAction(e -> refreshNotifications());
         filterRow.getChildren().addAll(new Label("Filter:"), notificationSearchField, notificationCategoryFilterBox, applyBtn);
         notificationList = new ListView<>();
+        notificationList.setCellFactory(list -> new javafx.scene.control.ListCell<StudentStaffPortalService.NotificationView>() {
+            @Override
+            protected void updateItem(StudentStaffPortalService.NotificationView item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    return;
+                }
+                String urgentTag = item.isUrgent() ? "[URGENT] " : "";
+                String readTag = item.read() ? "" : "[NEW] ";
+                setText(readTag + urgentTag
+                        + "[" + item.timestamp().toLocalDate() + " " + item.timestamp().toLocalTime().withNano(0) + "] "
+                        + "[" + item.category() + "] " + item.message());
+            }
+        });
+        Button markReadBtn = new Button("Mark Selected Read");
+        markReadBtn.getStyleClass().add("secondary-btn");
+        markReadBtn.setOnAction(e -> handleMarkTask1NotificationRead());
+        Button deleteBtn = new Button("Delete Selected");
+        deleteBtn.getStyleClass().add("secondary-btn");
+        deleteBtn.setOnAction(e -> handleDeleteTask1Notification());
+        Button deleteReadBtn = new Button("Delete Read");
+        deleteReadBtn.getStyleClass().add("secondary-btn");
+        deleteReadBtn.setOnAction(e -> handleDeleteTask1ReadNotifications());
+        HBox actions = new HBox(8, markReadBtn, deleteBtn, deleteReadBtn);
+        actions.setAlignment(Pos.CENTER_LEFT);
         VBox.setVgrow(notificationList, Priority.ALWAYS);
-        card.getChildren().addAll(heading, hint, filterRow, notificationList);
+        card.getChildren().addAll(heading, hint, filterRow, notificationList, actions);
         return card;
     }
 
@@ -850,6 +886,7 @@ public class StudentStaffPortalApp extends Application {
         } else {
             showErrorPopup("Session Restore", "Restore failed", "Could not restore the previous screen. Returned to Book List.");
         }
+        showTask1NewNotificationPopup();
         startAutoSave();
         refreshNotifications();
         showInfoPopup("Login", "Welcome", result.message());
@@ -1107,28 +1144,19 @@ public class StudentStaffPortalApp extends Application {
         if (selected == null || currentUser == null) {
             return;
         }
-        String existingPath = portalService.getBorrowedBookPdfPath(currentUser.username(), selected.bookId());
-        File pdfFile;
-        if (existingPath == null || existingPath.isBlank()) {
-            FileChooser chooser = new FileChooser();
-            chooser.setTitle("Select PDF for " + selected.bookTitle());
-            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files", "*.pdf"));
-            pdfFile = chooser.showOpenDialog(root.getScene().getWindow());
-            if (pdfFile == null) {
-                return;
-            }
-            StudentStaffPortalService.OperationResult linkResult =
-                    portalService.setBorrowedBookPdfPath(currentUser.username(), selected.bookId(), pdfFile.getAbsolutePath());
-            if (!linkResult.success()) {
-                showErrorPopup("PDF Link Failed", "Could not save PDF path.", linkResult.message());
-                return;
-            }
-        } else {
-            pdfFile = new File(existingPath);
+        String resolvedPath = portalService.resolveBorrowedBookPdfPath(currentUser.username(), selected.bookId());
+        if (resolvedPath == null || resolvedPath.isBlank()) {
+            showErrorPopup(
+                    "Open PDF Failed",
+                    "No linked PDF found.",
+                    "No associated file path is available for this borrowed book."
+            );
+            return;
         }
+        File pdfFile = new File(resolvedPath);
 
         if (!pdfFile.exists()) {
-            showErrorPopup("Open PDF Failed", "PDF file not found.", "Linked path does not exist. Re-link the PDF.");
+            showErrorPopup("Open PDF Failed", "PDF file not found.", "Linked file path does not exist on this machine.");
             return;
         }
         if (!Desktop.isDesktopSupported()) {
@@ -1150,8 +1178,10 @@ public class StudentStaffPortalApp extends Application {
         }
         String value = bookmarkField == null ? "" : bookmarkField.getText().trim();
         if (value.isEmpty()) {
-            showErrorPopup("Bookmark", "Bookmark is empty.", "Enter a bookmark value first.");
-            return;
+            value = "Auto bookmark @ " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            if (bookmarkField != null) {
+                bookmarkField.setText(value);
+            }
         }
         StudentStaffPortalService.OperationResult result =
                 portalService.saveBookmark(currentUser.username(), selected.bookId(), value);
@@ -1169,8 +1199,16 @@ public class StudentStaffPortalApp extends Application {
         }
         String value = highlightField == null ? "" : highlightField.getText().trim();
         if (value.isEmpty()) {
-            showErrorPopup("Highlight", "Highlight text is empty.", "Enter text to highlight first.");
-            return;
+            Clipboard clipboard = Clipboard.getSystemClipboard();
+            if (clipboard.hasString()) {
+                value = clipboard.getString().trim();
+                if (highlightField != null) {
+                    highlightField.setText(value);
+                }
+            }
+        }
+        if (value.isEmpty()) {
+            value = "Auto highlight @ " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         }
         StudentStaffPortalService.OperationResult result =
                 portalService.saveHighlight(currentUser.username(), selected.bookId(), value);
@@ -1364,16 +1402,13 @@ public class StudentStaffPortalApp extends Application {
         if (notificationList == null || currentUser == null) {
             return;
         }
-        List<String> rows = portalService.getNotificationBoard(
+        List<StudentStaffPortalService.NotificationView> rows = portalService.getNotificationBoard(
                         currentUser.username(),
                         notificationSearchField == null ? "" : notificationSearchField.getText(),
                         notificationCategoryFilterBox == null ? "All" : notificationCategoryFilterBox.getValue()
-                )
-                .stream()
-                .map(n -> formatNotificationRow(n.timestamp(), n.category(), n.message()))
-                .collect(java.util.stream.Collectors.toList());
+                );
         if (rows.isEmpty()) {
-            notificationList.setItems(FXCollections.observableArrayList("No notifications."));
+            notificationList.setItems(FXCollections.observableArrayList());
             return;
         }
         notificationList.setItems(FXCollections.observableArrayList(rows));
@@ -1438,8 +1473,73 @@ public class StudentStaffPortalApp extends Application {
     }
 
     private String formatNotificationRow(LocalDateTime timestamp, String category, String message) {
-        return "[" + timestamp.toLocalDate() + " " + timestamp.toLocalTime().withNano(0) + "] "
+        boolean urgent = "AUTO_RETURN".equalsIgnoreCase(category)
+                || "BOOK_DELETION".equalsIgnoreCase(category)
+                || category.toUpperCase().contains("URGENT");
+        String urgentTag = urgent ? "[URGENT] " : "";
+        return urgentTag
+                + "[" + timestamp.toLocalDate() + " " + timestamp.toLocalTime().withNano(0) + "] "
                 + "[" + category + "] " + message;
+    }
+
+    private void handleMarkTask1NotificationRead() {
+        if (currentUser == null || notificationList == null) {
+            return;
+        }
+        StudentStaffPortalService.NotificationView selected = notificationList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showErrorPopup("Notifications", "No selection.", "Select a notification first.");
+            return;
+        }
+        if (selected.notificationId().startsWith("DUE-")) {
+            showInfoPopup("Notifications", "Not applicable", "Due reminders are generated dynamically and cannot be marked as read.");
+            return;
+        }
+        portalService.markNotificationAsRead(currentUser.username(), selected.notificationId());
+        refreshNotifications();
+    }
+
+    private void handleDeleteTask1Notification() {
+        if (currentUser == null || notificationList == null) {
+            return;
+        }
+        StudentStaffPortalService.NotificationView selected = notificationList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showErrorPopup("Notifications", "No selection.", "Select a notification first.");
+            return;
+        }
+        if (selected.notificationId().startsWith("DUE-")) {
+            showInfoPopup("Notifications", "Not applicable", "Due reminders are generated dynamically and cannot be deleted.");
+            return;
+        }
+        portalService.deleteNotification(currentUser.username(), selected.notificationId());
+        refreshNotifications();
+    }
+
+    private void handleDeleteTask1ReadNotifications() {
+        if (currentUser == null) {
+            return;
+        }
+        portalService.deleteReadNotifications(currentUser.username());
+        refreshNotifications();
+    }
+
+    private void showTask1NewNotificationPopup() {
+        if (currentUser == null) {
+            return;
+        }
+        List<StudentStaffPortalService.NotificationView> unread = portalService.getUnreadNotifications(currentUser.username(), 5);
+        if (unread.isEmpty()) {
+            return;
+        }
+        String content = unread.stream()
+                .map(n -> "[" + n.category() + "] " + n.message())
+                .collect(java.util.stream.Collectors.joining("\n\n"));
+        showInfoPopup(
+                "New Notifications",
+                "You have " + unread.size() + " unread notification(s)",
+                content
+        );
     }
 
     private boolean restoreLastScreen(String screen) {

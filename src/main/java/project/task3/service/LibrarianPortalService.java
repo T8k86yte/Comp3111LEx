@@ -12,11 +12,12 @@ import project.task1.security.PasswordSecurity;
 import project.task1.service.StudentStaffPortalService;
 import project.task2.model.AuthorAccount;
 import project.task2.model.BookSubmission;
-import project.task2.model.Notification;
 import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
 import project.task3.repo.LibrarianRepository;
+import project.shared.notification.UnifiedNotification;
+import project.shared.notification.UnifiedNotificationStore;
 
 import java.awt.*;
 import java.io.File;
@@ -46,10 +47,12 @@ public class LibrarianPortalService {
     private final SharedAuthFacade sharedAuthFacade;
     private final BookRepository bookRepository;
     private final SubmissionRepository bookSubmissionRepository;
+    private final UnifiedNotificationStore notificationStore;
 
-    private static final String TASK1_NOTIFICATIONS_FILE = "data/task1/notifications.txt";
-    private static final String TASK2_NOTIFICATIONS_FILE = "data/notifications.txt";
-    private static final String TASK3_NOTIFICATIONS_FILE = "data/task3/notifications.txt";
+    private static final String LEGACY_TASK3_NOTIFICATIONS_FILE = "data/task3/notifications.txt";
+    private static final String TASK1_NOTIFICATION_SCOPE = "TASK1";
+    private static final String TASK2_NOTIFICATION_SCOPE = "TASK2";
+    private static final String TASK3_NOTIFICATION_SCOPE = "TASK3";
     private static final String BORROW_RECORDS_FILE = "data/task1/borrow_records.txt";
     private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -60,6 +63,45 @@ public class LibrarianPortalService {
         this.sharedAuthFacade = new SharedAuthFacade(studentStaffRepository, authorRepository, librarianRepository);
         this.bookRepository = bookRepository;
         this.bookSubmissionRepository = bookSubmissionRepository;
+        this.notificationStore = new UnifiedNotificationStore();
+        migrateLegacyTask3Notifications();
+    }
+
+    private void migrateLegacyTask3Notifications() {
+        Path path = Paths.get(LEGACY_TASK3_NOTIFICATIONS_FILE);
+        if (!Files.exists(path)) {
+            return;
+        }
+        try {
+            for (String line : Files.readAllLines(path)) {
+                if (line == null || line.trim().isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 4) {
+                    continue;
+                }
+                String username = decode(parts[0]);
+                String category = decode(parts[1]);
+                String message = decode(parts[2]);
+                LocalDateTime createdAt = LocalDateTime.parse(parts[3], HISTORY_TIME_FORMAT);
+                String legacyId = "LEGACY_TASK3_" + Integer.toUnsignedString(line.hashCode());
+                notificationStore.upsert(new UnifiedNotification(
+                        legacyId,
+                        TASK3_NOTIFICATION_SCOPE,
+                        username,
+                        category,
+                        message,
+                        category,
+                        category,
+                        false,
+                        "RESPONSE".equalsIgnoreCase(category),
+                        "",
+                        createdAt
+                ));
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     public LibrarianPortalService.OperationResult registerLibrarian(String username, String fullname, String rawPassword, String employeeIDtext) {
@@ -295,7 +337,7 @@ public class LibrarianPortalService {
         bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), s.getGenre());//Note that description is just an alias of summary for book
         bookSubmissionRepository.update(s);//Changes should be saved once there are updates
 
-        appendNotificationForAuthors(s.getAuthorUsername(), "Submission approved", "Your Book Submission \"" + s.getTitle() + "\" was approved.", "Book Approved", s.getSubmissionId());//Send notification to the author
+        appendNotificationTo(s.getAuthorUsername(), "BOOK_APPROVED", "Your Book Submission \"" + s.getTitle() + "\" was approved.", UserRole.AUTHOR);//Send notification to the author
         return OperationResult.success("Approve successful: \"" + s.getTitle() + "\" is approved and created.");
     }
     public OperationResult approveBookSubmission(String subId, String Username) {
@@ -315,7 +357,7 @@ public class LibrarianPortalService {
         s.reject(user.getUsername(), reason);
         bookSubmissionRepository.update(s);
 
-        appendNotificationForAuthors(s.getAuthorUsername(), "Submission rejected", "Your Book Submission \"" + s.getTitle() + "\" was rejected. Rejection reason:" + reason, "Book Rejected", s.getSubmissionId());//Send notification to the author
+        appendNotificationTo(s.getAuthorUsername(), "BOOK_REJECTED", "Your Book Submission \"" + s.getTitle() + "\" was rejected.\nRejection reason:" + reason, UserRole.AUTHOR);//Send notification to the author
         return OperationResult.success("Rejection successful: \"" + s.getTitle() + "\" is rejected.");
     }
     public OperationResult rejectBookSubmission(String subId, String Username, String reason) {
@@ -341,24 +383,6 @@ public class LibrarianPortalService {
         }
 
         return OperationResult.success("Successfully opened file: " + path);
-    }
-
-    public OperationResult modifyBook(
-            String bookId,
-            String newTitle,
-            String newAuthor,
-            String newGenre,
-            String newDescription,
-            String newFilePath,
-            String newCoverPath) {
-        Optional<Book> bookO = bookRepository.findById(bookId);
-        if (bookO.isEmpty()) return OperationResult.failure("Modification failed: Invalid book ID.");
-
-        Book book = bookO.get();
-        Book newBook = new Book(bookId, newTitle, newAuthor, newGenre, book.getPublishDate(),
-                newDescription, book.isAvailable(), book.getBorrowedByUsername(), book.getBorrowCount());
-
-        return OperationResult.success("");
     }
 
     public OperationResult updateProfile(String username, String newFullName, String oldPassword, String newPassword, String confirmNewPassword, String newEmployeeID) {
@@ -549,8 +573,7 @@ public class LibrarianPortalService {
                 ));
                 break;
         }
-        if (role == UserRole.AUTHOR) appendNotificationForAuthors(normalizedUsername, "Profile edited", "Your profile was edited.", "Urgent", "");//Send notification to the author
-        else appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your profile was edited.", role);
+        appendNotificationTo(normalizedUsername, "USER_ACCOUNT_UPDATE", "Your profile was edited.", role);
 
         return OperationResult.success("Successfully edited target user account.");
     }
@@ -708,8 +731,7 @@ public class LibrarianPortalService {
                 librarianRepository.save(userLibrarian.get());
                 break;
         }
-        if (role == UserRole.AUTHOR) appendNotificationForAuthors(normalizedUsername, "Account disabled", "Your account was disabled.", "Urgent", "");//Send notification to the author
-        else appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your account was disabled.", role);
+        appendNotificationTo(normalizedUsername, "USER_ACCOUNT_UPDATE", "Your account was disabled.", role);
 
         return OperationResult.success("Successfully disabled target user account.");
     }
@@ -796,8 +818,7 @@ public class LibrarianPortalService {
                 librarianRepository.save(userLibrarian.get());
                 break;
         }
-        if (role == UserRole.AUTHOR) appendNotificationForAuthors(normalizedUsername, "Account activated", "Your account was activated.", "Urgent", "");//Send notification to the author
-        else appendNotificationTo(normalizedUsername, "ANNOUNCEMENT", "Your account was activated.", role);
+        appendNotificationTo(normalizedUsername, "USER_ACCOUNT_UPDATE", "Your account was activated.", role);
 
         return OperationResult.success("Successfully activated target user account.");
     }
@@ -871,7 +892,9 @@ public class LibrarianPortalService {
         if (!(categoryFilter.equals("ALL") || categoryFilter.equals(notification.category()))) return false;
         if (timeMin != null && notification.timestamp().isBefore(timeMin)) return false;
         if (timeMax != null && notification.timestamp().isAfter(timeMax)) return false;
-        return true;//TO DO: Add urgency to the NotificationView class, and replace this by urgencyFilter.equals("ALL") || urgencyFilter.equals(notification.urgency());
+        if ("URGENT".equalsIgnoreCase(urgencyFilter) && !notification.isUrgent()) return false;
+        if ("NORMAL".equalsIgnoreCase(urgencyFilter) && notification.isUrgent()) return false;
+        return true;
     }
 
     public List<NotificationView> getNotificationBoard(String username) {
@@ -888,108 +911,130 @@ public class LibrarianPortalService {
 
         List<NotificationView> notifications = loadStoredNotifications(normalized);
         notifications.sort(Comparator.comparing(NotificationView::timestamp).reversed());
-        notifications.sort((n1, n2) -> (n1.isUrgent() ? 1 : 0) - (n2.isUrgent() ? 1 : 0));
+        notifications.sort((n1, n2) -> Boolean.compare(n2.isUrgent(), n1.isUrgent()));
         return notifications
                 .stream()
                 .filter(n -> filterNotification(n, categoryFilter, dateMin, dateMax, urgencyFilter))
                 .collect(Collectors.toList());
     }
 
-    private void appendNotification(String username, String category, String message) {
-        try {
-            Files.createDirectories(Paths.get("data/task3"));
-            String line = String.join("|",
-                    encode(username),
-                    encode(category),
-                    encode(message),
-                    LocalDateTime.now().format(HISTORY_TIME_FORMAT)
-            );
-            Files.write(
-                    Paths.get(TASK3_NOTIFICATIONS_FILE),
-                    List.of(line),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND
-            );
-        } catch (IOException ignored) {
+    public List<NotificationView> getUnreadNotifications(String username, int limit) {
+        String normalized = safeTrim(username);
+        if (normalized.isEmpty()) {
+            return List.of();
         }
+        return loadStoredNotifications(normalized).stream()
+                .filter(n -> !n.read())
+                .sorted((a, b) -> {
+                    if (a.isUrgent() != b.isUrgent()) {
+                        return a.isUrgent() ? -1 : 1;
+                    }
+                    return b.timestamp().compareTo(a.timestamp());
+                })
+                .limit(Math.max(0, limit))
+                .collect(Collectors.toList());
+    }
+
+    public void markNotificationAsRead(String username, String notificationId) {
+        String normalized = safeTrim(username);
+        String normalizedId = safeTrim(notificationId);
+        if (normalized.isEmpty() || normalizedId.isEmpty()) {
+            return;
+        }
+        boolean owned = notificationStore.findByScopeAndUser(TASK3_NOTIFICATION_SCOPE, normalized).stream()
+                .anyMatch(n -> n.id().equals(normalizedId));
+        if (owned) {
+            notificationStore.markRead(TASK3_NOTIFICATION_SCOPE, normalizedId);
+        }
+    }
+
+    public void deleteNotification(String username, String notificationId) {
+        String normalized = safeTrim(username);
+        String normalizedId = safeTrim(notificationId);
+        if (normalized.isEmpty() || normalizedId.isEmpty()) {
+            return;
+        }
+        boolean owned = notificationStore.findByScopeAndUser(TASK3_NOTIFICATION_SCOPE, normalized).stream()
+                .anyMatch(n -> n.id().equals(normalizedId));
+        if (owned) {
+            notificationStore.deleteById(TASK3_NOTIFICATION_SCOPE, normalizedId);
+        }
+    }
+
+    public void deleteReadNotifications(String username) {
+        String normalized = safeTrim(username);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        notificationStore.deleteReadByUser(TASK3_NOTIFICATION_SCOPE, normalized);
+    }
+
+    private void appendNotification(String username, String category, String message) {
+        notificationStore.create(
+                TASK3_NOTIFICATION_SCOPE,
+                username,
+                category,
+                message,
+                category,
+                category,
+                isUrgentNotificationCategory(category),
+                ""
+        );
     }
 
     private void appendNotificationTo(String username, String category, String message, UserRole role) {
-        if (role == UserRole.AUTHOR) return;
-
-        String file = "";
-        String folder = "";
-        switch (role) {
-            case STUDENT, STAFF:
-                file = TASK1_NOTIFICATIONS_FILE;
-                folder = "data/task1";
-                break;
-            case LIBRARIAN:
-                file = TASK3_NOTIFICATIONS_FILE;
-                folder = "data/task3";
-        }
-        try {
-            Files.createDirectories(Paths.get(folder));
-            String line = String.join("|",
-                    encode(username),
-                    encode(category),
-                    encode(message),
-                    LocalDateTime.now().format(HISTORY_TIME_FORMAT)
-            );
-            Files.write(
-                    Paths.get(file),
-                    List.of(line),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND
-            );
-        } catch (IOException ignored) {
-        }
+        String scope = switch (role) {
+            case STUDENT, STAFF -> TASK1_NOTIFICATION_SCOPE;
+            case AUTHOR -> TASK2_NOTIFICATION_SCOPE;
+            case LIBRARIAN -> TASK3_NOTIFICATION_SCOPE;
+        };
+        notificationStore.create(
+                scope,
+                username,
+                category,
+                message,
+                category,
+                category,
+                isUrgentNotificationCategory(category),
+                ""
+        );
     }
-    private void appendNotificationForAuthors(String username, String title, String message, String type, String subId) {
-        try {
-            Files.createDirectories(Paths.get("data"));
-            String line = new Notification(username, title, message, type, subId).toString();
-            Files.write(
-                    Paths.get("data/notifications.txt"),
-                    List.of(line),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND
-            );
-        } catch (IOException ignored) {
-        }
+
+    private boolean isUrgentNotificationCategory(String category) {
+        String c = safeTrim(category).toUpperCase();
+        return "BOOK_REJECTED".equals(c)
+                || "NEW_BOOK_SUBMISSION".equals(c)
+                || "USER_ACCOUNT_UPDATE".equals(c)
+                || "RESPONSE".equals(c);
     }
 
     private List<NotificationView> loadStoredNotifications(String username) {
-        Path path = Paths.get(TASK3_NOTIFICATIONS_FILE);
-        if (!Files.exists(path)) return List.of();
-        try {
-            List<NotificationView> list = new ArrayList<>();
-            for (String line : Files.readAllLines(path)) {
-                if (line.trim().isEmpty()) continue;
-                String[] parts = line.split("\\|", -1);
-                if (parts.length < 4) continue;
-                String u = decode(parts[0]);
-                if (!username.equals(u)) continue;
-                list.add(new NotificationView(
-                        LocalDateTime.parse(parts[3], HISTORY_TIME_FORMAT),
-                        decode(parts[1]),
-                        decode(parts[2])
-                ));
-            }
-            return list;
-        } catch (Exception e) {
-            return List.of();
-        }
+        return notificationStore.findByScopeAndUser(TASK3_NOTIFICATION_SCOPE, username).stream()
+                .map(n -> new NotificationView(
+                        n.id(),
+                        n.createdAt(),
+                        n.category().isBlank() ? n.type() : n.category(),
+                        n.message(),
+                        n.read()
+                ))
+                .collect(Collectors.toList());
     }
 
     public record NotificationView(
+            String notificationId,
             LocalDateTime timestamp,
             String category,
-            String message
+            String message,
+            boolean read
     )
     {
         public boolean isUrgent() {
-            return category.equals("Profile Change");
+            String c = safeTrim(category).toUpperCase();
+            return c.equals("NEW_BOOK_SUBMISSION")
+                    || c.equals("USER_ACCOUNT_UPDATE")
+                    || c.equals("BOOK_REJECTED")
+                    || c.equals("RESPONSE")
+                    || c.contains("URGENT");
         }
     }
 
