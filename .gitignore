@@ -3,6 +3,7 @@
 !**/src/main/**/target/
 !**/src/test/**/target/
 target/
+data/
 .kotlin
 
 ### IntelliJ IDEA ###

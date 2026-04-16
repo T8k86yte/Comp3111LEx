@@ -314,6 +314,24 @@ public class LibrarianPortalService {
         }
     }
 
+    public List<Book> getPublishedBooksScreenData() {
+        return bookRepository.findAll();
+    }
+
+
+    public OperationResult modifyBook(
+            String bookId,
+            String newTitle,
+            String newAuthor,
+            String newGenre,
+            String newDescription,
+            String newFilePath,
+            String newCoverPath) {
+        //TO DO: Add filePath and coverPath to the modified book data
+        return OperationResult.success("Modification successful: ");
+    }
+
+
     private static String csv(String value) {
         String v = value == null ? "" : value;
         return "\"" + v.replace("\"", "\"\"") + "\"";
