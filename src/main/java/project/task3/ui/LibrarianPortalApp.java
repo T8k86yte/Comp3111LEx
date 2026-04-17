@@ -352,7 +352,7 @@ public class LibrarianPortalApp extends Application {
     private Scene buildPublishedBooksScene() {
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
-        root.setTop(new HBox(18, buildSceneSelector(4)));
+        root.setTop(new HBox(18, buildSceneSelector(5)));
         root.setCenter(buildPublishedBooksView());
         publishedBookStatusLabel = new Label();
         root.setBottom(buildStatusBar(publishedBookStatusLabel));
@@ -1046,7 +1046,7 @@ public class LibrarianPortalApp extends Application {
         publishedBooksTable.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Book>() {
             @Override
             public void changed(ObservableValue<? extends Book> obs, Book oldBook, Book newBook) {
-                publishedBookSelectedId.setText(publishedBooksTable.getSelectionModel().getSelectedItem().getId());
+                if (newBook != null) publishedBookSelectedId.setText(publishedBooksTable.getSelectionModel().getSelectedItem().getId());
             }
         });
 
@@ -1183,6 +1183,9 @@ public class LibrarianPortalApp extends Application {
             case 3: manageUsers.setDisable(true);
             break;
             case 4: borrowedBooks.setDisable(true);
+            break;
+            case 5: publishedBooks.setDisable(true);
+            break;
         }
 
         selector.getChildren().addAll(acceptReject, profile, notification, manageUsers, borrowedBooks, publishedBooks, logoutBtn, crashBtn);
@@ -1678,6 +1681,7 @@ public class LibrarianPortalApp extends Application {
 
         if (!result.success()) showErrorPopup("Modify Book", "Action failed", result.message());
         setStatus(result.message());
+        refreshPublishedBooks();
     }
 
     private void handleCreateBook() {

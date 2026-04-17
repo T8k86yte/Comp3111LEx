@@ -319,16 +319,19 @@ public class LibrarianPortalService {
     }
 
 
-    public OperationResult modifyBook(
-            String bookId,
-            String newTitle,
-            String newAuthor,
-            String newGenre,
-            String newDescription,
-            String newFilePath,
-            String newCoverPath) {
-        //TO DO: Add filePath and coverPath to the modified book data
-        return OperationResult.success("Modification successful: ");
+    public OperationResult modifyBook(String bookId,
+                                      String newTitle,
+                                      String newAuthor,
+                                      String newGenre,
+                                      String newDescription,
+                                      String newFilePath,
+                                      String newCoverPath) {
+        if (bookId.isEmpty()) return OperationResult.failure("Modification failed: Id should not be empty.");
+        if (bookRepository.findById(bookId).isEmpty()) return OperationResult.failure("Modification failed: Invalid book Id.");
+
+        boolean success = bookRepository.modifyBook(bookId, newTitle, newAuthor, newGenre, newDescription, newFilePath, newCoverPath);
+        return success ? OperationResult.success("Modification successful: Modified book with Id \"" + bookId + "\".") :
+                OperationResult.failure("Modification failed: Invalid parameters.");
     }
 
 
