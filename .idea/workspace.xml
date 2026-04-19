@@ -4,40 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Temporary change">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Added published books screen for task3. Functions to modify books is temporarily empty.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/authors.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/borrow_history.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/drafts.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/librarians.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/notifications.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/notifications_unified.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/session_recovery.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/studentstaffs.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/submissions.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/task1/borrow_records.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/task1/notifications.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/task2/notifications.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/module-info.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/model/UserAccount.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task1/ui/light-theme.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/AuthorLoginUI.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/PublishBookUI.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX$1.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX$2.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorDashboardFX.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorLoginFX.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/AuthorRegistrationFX.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task2/ui/javafx/ProfileManagementFX.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$LoginResult.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$OperationResult.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp$1.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalConsole.class" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -65,12 +34,12 @@
     &quot;assignee&quot;: &quot;T8k86yte&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/T8k86yte/Comp3111LEx.git",
-    "accountId": "970ccb46-7db9-458f-bcaa-01033db20b8a"
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/T8k86yte/Comp3111LEx.git&quot;,
+    &quot;accountId&quot;: &quot;970ccb46-7db9-458f-bcaa-01033db20b8a&quot;
   }
-}]]></component>
+}</component>
   <component name="ProblemsViewState">
     <option name="selectedTabId" value="CurrentFile" />
   </component>
