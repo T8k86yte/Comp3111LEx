@@ -113,10 +113,15 @@ public class InMemoryBookRepository implements BookRepository {
 
     @Override
     public void addApprovedBook(String title, String author, LocalDate publishDate, String summary, String genre) {
+        addApprovedBook(title, author, publishDate, summary, genre, "");
+    }
+
+    @Override
+    public void addApprovedBook(String title, String author, LocalDate publishDate, String summary, String genre, String coverImagePath) {
         String idstr = Integer.toString(nextid);
         if (idstr.length() < 3) idstr = "0".repeat(3 - idstr.length()).concat(idstr);
         idstr = "B".concat(idstr);
-        booksById.put(idstr, new Book(idstr, title, author, genre, publishDate, summary, true));
+        booksById.put(idstr, new Book(idstr, title, author, genre, publishDate, summary, true, null, 0, coverImagePath));
         nextid++;
         saveBooks();
     }
@@ -179,7 +184,8 @@ public class InMemoryBookRepository implements BookRepository {
                 encodeField(book.getSummary()),
                 Boolean.toString(book.isAvailable()),
                 encodeField(borrowedBy),
-                Integer.toString(book.getBorrowCount())
+                Integer.toString(book.getBorrowCount()),
+                encodeField(book.getCoverImagePath())
         );
     }
 
@@ -209,7 +215,8 @@ public class InMemoryBookRepository implements BookRepository {
                 // Backward compatibility with old data format.
                 borrowCount = 1;
             }
-            return new Book(id, title, author, genre, publishDate, summary, available, borrowedBy, borrowCount);
+            String coverImagePath = parts.length >= (9 + indexOffset) ? decodeField(parts[8 + indexOffset]) : "";
+            return new Book(id, title, author, genre, publishDate, summary, available, borrowedBy, borrowCount, coverImagePath);
         } catch (Exception e) {
             return null;
         }

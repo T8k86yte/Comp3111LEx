@@ -15,6 +15,8 @@ rectangle "Task 1: Student/Staff Portal" {
 
   package "Book Discovery" {
     usecase "View Book List" as UC_ViewBooks
+    usecase "View Book Cover" as UC_ViewBookCover
+    usecase "View Book Description" as UC_ViewBookDescription
     usecase "Read Full Summary" as UC_ReadSummary
     usecase "Get Recommendations" as UC_Recommend
   }
@@ -50,6 +52,8 @@ user --> UC_Register
 user --> UC_Login
 user --> UC_Logout
 user --> UC_ViewBooks
+user --> UC_ViewBookCover
+user --> UC_ViewBookDescription
 user --> UC_ReadSummary
 user --> UC_Recommend
 user --> UC_Borrow
@@ -69,5 +73,7 @@ UC_UpdateProfile .> UC_ReAuthProfile : include
 UC_UpdateProfile .> UC_ValidateProfilePwd : include
 UC_ViewNotifications .> UC_FilterNotifications : include
 UC_Login .> UC_ShowUnreadPopup : include
+UC_ViewBooks .> UC_ViewBookCover : extend
+UC_ViewBooks .> UC_ViewBookDescription : extend
 UC_ViewBooks .> UC_ReadSummary : extend
 @enduml
