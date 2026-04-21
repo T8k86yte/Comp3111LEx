@@ -7,11 +7,15 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import project.task2.model.AuthorAccount;
+import project.task2.model.BookSubmission;
 import project.task2.model.Review;
 import project.task2.service.AuthorPortalService;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class AuthorReviewsFX {
     private AuthorPortalService authorService;
@@ -19,6 +23,17 @@ public class AuthorReviewsFX {
     private Stage stage;
     private VBox reviewsContainer;
     private Label statusLabel;
+    
+    // Filter components
+    private ComboBox<String> bookFilterCombo;
+    private ComboBox<Integer> ratingFilterCombo;
+    private ComboBox<String> dateFilterCombo;
+    private TextField searchField;
+    private CheckBox flaggedOnlyCheckBox;
+    private Label filterCountLabel;
+    
+    private List<Review> allReviews;
+    private List<BookSubmission> authorBooks;
 
     public AuthorReviewsFX(AuthorAccount author) {
         this.currentAuthor = author;
@@ -53,15 +68,12 @@ public class AuthorReviewsFX {
         
         titleSection.getChildren().addAll(titleLabel, subtitleLabel);
 
-        // Refresh button
-        Button refreshBtn = new Button("🔄 Refresh");
-        refreshBtn.getStyleClass().addAll("button", "primary-btn");
-        refreshBtn.setOnAction(e -> loadReviews());
-
-        HBox controlBar = new HBox();
-        controlBar.setAlignment(Pos.CENTER_RIGHT);
-        controlBar.getChildren().add(refreshBtn);
-
+        // Filter section
+        VBox filterSection = createFilterSection();
+        
+        // Control bar with refresh and filter count
+        HBox controlBar = createControlBar();
+        
         // Reviews container
         reviewsContainer = new VBox(15);
         reviewsContainer.setPadding(new Insets(10));
@@ -75,17 +87,17 @@ public class AuthorReviewsFX {
         statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748b;");
         statusLabel.setVisible(false);
 
-        centerContent.getChildren().addAll(titleSection, controlBar, scrollPane, statusLabel);
+        centerContent.getChildren().addAll(titleSection, filterSection, controlBar, scrollPane, statusLabel);
         root.setCenter(centerContent);
 
-        Scene scene = new Scene(root, 800, 650);
+        Scene scene = new Scene(root, 950, 750);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         stage.setTitle("Reviews & Feedback - " + currentAuthor.getUsername());
         stage.setScene(scene);
         stage.show();
         
-        loadReviews();
+        loadData();
     }
 
     private HBox createTopBar() {
@@ -119,13 +131,193 @@ public class AuthorReviewsFX {
         return topBar;
     }
 
-    private void loadReviews() {
-        List<Review> reviews = authorService.getReviewsForAuthorBooks(currentAuthor.getUsername());
+    private VBox createFilterSection() {
+        VBox filterBox = new VBox(10);
+        filterBox.setStyle("-fx-background-color: white; -fx-background-radius: 12px; " +
+                          "-fx-border-color: #e2e8f0; -fx-border-radius: 12px;");
+        filterBox.setPadding(new Insets(15));
         
+        Label filterTitle = new Label("🔍 Filter Reviews");
+        filterTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: #1e293b;");
+        
+        GridPane filterGrid = new GridPane();
+        filterGrid.setHgap(15);
+        filterGrid.setVgap(10);
+        filterGrid.setPadding(new Insets(10, 0, 0, 0));
+        
+        // Filter by Book
+        Label bookLabel = new Label("Book:");
+        bookLabel.getStyleClass().add("muted");
+        bookFilterCombo = new ComboBox<>();
+        bookFilterCombo.setPromptText("All Books");
+        bookFilterCombo.setPrefWidth(200);
+        bookFilterCombo.valueProperty().addListener((obs, old, newVal) -> applyFilters());
+        
+        // Filter by Rating
+        Label ratingLabel = new Label("Rating:");
+        ratingLabel.getStyleClass().add("muted");
+        ratingFilterCombo = new ComboBox<>();
+        ratingFilterCombo.getItems().addAll(0, 1, 2, 3, 4, 5);
+        ratingFilterCombo.setValue(0);
+        ratingFilterCombo.setPromptText("All Ratings");
+        ratingFilterCombo.setPrefWidth(100);
+        ratingFilterCombo.valueProperty().addListener((obs, old, newVal) -> applyFilters());
+        
+        // Filter by Date
+        Label dateLabel = new Label("Date:");
+        dateLabel.getStyleClass().add("muted");
+        dateFilterCombo = new ComboBox<>();
+        dateFilterCombo.getItems().addAll("All Time", "Last 7 Days", "Last 30 Days", "This Year");
+        dateFilterCombo.setValue("All Time");
+        dateFilterCombo.setPrefWidth(120);
+        dateFilterCombo.valueProperty().addListener((obs, old, newVal) -> applyFilters());
+        
+        // Search by keyword
+        Label searchLabel = new Label("Search:");
+        searchLabel.getStyleClass().add("muted");
+        searchField = new TextField();
+        searchField.setPromptText("Search in reviews...");
+        searchField.setPrefWidth(200);
+        searchField.textProperty().addListener((obs, old, newVal) -> applyFilters());
+        
+        // Flagged only
+        flaggedOnlyCheckBox = new CheckBox("⚠️ Show flagged reviews only");
+        flaggedOnlyCheckBox.getStyleClass().add("muted");
+        flaggedOnlyCheckBox.selectedProperty().addListener((obs, old, newVal) -> applyFilters());
+        
+        // Clear filters button
+        Button clearFiltersBtn = new Button("Clear Filters");
+        clearFiltersBtn.getStyleClass().addAll("button", "secondary-btn");
+        clearFiltersBtn.setPrefWidth(100);
+        clearFiltersBtn.setOnAction(e -> clearFilters());
+        
+        filterGrid.add(bookLabel, 0, 0);
+        filterGrid.add(bookFilterCombo, 1, 0);
+        filterGrid.add(ratingLabel, 2, 0);
+        filterGrid.add(ratingFilterCombo, 3, 0);
+        filterGrid.add(dateLabel, 4, 0);
+        filterGrid.add(dateFilterCombo, 5, 0);
+        
+        filterGrid.add(searchLabel, 0, 1);
+        filterGrid.add(searchField, 1, 1);
+        filterGrid.add(flaggedOnlyCheckBox, 2, 1);
+        
+        filterBox.getChildren().addAll(filterTitle, filterGrid);
+        
+        // Add clear filters button row
+        HBox clearRow = new HBox();
+        clearRow.setAlignment(Pos.CENTER_RIGHT);
+        clearRow.getChildren().add(clearFiltersBtn);
+        filterBox.getChildren().add(clearRow);
+        
+        return filterBox;
+    }
+    
+    private HBox createControlBar() {
+        HBox controlBar = new HBox(15);
+        controlBar.setAlignment(Pos.CENTER_RIGHT);
+        controlBar.setPadding(new Insets(0, 0, 10, 0));
+        
+        filterCountLabel = new Label();
+        filterCountLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748b;");
+        
+        Button refreshBtn = new Button("🔄 Refresh");
+        refreshBtn.getStyleClass().addAll("button", "primary-btn");
+        refreshBtn.setOnAction(e -> loadData());
+        
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        
+        controlBar.getChildren().addAll(filterCountLabel, spacer, refreshBtn);
+        return controlBar;
+    }
+    
+    private void clearFilters() {
+        bookFilterCombo.setValue(null);
+        ratingFilterCombo.setValue(0);
+        dateFilterCombo.setValue("All Time");
+        searchField.clear();
+        flaggedOnlyCheckBox.setSelected(false);
+        applyFilters();
+    }
+    
+    private void loadData() {
+        authorBooks = authorService.getAuthorSubmissions(currentAuthor.getUsername())
+                .stream()
+                .filter(b -> b.isApproved() || b.isPending())
+                .collect(Collectors.toList());
+        
+        allReviews = authorService.getReviewsForAuthorBooks(currentAuthor.getUsername());
+        
+        // Populate book filter
+        bookFilterCombo.getItems().clear();
+        bookFilterCombo.getItems().add("All Books");
+        for (BookSubmission book : authorBooks) {
+            bookFilterCombo.getItems().add(book.getTitle());
+        }
+        bookFilterCombo.setValue("All Books");
+        
+        applyFilters();
+    }
+    
+    private void applyFilters() {
+        if (allReviews == null) return;
+        
+        String selectedBook = bookFilterCombo.getValue();
+        int minRating = ratingFilterCombo.getValue() != null ? ratingFilterCombo.getValue() : 0;
+        String dateRange = dateFilterCombo.getValue();
+        String searchText = searchField.getText().toLowerCase();
+        boolean flaggedOnly = flaggedOnlyCheckBox.isSelected();
+        
+        List<Review> filtered = allReviews.stream()
+            .filter(review -> {
+                // Filter by book
+                if (selectedBook != null && !selectedBook.equals("All Books")) {
+                    if (!review.getBookTitle().equals(selectedBook)) {
+                        return false;
+                    }
+                }
+                // Filter by rating
+                if (minRating > 0 && review.getRating() < minRating) {
+                    return false;
+                }
+                // Filter by date range
+                if (dateRange != null && !dateRange.equals("All Time")) {
+                    LocalDateTime now = LocalDateTime.now();
+                    LocalDateTime cutoff = switch (dateRange) {
+                        case "Last 7 Days" -> now.minusDays(7);
+                        case "Last 30 Days" -> now.minusDays(30);
+                        case "This Year" -> now.minusDays(365);
+                        default -> null;
+                    };
+                    if (cutoff != null && review.getCreatedAt().isBefore(cutoff)) {
+                        return false;
+                    }
+                }
+                // Filter by search text
+                if (!searchText.isEmpty()) {
+                    if (!review.getComment().toLowerCase().contains(searchText) &&
+                        !review.getReviewerFullName().toLowerCase().contains(searchText)) {
+                        return false;
+                    }
+                }
+                // Filter flagged only
+                if (flaggedOnly && !review.isFlagged()) {
+                    return false;
+                }
+                return true;
+            })
+            .collect(Collectors.toList());
+        
+        filterCountLabel.setText("Showing " + filtered.size() + " of " + allReviews.size() + " reviews");
+        displayReviews(filtered);
+    }
+    
+    private void displayReviews(List<Review> reviews) {
         reviewsContainer.getChildren().clear();
         
         if (reviews.isEmpty()) {
-            Label emptyLabel = new Label("📭 No reviews yet for your books");
+            Label emptyLabel = new Label("📭 No reviews match your filters");
             emptyLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #64748b;");
             emptyLabel.setAlignment(Pos.CENTER);
             emptyLabel.setMaxWidth(Double.MAX_VALUE);
@@ -137,8 +329,6 @@ public class AuthorReviewsFX {
             VBox card = createReviewCard(review);
             reviewsContainer.getChildren().add(card);
         }
-        
-        showStatus("Loaded " + reviews.size() + " reviews", "success");
     }
 
     private VBox createReviewCard(Review review) {
@@ -213,7 +403,7 @@ public class AuthorReviewsFX {
                 boolean success = authorService.replyToReview(review.getReviewId(), replyText);
                 if (success) {
                     showStatus("Reply sent successfully!", "success");
-                    loadReviews(); // Refresh to show the reply
+                    loadData();
                 } else {
                     showStatus("Failed to send reply", "error");
                 }
@@ -239,7 +429,7 @@ public class AuthorReviewsFX {
                         boolean success = authorService.flagReview(review.getReviewId(), reason);
                         if (success) {
                             showStatus("Review flagged successfully", "success");
-                            loadReviews();
+                            loadData();
                         } else {
                             showStatus("Failed to flag review", "error");
                         }
