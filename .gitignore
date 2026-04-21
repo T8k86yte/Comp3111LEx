@@ -5,6 +5,7 @@
 target/
 data/
 .kotlin
+.idea/workspace.xml
 
 ### IntelliJ IDEA ###
 .idea/modules.xml

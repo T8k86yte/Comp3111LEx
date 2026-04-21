@@ -1077,21 +1077,6 @@ public class LibrarianPortalService {
     }
 
 
-
-    private record BookRequest(
-            String requestId,
-            String username,
-            String title,
-            String author,
-            String genre,
-            String reason,
-            String status,
-            String librarianComment,
-            LocalDateTime createdAt,
-            LocalDateTime decidedAt
-    ) {}
-
-
     private static boolean filterNotification(NotificationView notification,
                                               String categoryFilter,
                                               LocalDateTime timeMin,
@@ -1294,5 +1279,13 @@ public class LibrarianPortalService {
             String librarianComment,
             LocalDateTime createdAt,
             LocalDateTime decidedAt
-    ) {}
+    ) {
+        public String getRequestId() { return requestId; }
+        public String getUsername() { return username; }
+        public String getTitle() { return title; }
+        public String getAuthor() { return author; }
+        public String getGenre() { return genre; }
+        public String getReason() { return reason; }
+        public String getStatus() { return status; }
+    }
 }

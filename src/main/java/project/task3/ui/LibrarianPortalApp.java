@@ -58,7 +58,6 @@ public class LibrarianPortalApp extends Application {
     private Scene manageUsersScene;
     private Scene borrowedBooksScene;
     private Scene publishedBooksScene;
-    private Scene newBookRequestScene;
 
     private Label currentUserLabel;
     private TableView<BookSubmission> bookSubmissionTable;
@@ -138,12 +137,6 @@ public class LibrarianPortalApp extends Application {
     private TextField publishedBookFilePath;
     private TextField publishedBookCoverPath;
     private Label publishedBookStatusLabel;
-
-    private TableView<Object> requestsTable;
-    private TextField requestSelectedIdField;
-    private ComboBox<String> requestActionBox;
-    private TextField requestRejectReason;
-    private Label requestStatusLabel;
 
     private Timer autoSaveTimer;
     private static final String TASK3_PROGRESS_FILE = "data/task3/progress.txt";
@@ -369,22 +362,6 @@ public class LibrarianPortalApp extends Application {
         root.setCenter(buildPublishedBooksView());
         publishedBookStatusLabel = new Label();
         root.setBottom(buildStatusBar(publishedBookStatusLabel));
-
-        Scene scene = new Scene(root, 1060, 700);
-        scene.getStylesheets().add(
-                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
-        );
-
-        return scene;
-    }
-
-    private Scene buildNewBookRequestScene() {
-        BorderPane root = new BorderPane();
-        root.getStyleClass().add("root-pane");
-        root.setTop(new HBox(18, buildSceneSelector(6)));
-        root.setCenter(buildNewBookRequestView());
-        requestStatusLabel = new Label();
-        root.setBottom(buildStatusBar(requestStatusLabel));
 
         Scene scene = new Scene(root, 1060, 700);
         scene.getStylesheets().add(
@@ -1060,19 +1037,19 @@ public class LibrarianPortalApp extends Application {
         bookRequestTable = new TableView<>();
         bookRequestTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         TableColumn<BookRequestView, String> requestIdCol = new TableColumn<>("Request ID");
-        requestIdCol.setCellValueFactory(new PropertyValueFactory<>("requestId"));
+        requestIdCol.setCellValueFactory(new PropertyValueFactory<>("RequestId"));
         TableColumn<BookRequestView, String> requestUserCol = new TableColumn<>("Requester");
-        requestUserCol.setCellValueFactory(new PropertyValueFactory<>("username"));
+        requestUserCol.setCellValueFactory(new PropertyValueFactory<>("Username"));
         TableColumn<BookRequestView, String> requestTitleCol = new TableColumn<>("Title");
-        requestTitleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+        requestTitleCol.setCellValueFactory(new PropertyValueFactory<>("Title"));
         TableColumn<BookRequestView, String> requestAuthorCol = new TableColumn<>("Author");
-        requestAuthorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
+        requestAuthorCol.setCellValueFactory(new PropertyValueFactory<>("Author"));
         TableColumn<BookRequestView, String> requestGenreCol = new TableColumn<>("Genre");
-        requestGenreCol.setCellValueFactory(new PropertyValueFactory<>("genre"));
+        requestGenreCol.setCellValueFactory(new PropertyValueFactory<>("Genre"));
         TableColumn<BookRequestView, String> requestStatusCol = new TableColumn<>("Status");
-        requestStatusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
+        requestStatusCol.setCellValueFactory(new PropertyValueFactory<>("Status"));
         TableColumn<BookRequestView, String> requestReasonCol = new TableColumn<>("Reason");
-        requestReasonCol.setCellValueFactory(new PropertyValueFactory<>("reason"));
+        requestReasonCol.setCellValueFactory(new PropertyValueFactory<>("Reason"));
         requestReasonCol.setCellFactory(column -> new TableCell<>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -1227,90 +1204,6 @@ public class LibrarianPortalApp extends Application {
         return wrapper;
     }
 
-    private VBox buildNewBookRequestView() {
-        VBox wrapper = new VBox(10);
-        wrapper.setPadding(new Insets(8, 18, 18, 18));
-        Label heading = new Label("New Book Requests");
-        heading.getStyleClass().add("section-title");
-
-        requestsTable = new TableView<>();
-        requestsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
-        //TO DO: change Object to the request class after the latter being implemented
-
-        TableColumn<Object, String> IdCol = new TableColumn<>("Id");
-        IdCol.setCellValueFactory(new PropertyValueFactory<>("Id"));
-
-        TableColumn<Object, String> titleCol = new TableColumn<>("Title");
-        titleCol.setCellValueFactory(new PropertyValueFactory<>("Title"));
-
-        TableColumn<Object, String> authorNameCol = new TableColumn<>("Author");
-        authorNameCol.setCellValueFactory(new PropertyValueFactory<>("Author"));
-
-        TableColumn<Object, String> genreCol = new TableColumn<>("Genre");
-        genreCol.setCellValueFactory(new PropertyValueFactory<>("Genre"));
-
-        TableColumn<Object, String> reasonCol = new TableColumn<>("Request Reason");
-        reasonCol.setCellValueFactory(new PropertyValueFactory<>("RequestReason"));
-
-        requestsTable.getColumns().addAll(IdCol, titleCol, authorNameCol, genreCol, reasonCol);
-        requestsTable.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Object>() {
-            @Override
-            public void changed(ObservableValue<?> obs, Object oldRequest, Object newRequest) {
-                if (newRequest != null) publishedBookSelectedId.setText(publishedBooksTable.getSelectionModel().getSelectedItem().getId());
-            }
-        });
-
-        VBox card = new VBox(10);
-        card.getStyleClass().add("card");
-        card.setPrefWidth(320);
-
-        Label cardHeading = new Label("New Book Requests");
-        cardHeading.getStyleClass().add("card-title");
-        Label hint = new Label("Approve or reject the new book requests.");
-        hint.getStyleClass().add("muted");
-
-
-        requestSelectedIdField = new TextField();
-        requestSelectedIdField.setPromptText("Request Id: ");
-        requestActionBox = new ComboBox<>(FXCollections.observableArrayList("APPROVE", "REJECT"));
-        requestActionBox.setPromptText("Action");
-        requestRejectReason = new TextField();
-        requestRejectReason.setPromptText("Rejection Reason: ");
-
-        Button approveBtn = new Button("Approve Request");
-        approveBtn.getStyleClass().add("primary-btn");
-        approveBtn.setOnAction(event -> handleApproveRejectRequest());
-        requestActionBox.getSelectionModel().selectedItemProperty().addListener((val, prev, next) -> {
-            if (next == null) {
-                approveBtn.setDisable(true);
-                requestRejectReason.setDisable(true);
-                return;
-            }
-            if (next.equals("APPROVE")) {
-                approveBtn.setText("Approve Request");
-                requestRejectReason.setDisable(true);
-            }
-            else {
-                approveBtn.setText("Reject Request");
-                requestRejectReason.setDisable(false);
-            }
-        });
-
-        HBox fields = new HBox(5);
-        HBox actions = new HBox(5);
-        fields.getChildren().add(requestSelectedIdField);
-        fields.getChildren().add(requestActionBox);
-        fields.getChildren().add(requestRejectReason);
-        actions.getChildren().add(approveBtn);
-
-        card.getChildren().addAll(heading, hint, fields, actions);
-
-        VBox.setVgrow(requestsTable, Priority.ALWAYS);
-        wrapper.getChildren().addAll(card, heading, requestsTable);
-
-        return wrapper;
-    }
-
     private HBox buildStatusBar(Label s) {
         HBox statusBar = new HBox();
         statusBar.setPadding(new Insets(10, 18, 12, 18));
@@ -1329,7 +1222,6 @@ public class LibrarianPortalApp extends Application {
         Button manageUsers = new Button("Manage Users");
         Button borrowedBooks = new Button("Borrowed Books");
         Button publishedBooks = new Button("Published Books");
-        Button newBookRequests = new Button("New Book Requests");
         Button logoutBtn = new Button("Logout");
         Button crashBtn = new Button("Crash");
 
@@ -1351,9 +1243,6 @@ public class LibrarianPortalApp extends Application {
         publishedBooks.getStyleClass().add("primary-btn");
         publishedBooks.setOnAction(event -> { stage.setScene(publishedBooksScene); refreshPublishedBooks(); });
         publishedBooks.setPrefWidth(140);
-        newBookRequests.getStyleClass().add("primary-btn");
-        newBookRequests.setOnAction(event -> { stage.setScene(newBookRequestScene); refreshNewBookRequests(); });
-        newBookRequests.setPrefWidth(140);
         logoutBtn.getStyleClass().add("secondary-btn");
         logoutBtn.setOnAction(event -> handleLogout());
         crashBtn.getStyleClass().add("secondary-btn");
@@ -1372,10 +1261,9 @@ public class LibrarianPortalApp extends Application {
             break;
             case 5: publishedBooks.setDisable(true);
             break;
-            case 6: newBookRequests.setDisable(true);
         }
 
-        selector.getChildren().addAll(acceptReject, profile, notification, manageUsers, borrowedBooks, publishedBooks, newBookRequests, logoutBtn, crashBtn);
+        selector.getChildren().addAll(acceptReject, profile, notification, manageUsers, borrowedBooks, publishedBooks, logoutBtn, crashBtn);
 
         return selector;
     }
@@ -1875,19 +1763,6 @@ public class LibrarianPortalApp extends Application {
 
     }
 
-    private void handleApproveRejectRequest() {
-        if (requestActionBox.getValue().equals("Approve")) handleApproveRequest();
-        else handleRejectRequest();
-    }
-
-    private void handleApproveRequest() {
-        //TO DO: implement this
-    }
-
-    private void handleRejectRequest() {
-        //TO DO: implement this
-    }
-
 
     private void refreshBorrowedBooks() {
         borrowedBooksTable.setItems(FXCollections.observableArrayList(
@@ -2049,7 +1924,7 @@ public class LibrarianPortalApp extends Application {
         manageUsersStatusLabel.setText(message);
         bookTableStatusLabel.setText(message);
         publishedBookStatusLabel.setText(message);
-        requestStatusLabel.setText(message);
+        //requestStatusLabel.setText(message);
     }
 
     private void updateRegisterPasswordHint() {
