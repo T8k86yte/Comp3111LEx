@@ -4,9 +4,28 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Added published books screen for task3. Functions to modify books is temporarily empty.">
+    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Restored book deletion logic">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/authors.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/authors.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/books.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/books.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/borrow_history.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/borrow_history.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/librarians.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/librarians.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/notifications_unified.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/notifications_unified.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/studentstaffs.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/studentstaffs.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/submissions.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/submissions.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/task1/borrow_records.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/task1/borrow_records.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/module-info.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/module-info.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/model/Book.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/model/Book.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/repo/BookRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/repo/BookRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/repo/InMemoryBookRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/repo/InMemoryBookRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/ui/StudentStaffPortalApp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/ui/StudentStaffPortalApp.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/task1_use_case_diagram_plantuml.txt" beforeDir="false" afterPath="$PROJECT_DIR$/task1_use_case_diagram_plantuml.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/task3_uml.png" beforeDir="false" afterPath="$PROJECT_DIR$/task3_uml.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/task3_uml.txt" beforeDir="false" afterPath="$PROJECT_DIR$/task3_uml.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -37,7 +56,7 @@
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
     &quot;url&quot;: &quot;https://github.com/T8k86yte/Comp3111LEx.git&quot;,
-    &quot;accountId&quot;: &quot;970ccb46-7db9-458f-bcaa-01033db20b8a&quot;
+    &quot;accountId&quot;: &quot;e591db63-2b26-414d-95e4-6df6aa4ccca7&quot;
   }
 }</component>
   <component name="ProblemsViewState">
@@ -64,7 +83,7 @@
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;Task3&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;C:/Users/zyang/IdeaProjects/Comp3111LEx&quot;,
@@ -368,7 +387,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774958566417</updated>
     </task>
-    <option name="localTasksCounter" value="32" />
+    <task id="LOCAL-00032" summary="Restored book deletion logic">
+      <option name="closed" value="true" />
+      <created>1775018852566</created>
+      <option name="number" value="00032" />
+      <option name="presentableId" value="LOCAL-00032" />
+      <option name="project" value="LOCAL" />
+      <updated>1775018852566</updated>
+    </task>
+    <option name="localTasksCounter" value="33" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -413,7 +440,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java</url>
-          <line>528</line>
+          <line>537</line>
           <option name="timeStamp" value="4" />
         </line-breakpoint>
       </breakpoints>

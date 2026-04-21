@@ -121,6 +121,12 @@ public class LibrarianPortalApp extends Application {
     private TextField bookTableTitleFilter;
     private TextField bookTableBorrowedByFilter;
     private ComboBox<String> bookTableStatusFilter;
+    private TableView<BookRequestView> bookRequestTable;
+    private TextField bookRequestKeywordFilter;
+    private ComboBox<String> bookRequestStatusFilter;
+    private TextField requestActionIdField;
+    private ComboBox<String> requestActionTypeBox;
+    private TextField requestActionCommentField;
     private Label bookTableStatusLabel;
 
     private TableView<Book> publishedBooksTable;
@@ -698,6 +704,7 @@ public class LibrarianPortalApp extends Application {
                 "ALL",
                 "ANNOUNCEMENT",
                 "NEW_BOOK_SUBMISSION",
+                "NEW_BOOK_REQUEST",
                 "USER_ACCOUNT_UPDATE"
         ));
         notificationCategoryFilter.setValue("ALL");
@@ -1033,7 +1040,75 @@ public class LibrarianPortalApp extends Application {
         card.getChildren().addAll(heading, hint, filters, actions);
 
         VBox.setVgrow(borrowedBooksTable, Priority.ALWAYS);
-        wrapper.getChildren().addAll(card, heading, borrowedBooksTable);
+        VBox requestCard = new VBox(10);
+        requestCard.getStyleClass().add("card");
+        Label requestHeading = new Label("Student/Staff Book Requests");
+        requestHeading.getStyleClass().add("card-title");
+        Label requestHint = new Label("Review and approve/reject requests for new books.");
+        requestHint.getStyleClass().add("muted");
+
+        HBox requestFilters = new HBox(8);
+        bookRequestKeywordFilter = new TextField();
+        bookRequestKeywordFilter.setPromptText("Keyword (ID/title/author/user)");
+        bookRequestStatusFilter = new ComboBox<>(FXCollections.observableArrayList("ALL", "PENDING", "APPROVED", "REJECTED"));
+        bookRequestStatusFilter.setValue("PENDING");
+        Button refreshRequestsBtn = new Button("Refresh Requests");
+        refreshRequestsBtn.getStyleClass().add("secondary-btn");
+        refreshRequestsBtn.setOnAction(e -> refreshBookRequests());
+        requestFilters.getChildren().addAll(new Label("Filter:"), bookRequestKeywordFilter, bookRequestStatusFilter, refreshRequestsBtn);
+
+        bookRequestTable = new TableView<>();
+        bookRequestTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        TableColumn<BookRequestView, String> requestIdCol = new TableColumn<>("Request ID");
+        requestIdCol.setCellValueFactory(new PropertyValueFactory<>("requestId"));
+        TableColumn<BookRequestView, String> requestUserCol = new TableColumn<>("Requester");
+        requestUserCol.setCellValueFactory(new PropertyValueFactory<>("username"));
+        TableColumn<BookRequestView, String> requestTitleCol = new TableColumn<>("Title");
+        requestTitleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+        TableColumn<BookRequestView, String> requestAuthorCol = new TableColumn<>("Author");
+        requestAuthorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
+        TableColumn<BookRequestView, String> requestGenreCol = new TableColumn<>("Genre");
+        requestGenreCol.setCellValueFactory(new PropertyValueFactory<>("genre"));
+        TableColumn<BookRequestView, String> requestStatusCol = new TableColumn<>("Status");
+        requestStatusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
+        TableColumn<BookRequestView, String> requestReasonCol = new TableColumn<>("Reason");
+        requestReasonCol.setCellValueFactory(new PropertyValueFactory<>("reason"));
+        requestReasonCol.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setTooltip(null);
+                    return;
+                }
+                String compact = item.length() > 70 ? item.substring(0, 70) + "..." : item;
+                setText(compact);
+                setTooltip(new Tooltip(item));
+            }
+        });
+        bookRequestTable.getColumns().addAll(requestIdCol, requestUserCol, requestTitleCol, requestAuthorCol, requestGenreCol, requestStatusCol, requestReasonCol);
+        bookRequestTable.getSelectionModel().selectedItemProperty().addListener((obs, old, val) -> {
+            if (val != null && requestActionIdField != null) {
+                requestActionIdField.setText(val.requestId());
+            }
+        });
+
+        HBox requestActionRow = new HBox(8);
+        requestActionIdField = new TextField();
+        requestActionIdField.setPromptText("Request ID");
+        requestActionTypeBox = new ComboBox<>(FXCollections.observableArrayList("APPROVE", "REJECT"));
+        requestActionTypeBox.setValue("APPROVE");
+        requestActionCommentField = new TextField();
+        requestActionCommentField.setPromptText("Optional comment");
+        Button applyRequestActionBtn = new Button("Apply");
+        applyRequestActionBtn.getStyleClass().add("primary-btn");
+        applyRequestActionBtn.setOnAction(e -> handleBookRequestAction());
+        requestActionRow.getChildren().addAll(requestActionIdField, requestActionTypeBox, requestActionCommentField, applyRequestActionBtn);
+
+        requestCard.getChildren().addAll(requestHeading, requestHint, requestFilters, bookRequestTable, requestActionRow);
+
+        wrapper.getChildren().addAll(card, heading, borrowedBooksTable, requestCard);
 
         return wrapper;
     }
@@ -1271,7 +1346,7 @@ public class LibrarianPortalApp extends Application {
         manageUsers.setOnAction(event -> { stage.setScene(manageUsersScene); refreshEditUsers(); });
         manageUsers.setPrefWidth(140);
         borrowedBooks.getStyleClass().add("primary-btn");
-        borrowedBooks.setOnAction(event -> { stage.setScene(borrowedBooksScene); refreshBorrowedBooks(); });
+        borrowedBooks.setOnAction(event -> { stage.setScene(borrowedBooksScene); refreshBorrowedBooks(); refreshBookRequests(); });
         borrowedBooks.setPrefWidth(140);
         publishedBooks.getStyleClass().add("primary-btn");
         publishedBooks.setOnAction(event -> { stage.setScene(publishedBooksScene); refreshPublishedBooks(); });
@@ -1820,6 +1895,46 @@ public class LibrarianPortalApp extends Application {
                         bookTableTitleFilter.getText(),
                         bookTableBorrowedByFilter.getText(),
                         bookTableStatusFilter.getValue())));
+    }
+
+    private void refreshBookRequests() {
+        if (bookRequestTable == null) {
+            return;
+        }
+        String status = bookRequestStatusFilter == null ? "ALL" : bookRequestStatusFilter.getValue();
+        String keyword = bookRequestKeywordFilter == null ? "" : bookRequestKeywordFilter.getText();
+        bookRequestTable.setItems(FXCollections.observableArrayList(
+                portalService.getBookRequests(status, keyword)
+        ));
+    }
+
+    private void handleBookRequestAction() {
+        if (currentUser == null) {
+            showErrorPopup("Book Request", "No user logged in.", "Please log in first.");
+            return;
+        }
+        String requestId = requestActionIdField == null ? "" : requestActionIdField.getText().trim();
+        if (requestId.isEmpty()) {
+            showErrorPopup("Book Request", "Request ID required.", "Select a request or type a request ID.");
+            return;
+        }
+        String action = requestActionTypeBox == null ? "APPROVE" : requestActionTypeBox.getValue();
+        String comment = requestActionCommentField == null ? "" : requestActionCommentField.getText();
+        LibrarianPortalService.OperationResult result;
+        if ("REJECT".equalsIgnoreCase(action)) {
+            result = portalService.rejectBookRequest(requestId, currentUser.username(), comment);
+        } else {
+            result = portalService.approveBookRequest(requestId, currentUser.username(), comment);
+        }
+        setStatus(result.message());
+        if (!result.success()) {
+            showErrorPopup("Book Request", "Action failed", result.message());
+            return;
+        }
+        if (requestActionCommentField != null) requestActionCommentField.clear();
+        if (requestActionIdField != null) requestActionIdField.clear();
+        refreshBookRequests();
+        refreshBorrowedBooks();
     }
 
     private void refreshPublishedBooks() {

@@ -1,8 +1,14 @@
 module project.library {
     requires javafx.controls;
+    requires javafx.swing;
     requires java.desktop;
+    requires org.apache.pdfbox;
     requires org.apache.poi.poi;
     requires java.sql;
+    requires langchain4j;
+    requires langchain4j.open.ai;
+    requires langchain4j.core;
+    requires langchain4j.document.parser.apache.pdfbox;
 
     exports project;
     exports project.ui;

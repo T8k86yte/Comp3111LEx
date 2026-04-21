@@ -54,6 +54,7 @@ public class LibrarianPortalService {
     private static final String TASK2_NOTIFICATION_SCOPE = "TASK2";
     private static final String TASK3_NOTIFICATION_SCOPE = "TASK3";
     private static final String BORROW_RECORDS_FILE = "data/task1/borrow_records.txt";
+    private static final String TASK1_BOOK_REQUESTS_FILE = "data/task1/book_requests.txt";
     private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     public LibrarianPortalService(LibrarianRepository librarianRepository, StudentStaffRepository studentStaffRepository, AuthorRepository authorRepository, BookRepository bookRepository, SubmissionRepository bookSubmissionRepository) {
@@ -238,9 +239,10 @@ public class LibrarianPortalService {
                 String username = decode(parts[0]);
                 String bookId = decode(parts[1]);
                 String bookTitle = decode(parts[2]);
-                LocalDate borrowDate = LocalDate.parse(parts[3]);
-                LocalDate dueDate = LocalDate.parse(parts[4]);
-                LocalDate returnDate = parts[5].isBlank() ? null : LocalDate.parse(parts[5]);
+                int offset = parts.length >= 9 ? 2 : 0;
+                LocalDate borrowDate = LocalDate.parse(parts[3 + offset]);
+                LocalDate dueDate = LocalDate.parse(parts[4 + offset]);
+                LocalDate returnDate = parts[5 + offset].isBlank() ? null : LocalDate.parse(parts[5 + offset]);
                 String rowStatus = returnDate == null ? (dueDate.isBefore(LocalDate.now()) ? "OVERDUE" : "BORROWED") : "RETURNED";
                 if (!title.isEmpty() && !bookTitle.toLowerCase().contains(title)) continue;
                 if (!borrower.isEmpty() && !username.toLowerCase().contains(borrower)) continue;
@@ -252,6 +254,111 @@ public class LibrarianPortalService {
         }
         records.sort(Comparator.comparing(BorrowedBookRecordView::borrowDate).reversed());
         return records;
+    }
+
+    public List<BookRequestView> getBookRequests(String statusFilter, String keywordFilter) {
+        String status = safeTrim(statusFilter).toUpperCase();
+        String keyword = safeTrim(keywordFilter).toLowerCase();
+        return loadBookRequests().stream()
+                .filter(r -> status.isEmpty() || "ALL".equals(status) || status.equalsIgnoreCase(r.status()))
+                .filter(r -> keyword.isEmpty()
+                        || r.requestId().toLowerCase().contains(keyword)
+                        || r.username().toLowerCase().contains(keyword)
+                        || r.title().toLowerCase().contains(keyword)
+                        || r.author().toLowerCase().contains(keyword)
+                        || r.genre().toLowerCase().contains(keyword))
+                .sorted(Comparator.comparing(BookRequestView::createdAt).reversed())
+                .collect(Collectors.toList());
+    }
+
+    public OperationResult approveBookRequest(String requestId, String librarianUsername, String comment) {
+        String normalizedRequestId = safeTrim(requestId);
+        String normalizedLibrarian = safeTrim(librarianUsername);
+        if (normalizedRequestId.isEmpty() || normalizedLibrarian.isEmpty()) {
+            return OperationResult.failure("Approve failed: invalid request or librarian.");
+        }
+        List<BookRequestView> rows = loadBookRequests();
+        for (int i = 0; i < rows.size(); i++) {
+            BookRequestView request = rows.get(i);
+            if (!normalizedRequestId.equalsIgnoreCase(request.requestId())) {
+                continue;
+            }
+            if (!"PENDING".equalsIgnoreCase(request.status())) {
+                return OperationResult.failure("Approve failed: request is already " + request.status() + ".");
+            }
+            String summary = "Added from student/staff request. Reason: " + request.reason();
+            bookRepository.addApprovedBook(
+                    request.title(),
+                    request.author(),
+                    LocalDate.now(),
+                    summary,
+                    request.genre(),
+                    ""
+            );
+            BookRequestView decided = new BookRequestView(
+                    request.requestId(),
+                    request.username(),
+                    request.title(),
+                    request.author(),
+                    request.genre(),
+                    request.reason(),
+                    "APPROVED",
+                    safeTrim(comment).isEmpty() ? "Approved by " + normalizedLibrarian : comment.trim(),
+                    request.createdAt(),
+                    LocalDateTime.now()
+            );
+            rows.set(i, decided);
+            saveBookRequests(rows);
+            appendNotificationTo(
+                    request.username(),
+                    "BOOK_REQUEST_APPROVED",
+                    "Your request \"" + request.title() + "\" was approved and uploaded to the library.",
+                    UserRole.STUDENT
+            );
+            return OperationResult.success("Book request approved and uploaded: " + request.title());
+        }
+        return OperationResult.failure("Approve failed: request not found.");
+    }
+
+    public OperationResult rejectBookRequest(String requestId, String librarianUsername, String comment) {
+        String normalizedRequestId = safeTrim(requestId);
+        String normalizedLibrarian = safeTrim(librarianUsername);
+        if (normalizedRequestId.isEmpty() || normalizedLibrarian.isEmpty()) {
+            return OperationResult.failure("Reject failed: invalid request or librarian.");
+        }
+        List<BookRequestView> rows = loadBookRequests();
+        for (int i = 0; i < rows.size(); i++) {
+            BookRequestView request = rows.get(i);
+            if (!normalizedRequestId.equalsIgnoreCase(request.requestId())) {
+                continue;
+            }
+            if (!"PENDING".equalsIgnoreCase(request.status())) {
+                return OperationResult.failure("Reject failed: request is already " + request.status() + ".");
+            }
+            BookRequestView decided = new BookRequestView(
+                    request.requestId(),
+                    request.username(),
+                    request.title(),
+                    request.author(),
+                    request.genre(),
+                    request.reason(),
+                    "REJECTED",
+                    safeTrim(comment).isEmpty() ? "Rejected by " + normalizedLibrarian : comment.trim(),
+                    request.createdAt(),
+                    LocalDateTime.now()
+            );
+            rows.set(i, decided);
+            saveBookRequests(rows);
+            appendNotificationTo(
+                    request.username(),
+                    "BOOK_REQUEST_REJECTED",
+                    "Your request \"" + request.title() + "\" was rejected. "
+                            + (safeTrim(comment).isEmpty() ? "" : ("Reason: " + comment.trim())),
+                    UserRole.STUDENT
+            );
+            return OperationResult.success("Book request rejected: " + request.title());
+        }
+        return OperationResult.failure("Reject failed: request not found.");
     }
     public OperationResult exportBorrowedBooksData(File file,
                                                    String titleFilter,
@@ -355,7 +462,14 @@ public class LibrarianPortalService {
         if (!s.isPending()) return OperationResult.failure("Approve failed: \"" + s.getTitle() + "\" is not a pending book submission.");
 
         s.approve(user.getUsername());
-        bookRepository.addApprovedBook(s.getTitle(), s.getAuthorFullName(), LocalDate.now(), s.getDescription(), s.getGenre());//Note that description is just an alias of summary for book
+        bookRepository.addApprovedBook(
+                s.getTitle(),
+                s.getAuthorFullName(),
+                LocalDate.now(),
+                s.getDescription(),
+                s.getGenre(),
+                s.getCoverImagePath()
+        );//Note that description is just an alias of summary for book
         bookSubmissionRepository.update(s);//Changes should be saved once there are updates
 
         appendNotificationTo(s.getAuthorUsername(), "BOOK_APPROVED", "Your Book Submission \"" + s.getTitle() + "\" was approved.", UserRole.AUTHOR);//Send notification to the author
@@ -863,6 +977,63 @@ public class LibrarianPortalService {
         return "Title: " + sub.getTitle() + "\nAuthor Username: "+ sub.getAuthorUsername() + "\nDescription: " + sub.getDescription() + "\nSubmission Time: " + sub.getSubmissionDate() + "\n";
     }
 
+    private List<BookRequestView> loadBookRequests() {
+        Path path = Paths.get(TASK1_BOOK_REQUESTS_FILE);
+        if (!Files.exists(path)) {
+            return new ArrayList<>();
+        }
+        try {
+            List<BookRequestView> list = new ArrayList<>();
+            for (String line : Files.readAllLines(path)) {
+                if (line == null || line.trim().isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 10) {
+                    continue;
+                }
+                list.add(new BookRequestView(
+                        decode(parts[0]),
+                        decode(parts[1]),
+                        decode(parts[2]),
+                        decode(parts[3]),
+                        decode(parts[4]),
+                        decode(parts[5]),
+                        decode(parts[6]),
+                        decode(parts[7]),
+                        LocalDateTime.parse(parts[8], HISTORY_TIME_FORMAT),
+                        parts[9].isBlank() ? null : LocalDateTime.parse(parts[9], HISTORY_TIME_FORMAT)
+                ));
+            }
+            return list;
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    private void saveBookRequests(List<BookRequestView> rows) {
+        try {
+            Files.createDirectories(Paths.get("data/task1"));
+            List<String> lines = new ArrayList<>();
+            for (BookRequestView r : rows) {
+                lines.add(String.join("|",
+                        encode(r.requestId()),
+                        encode(r.username()),
+                        encode(r.title()),
+                        encode(r.author()),
+                        encode(r.genre()),
+                        encode(r.reason()),
+                        encode(r.status()),
+                        encode(r.librarianComment() == null ? "" : r.librarianComment()),
+                        r.createdAt().format(HISTORY_TIME_FORMAT),
+                        r.decidedAt() == null ? "" : r.decidedAt().format(HISTORY_TIME_FORMAT)
+                ));
+            }
+            Files.write(Paths.get(TASK1_BOOK_REQUESTS_FILE), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception ignored) {
+        }
+    }
+
 
     private static String encode(String value) {
         return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
@@ -1041,6 +1212,7 @@ public class LibrarianPortalService {
         String c = safeTrim(category).toUpperCase();
         return "BOOK_REJECTED".equals(c)
                 || "NEW_BOOK_SUBMISSION".equals(c)
+                || "NEW_BOOK_REQUEST".equals(c)
                 || "USER_ACCOUNT_UPDATE".equals(c)
                 || "RESPONSE".equals(c);
     }
@@ -1110,4 +1282,17 @@ public class LibrarianPortalService {
         public String getStatusAlt() { return status; }
         public boolean getOverdue() { return overdue; }
     }
+
+    public record BookRequestView(
+            String requestId,
+            String username,
+            String title,
+            String author,
+            String genre,
+            String reason,
+            String status,
+            String librarianComment,
+            LocalDateTime createdAt,
+            LocalDateTime decidedAt
+    ) {}
 }
