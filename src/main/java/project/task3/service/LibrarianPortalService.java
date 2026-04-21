@@ -905,6 +905,22 @@ public class LibrarianPortalService {
                 && password.matches(".*[A-Z].*");
     }
 
+
+
+    private record BookRequest(
+            String requestId,
+            String username,
+            String title,
+            String author,
+            String genre,
+            String reason,
+            String status,
+            String librarianComment,
+            LocalDateTime createdAt,
+            LocalDateTime decidedAt
+    ) {}
+
+
     private static boolean filterNotification(NotificationView notification,
                                               String categoryFilter,
                                               LocalDateTime timeMin,
