@@ -1,6 +1,8 @@
 module project.library {
     requires javafx.controls;
+    requires javafx.swing;
     requires java.desktop;
+    requires org.apache.pdfbox;
     requires org.apache.poi.poi;
     requires java.sql;
     requires langchain4j;

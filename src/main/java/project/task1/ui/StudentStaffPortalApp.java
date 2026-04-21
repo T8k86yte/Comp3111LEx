@@ -11,6 +11,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.PasswordField;
@@ -41,12 +42,12 @@ import project.task2.repo.AuthorRepository;
 import project.task2.utils.SessionManager;
 import project.task3.repo.LibrarianRepository;
 
-import java.awt.Desktop;
 import java.io.File;
-import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -92,6 +93,12 @@ public class StudentStaffPortalApp extends Application {
     private ListView<Book> returnBookListView;
     private VBox recommendationBox;
     private ListView<String> borrowHistoryList;
+    private TableView<StudentStaffPortalService.ReadingHistoryView> readingHistoryTable;
+    private TextField readingHistoryTitleFilterField;
+    private TextField readingHistoryAuthorFilterField;
+    private TextField readingHistoryGenreFilterField;
+    private DatePicker readingHistoryFromDatePicker;
+    private DatePicker readingHistoryToDatePicker;
     private TableView<StudentStaffPortalService.BorrowRecordView> borrowedRecordTable;
     private TextField borrowedRecordFilterField;
     private TextField bookmarkField;
@@ -110,8 +117,14 @@ public class StudentStaffPortalApp extends Application {
     private ComboBox<String> bookFilterAvailabilityBox;
     private TextField notificationSearchField;
     private ComboBox<String> notificationCategoryFilterBox;
+    private TextField requestTitleField;
+    private TextField requestAuthorField;
+    private TextField requestGenreField;
+    private TextArea requestReasonArea;
+    private ListView<String> myRequestListView;
     private Timer autoSaveTimer;
     private boolean randomCrashEnabled;
+    private Map<String, StudentStaffPortalService.BookRatingSummary> ratingSummaryByBookId = Map.of();
 
     @Override
     public void start(Stage stage) {
@@ -298,6 +311,7 @@ public class StudentStaffPortalApp extends Application {
         Button borrowedBtn = new Button("Borrowed Books");
         Button recBtn = new Button("Recommendations");
         Button historyBtn = new Button("Borrow History");
+        Button requestBtn = new Button("Request Book");
         Button profileBtn = new Button("Profile");
         Button noticeBtn = new Button("Notifications");
         Button crashBtn = new Button("Crash Test");
@@ -308,6 +322,7 @@ public class StudentStaffPortalApp extends Application {
         borrowedBtn.getStyleClass().add("secondary-btn");
         recBtn.getStyleClass().add("secondary-btn");
         historyBtn.getStyleClass().add("secondary-btn");
+        requestBtn.getStyleClass().add("secondary-btn");
         profileBtn.getStyleClass().add("secondary-btn");
         noticeBtn.getStyleClass().add("secondary-btn");
         crashBtn.getStyleClass().add("secondary-btn");
@@ -318,11 +333,12 @@ public class StudentStaffPortalApp extends Application {
         borrowedBtn.setMaxWidth(Double.MAX_VALUE);
         recBtn.setMaxWidth(Double.MAX_VALUE);
         historyBtn.setMaxWidth(Double.MAX_VALUE);
+        requestBtn.setMaxWidth(Double.MAX_VALUE);
         profileBtn.setMaxWidth(Double.MAX_VALUE);
         noticeBtn.setMaxWidth(Double.MAX_VALUE);
         crashBtn.setMaxWidth(Double.MAX_VALUE);
         randomCrashBtn.setMaxWidth(Double.MAX_VALUE);
-        nav.getChildren().addAll(booksBtn, borrowBtn, returnBtn, borrowedBtn, recBtn, historyBtn, profileBtn, noticeBtn, crashBtn, randomCrashBtn);
+        nav.getChildren().addAll(booksBtn, borrowBtn, returnBtn, borrowedBtn, recBtn, historyBtn, requestBtn, profileBtn, noticeBtn, crashBtn, randomCrashBtn);
 
         contentPane = new StackPane();
         contentPane.setPadding(new Insets(0, 0, 0, 12));
@@ -333,6 +349,7 @@ public class StudentStaffPortalApp extends Application {
         borrowedBtn.setOnAction(e -> showBorrowedBooksView());
         recBtn.setOnAction(e -> showRecommendationView());
         historyBtn.setOnAction(e -> showBorrowHistoryView());
+        requestBtn.setOnAction(e -> showRequestBookView());
         profileBtn.setOnAction(e -> showProfileView());
         noticeBtn.setOnAction(e -> showNotificationView());
         crashBtn.setOnAction(e -> handleCrashTest());
@@ -469,17 +486,80 @@ public class StudentStaffPortalApp extends Application {
             }
         });
 
+        TableColumn<Book, String> avgRatingCol = new TableColumn<>("Avg Rating");
+        avgRatingCol.setCellValueFactory(cell -> {
+            StudentStaffPortalService.BookRatingSummary summary =
+                    ratingSummaryByBookId.getOrDefault(cell.getValue().getId(), new StudentStaffPortalService.BookRatingSummary(0.0, 0));
+            String text = summary.reviewCount() == 0 ? "-" : String.format("%.2f / 5", summary.averageRating());
+            return new javafx.beans.property.SimpleStringProperty(text);
+        });
+        avgRatingCol.setPrefWidth(110);
+
+        TableColumn<Book, String> reviewCountCol = new TableColumn<>("Reviews");
+        reviewCountCol.setCellValueFactory(cell -> {
+            StudentStaffPortalService.BookRatingSummary summary =
+                    ratingSummaryByBookId.getOrDefault(cell.getValue().getId(), new StudentStaffPortalService.BookRatingSummary(0.0, 0));
+            return new javafx.beans.property.SimpleStringProperty(String.valueOf(summary.reviewCount()));
+        });
+        reviewCountCol.setPrefWidth(80);
+
+        TableColumn<Book, String> reviewsPreviewCol = new TableColumn<>("Review Preview");
+        reviewsPreviewCol.setCellValueFactory(cell -> {
+            List<StudentStaffPortalService.BookReviewView> reviews = portalService.getBookReviews(cell.getValue().getId());
+            if (reviews.isEmpty()) {
+                return new javafx.beans.property.SimpleStringProperty("No reviews yet");
+            }
+            StudentStaffPortalService.BookReviewView latest = reviews.get(0);
+            String preview = latest.reviewText() == null ? "" : latest.reviewText().trim();
+            if (preview.isEmpty()) {
+                preview = "(rating only)";
+            }
+            if (preview.length() > 60) {
+                preview = preview.substring(0, 60) + "...";
+            }
+            return new javafx.beans.property.SimpleStringProperty(preview);
+        });
+        reviewsPreviewCol.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setTooltip(null);
+                    return;
+                }
+                setText(item);
+                Book rowBook = getTableRow() == null ? null : (Book) getTableRow().getItem();
+                if (rowBook == null) {
+                    setTooltip(null);
+                    return;
+                }
+                List<StudentStaffPortalService.BookReviewView> reviews = portalService.getBookReviews(rowBook.getId());
+                if (reviews.isEmpty()) {
+                    setTooltip(new Tooltip("No reviews submitted yet."));
+                    return;
+                }
+                String tooltipContent = reviews.stream()
+                        .limit(3)
+                        .map(r -> r.username() + " [" + r.rating() + "/5]: "
+                                + ((r.reviewText() == null || r.reviewText().isBlank()) ? "(rating only)" : r.reviewText()))
+                        .collect(java.util.stream.Collectors.joining("\n\n"));
+                setTooltip(new Tooltip(tooltipContent));
+            }
+        });
+        reviewsPreviewCol.setPrefWidth(220);
+
         Button readSummaryBtn = new Button("Read Summary");
         readSummaryBtn.getStyleClass().add("secondary-btn");
         readSummaryBtn.setOnAction(event -> handleReadSummary());
-        Button quickReviewBtn = new Button("Quick Review");
+        Button quickReviewBtn = new Button("Review / Rate");
         quickReviewBtn.getStyleClass().add("secondary-btn");
-        quickReviewBtn.setOnAction(event -> handleQuickReview());
+        quickReviewBtn.setOnAction(event -> handleReviewRateSelectedBook());
         Button borrowSelectedBtn = new Button("Borrow Selected");
         borrowSelectedBtn.getStyleClass().add("primary-btn");
         borrowSelectedBtn.setOnAction(event -> handleBorrowSelectedFromTable());
 
-        bookTable.getColumns().addAll(idCol, titleCol, authorCol, genreCol, dateCol, availabilityCol, summaryCol);
+        bookTable.getColumns().addAll(idCol, titleCol, authorCol, genreCol, dateCol, availabilityCol, avgRatingCol, reviewCountCol, reviewsPreviewCol, summaryCol);
         bookTable.setRowFactory(tv -> {
             TableRow<Book> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
@@ -581,13 +661,106 @@ public class StudentStaffPortalApp extends Application {
     private VBox buildBorrowHistoryView() {
         VBox card = new VBox(10);
         card.getStyleClass().add("card");
-        Label heading = new Label("Borrow History");
+        Label heading = new Label("Reading History");
         heading.getStyleClass().add("card-title");
-        Label hint = new Label("Your previous borrow actions.");
+        Label hint = new Label("Track borrow/return timeline, reading duration, and progress.");
         hint.getStyleClass().add("muted");
+
+        HBox filters = new HBox(8);
+        readingHistoryTitleFilterField = new TextField();
+        readingHistoryTitleFilterField.setPromptText("Title");
+        readingHistoryAuthorFilterField = new TextField();
+        readingHistoryAuthorFilterField.setPromptText("Author");
+        readingHistoryGenreFilterField = new TextField();
+        readingHistoryGenreFilterField.setPromptText("Genre");
+        readingHistoryFromDatePicker = new DatePicker();
+        readingHistoryFromDatePicker.setPromptText("Borrow date from");
+        readingHistoryToDatePicker = new DatePicker();
+        readingHistoryToDatePicker.setPromptText("Borrow date to");
+        Button applyFilterBtn = new Button("Apply Filter");
+        applyFilterBtn.getStyleClass().add("secondary-btn");
+        applyFilterBtn.setOnAction(e -> refreshReadingHistory());
+        filters.getChildren().addAll(
+                new Label("Filter:"),
+                readingHistoryTitleFilterField,
+                readingHistoryAuthorFilterField,
+                readingHistoryGenreFilterField,
+                readingHistoryFromDatePicker,
+                readingHistoryToDatePicker,
+                applyFilterBtn
+        );
+
+        readingHistoryTable = new TableView<>();
+        readingHistoryTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        TableColumn<StudentStaffPortalService.ReadingHistoryView, String> titleCol = new TableColumn<>("Book Title");
+        titleCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().bookTitle()));
+        TableColumn<StudentStaffPortalService.ReadingHistoryView, String> authorCol = new TableColumn<>("Author");
+        authorCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().author()));
+        TableColumn<StudentStaffPortalService.ReadingHistoryView, String> genreCol = new TableColumn<>("Genre");
+        genreCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().genre()));
+        TableColumn<StudentStaffPortalService.ReadingHistoryView, String> borrowDateCol = new TableColumn<>("Borrow Date");
+        borrowDateCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().borrowDate().toString()));
+        TableColumn<StudentStaffPortalService.ReadingHistoryView, String> returnDateCol = new TableColumn<>("Return Date");
+        returnDateCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
+                cell.getValue().returnDate() == null ? "In Progress" : cell.getValue().returnDate().toString()));
+        TableColumn<StudentStaffPortalService.ReadingHistoryView, String> durationCol = new TableColumn<>("Reading Duration");
+        durationCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().readingDurationDays() + " day(s)"));
+        TableColumn<StudentStaffPortalService.ReadingHistoryView, String> progressCol = new TableColumn<>("Reading Progress");
+        progressCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
+                cell.getValue().progressSummary() == null || cell.getValue().progressSummary().isBlank()
+                        ? "No progress saved"
+                        : cell.getValue().progressSummary()
+        ));
+        readingHistoryTable.getColumns().addAll(titleCol, authorCol, genreCol, borrowDateCol, returnDateCol, durationCol, progressCol);
+
         borrowHistoryList = new ListView<>();
-        VBox.setVgrow(borrowHistoryList, Priority.ALWAYS);
-        card.getChildren().addAll(heading, hint, borrowHistoryList);
+        borrowHistoryList.setPrefHeight(120);
+        VBox.setVgrow(readingHistoryTable, Priority.ALWAYS);
+        card.getChildren().addAll(heading, hint, filters, readingHistoryTable, new Label("Legacy Borrow Events"), borrowHistoryList);
+        return card;
+    }
+
+    private VBox buildRequestBookView() {
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        Label heading = new Label("Request New Book");
+        heading.getStyleClass().add("card-title");
+        Label hint = new Label("Submit a request for librarian review and approval.");
+        hint.getStyleClass().add("muted");
+
+        requestTitleField = new TextField();
+        requestTitleField.setPromptText("Title");
+        requestAuthorField = new TextField();
+        requestAuthorField.setPromptText("Author");
+        requestGenreField = new TextField();
+        requestGenreField.setPromptText("Genre");
+        requestReasonArea = new TextArea();
+        requestReasonArea.setPromptText("Reason for request");
+        requestReasonArea.setPrefRowCount(3);
+
+        Button submitBtn = new Button("Submit Request");
+        submitBtn.getStyleClass().add("primary-btn");
+        submitBtn.setOnAction(e -> handleSubmitBookRequest());
+        Button refreshBtn = new Button("Refresh My Requests");
+        refreshBtn.getStyleClass().add("secondary-btn");
+        refreshBtn.setOnAction(e -> refreshMyRequests());
+
+        HBox actions = new HBox(10, submitBtn, refreshBtn);
+        actions.setAlignment(Pos.CENTER_LEFT);
+
+        myRequestListView = new ListView<>();
+        VBox.setVgrow(myRequestListView, Priority.ALWAYS);
+        card.getChildren().addAll(
+                heading,
+                hint,
+                requestTitleField,
+                requestAuthorField,
+                requestGenreField,
+                requestReasonArea,
+                actions,
+                new Label("My Requests"),
+                myRequestListView
+        );
         return card;
     }
 
@@ -720,6 +893,8 @@ public class StudentStaffPortalApp extends Application {
                 "AUTO_RETURN",
                 "BOOK_RETURN",
                 "BOOK_DELETION",
+                "BOOK_REQUEST_APPROVED",
+                "BOOK_REQUEST_REJECTED",
                 "ANNOUNCEMENT"
         ));
         notificationCategoryFilterBox.setValue("All");
@@ -796,6 +971,13 @@ public class StudentStaffPortalApp extends Application {
         contentPane.getChildren().setAll(buildBorrowHistoryView());
         SessionManager.setCurrentScreen("TASK1_HISTORY", null);
         refreshBorrowHistory();
+        refreshReadingHistory();
+    }
+
+    private void showRequestBookView() {
+        contentPane.getChildren().setAll(buildRequestBookView());
+        SessionManager.setCurrentScreen("TASK1_REQUEST_BOOK", null);
+        refreshMyRequests();
     }
 
     private void showBorrowedBooksView() {
@@ -905,19 +1087,51 @@ public class StudentStaffPortalApp extends Application {
         showSummaryPopup(selected);
     }
 
-    private void handleQuickReview() {
+    private void handleReviewRateSelectedBook() {
         if (bookTable == null) {
-            showErrorPopup("Quick Review", "Book list is not open.", "Open Book List first.");
+            showErrorPopup("Review / Rate", "Book list is not open.", "Open Book List first.");
             return;
         }
         Book selected = bookTable.getSelectionModel().getSelectedItem();
         if (selected == null) {
-            showErrorPopup("Quick Review", "No book selected.", "Select a book first.");
+            showErrorPopup("Review / Rate", "No book selected.", "Select a book first.");
             return;
         }
-        String summary = selected.getSummary() == null ? "" : selected.getSummary();
-        String preview = summary.length() > 260 ? summary.substring(0, 260) + "..." : summary;
-        showInfoPopup("Quick Review", selected.getTitle(), preview);
+        if (currentUser == null) {
+            showErrorPopup("Review / Rate", "User not logged in.", "Please log in first.");
+            return;
+        }
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Review / Rate Book");
+        dialog.setHeaderText(selected.getTitle() + " (" + selected.getId() + ")");
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        VBox form = new VBox(8);
+        ComboBox<Integer> ratingBox = new ComboBox<>(FXCollections.observableArrayList(1, 2, 3, 4, 5));
+        ratingBox.setValue(5);
+        TextArea reviewArea = new TextArea();
+        reviewArea.setPromptText("Write your review...");
+        reviewArea.setPrefRowCount(4);
+        form.getChildren().addAll(new Label("Rating (1-5)"), ratingBox, new Label("Review"), reviewArea);
+        dialog.getDialogPane().setContent(form);
+
+        Optional<ButtonType> choice = dialog.showAndWait();
+        if (choice.isEmpty() || choice.get() != ButtonType.OK) {
+            return;
+        }
+        int rating = ratingBox.getValue() == null ? 5 : ratingBox.getValue();
+        StudentStaffPortalService.OperationResult result = portalService.submitBookReview(
+                currentUser.username(),
+                selected.getId(),
+                rating,
+                reviewArea.getText()
+        );
+        if (!result.success()) {
+            showErrorPopup("Review / Rate", "Submit failed.", result.message());
+            return;
+        }
+        showInfoPopup("Review / Rate", "Saved", result.message());
+        refreshBooks();
     }
 
     private void showSummaryPopup(Book selected) {
@@ -994,6 +1208,7 @@ public class StudentStaffPortalApp extends Application {
             refreshReturnBooks();
             borrowBookIdField.clear();
             refreshBorrowHistory();
+            refreshReadingHistory();
             showInfoPopup("Borrow", "Borrow successful", result.message());
         } else {
             showErrorPopup("Borrow Failed", "Unable to borrow book.", result.message());
@@ -1050,6 +1265,7 @@ public class StudentStaffPortalApp extends Application {
         refreshRecommendations();
         refreshReturnBooks();
         refreshBorrowHistory();
+        refreshReadingHistory();
         if (okCount > 0 && failures.isEmpty()) {
             showInfoPopup("Borrow", "Borrow successful", "Successfully borrowed " + okCount + " book(s).");
             return;
@@ -1080,6 +1296,7 @@ public class StudentStaffPortalApp extends Application {
             refreshRecommendations();
             refreshReturnBooks();
             returnBookIdField.clear();
+            refreshReadingHistory();
             showInfoPopup("Return", "Return successful", result.message());
         } else {
             showErrorPopup("Return Failed", "Unable to return book.", result.message());
@@ -1128,6 +1345,7 @@ public class StudentStaffPortalApp extends Application {
         refreshBooks();
         refreshRecommendations();
         refreshReturnBooks();
+        refreshReadingHistory();
         if (okCount > 0 && failures.isEmpty()) {
             showInfoPopup("Return", "Return successful", "Successfully returned " + okCount + " book(s).");
             return;
@@ -1159,15 +1377,28 @@ public class StudentStaffPortalApp extends Application {
             showErrorPopup("Open PDF Failed", "PDF file not found.", "Linked file path does not exist on this machine.");
             return;
         }
-        if (!Desktop.isDesktopSupported()) {
-            showErrorPopup("Open PDF Failed", "Desktop open is unsupported.", "This machine cannot open PDF files from Java desktop API.");
-            return;
-        }
         try {
-            Desktop.getDesktop().open(pdfFile);
-            readingInfoLabel.setText("Opened PDF: " + pdfFile.getAbsolutePath());
-        } catch (IOException e) {
-            showErrorPopup("Open PDF Failed", "Cannot open PDF.", e.getMessage());
+            PdfReaderWindow readerWindow = new PdfReaderWindow(
+                    currentUser.username(),
+                    selected.bookId(),
+                    selected.bookTitle(),
+                    pdfFile.getAbsolutePath()
+            );
+            PdfReaderWindow.ReaderSessionResult summary = readerWindow.showAndWait(root.getScene().getWindow());
+            if (summary.hasData()) {
+                bookmarkField.setText(summary.bookmarkSummary());
+                highlightField.setText(summary.highlightSummary());
+                portalService.setReadingProgress(
+                        currentUser.username(),
+                        selected.bookId(),
+                        summary.bookmarkSummary(),
+                        summary.highlightSummary()
+                );
+                refreshReadingHistory();
+            }
+            readingInfoLabel.setText("Opened in built-in reader: " + pdfFile.getAbsolutePath());
+        } catch (Exception e) {
+            showErrorPopup("Open PDF Failed", "Cannot open in built-in reader.", e.getMessage());
         }
     }
 
@@ -1245,6 +1476,7 @@ public class StudentStaffPortalApp extends Application {
         refreshReturnBooks();
         refreshBorrowedBookRecords();
         refreshRecommendations();
+        refreshReadingHistory();
         if (okCount > 0 && failures.isEmpty()) {
             showInfoPopup("Return", "Return successful", "Successfully returned " + okCount + " book(s).");
             return;
@@ -1329,6 +1561,7 @@ public class StudentStaffPortalApp extends Application {
                 return;
             }
         }
+        ratingSummaryByBookId = portalService.getRatingSummaryByBookId();
         bookTable.setItems(FXCollections.observableArrayList(
                 portalService.getBookScreenData(
                         bookFilterTitleField == null ? "" : bookFilterTitleField.getText(),
@@ -1369,6 +1602,68 @@ public class StudentStaffPortalApp extends Application {
             return;
         }
         borrowHistoryList.setItems(FXCollections.observableArrayList(history));
+    }
+
+    private void refreshReadingHistory() {
+        if (readingHistoryTable == null || currentUser == null) {
+            return;
+        }
+        LocalDate from = readingHistoryFromDatePicker == null ? null : readingHistoryFromDatePicker.getValue();
+        LocalDate to = readingHistoryToDatePicker == null ? null : readingHistoryToDatePicker.getValue();
+        List<StudentStaffPortalService.ReadingHistoryView> rows = portalService.getReadingHistory(
+                currentUser.username(),
+                readingHistoryTitleFilterField == null ? "" : readingHistoryTitleFilterField.getText(),
+                readingHistoryAuthorFilterField == null ? "" : readingHistoryAuthorFilterField.getText(),
+                readingHistoryGenreFilterField == null ? "" : readingHistoryGenreFilterField.getText(),
+                from,
+                to
+        );
+        readingHistoryTable.setItems(FXCollections.observableArrayList(rows));
+    }
+
+    private void handleSubmitBookRequest() {
+        if (currentUser == null) {
+            showErrorPopup("Book Request", "User not logged in.", "Please log in first.");
+            return;
+        }
+        StudentStaffPortalService.OperationResult result = portalService.submitBookRequest(
+                currentUser.username(),
+                requestTitleField == null ? "" : requestTitleField.getText(),
+                requestAuthorField == null ? "" : requestAuthorField.getText(),
+                requestGenreField == null ? "" : requestGenreField.getText(),
+                requestReasonArea == null ? "" : requestReasonArea.getText()
+        );
+        if (!result.success()) {
+            showErrorPopup("Book Request", "Submit failed.", result.message());
+            return;
+        }
+        showInfoPopup("Book Request", "Submitted", result.message());
+        if (requestTitleField != null) requestTitleField.clear();
+        if (requestAuthorField != null) requestAuthorField.clear();
+        if (requestGenreField != null) requestGenreField.clear();
+        if (requestReasonArea != null) requestReasonArea.clear();
+        refreshMyRequests();
+    }
+
+    private void refreshMyRequests() {
+        if (myRequestListView == null || currentUser == null) {
+            return;
+        }
+        List<String> rows = portalService.getMyBookRequests(currentUser.username()).stream()
+                .map(r -> "[" + r.status() + "] "
+                        + r.requestId() + " | "
+                        + r.title() + " by " + r.author()
+                        + " | Genre: " + r.genre()
+                        + " | Submitted: " + r.createdAt().toLocalDate()
+                        + (r.librarianComment() == null || r.librarianComment().isBlank()
+                        ? ""
+                        : (" | Comment: " + r.librarianComment())))
+                .collect(java.util.stream.Collectors.toList());
+        if (rows.isEmpty()) {
+            myRequestListView.setItems(FXCollections.observableArrayList("No requests submitted yet."));
+            return;
+        }
+        myRequestListView.setItems(FXCollections.observableArrayList(rows));
     }
 
     private void refreshBorrowedBookRecords() {
@@ -1553,6 +1848,7 @@ public class StudentStaffPortalApp extends Application {
             case "TASK1_BORROWED" -> showBorrowedBooksView();
             case "TASK1_RECOMMEND" -> showRecommendationView();
             case "TASK1_HISTORY" -> showBorrowHistoryView();
+            case "TASK1_REQUEST_BOOK" -> showRequestBookView();
             case "TASK1_PROFILE" -> showProfileView();
             case "TASK1_NOTIFICATIONS" -> showNotificationView();
             case "TASK1_BOOK_LIST" -> showBooksView();
@@ -1605,6 +1901,7 @@ public class StudentStaffPortalApp extends Application {
             case "TASK1_BORROWED" -> safe(borrowedRecordFilterField) + "|" + safe(bookmarkField) + "|" + safe(highlightField);
             case "TASK1_PROFILE" -> safe(profileFullNameField);
             case "TASK1_NOTIFICATIONS" -> safe(notificationSearchField) + "|" + (notificationCategoryFilterBox == null ? "All" : notificationCategoryFilterBox.getValue());
+            case "TASK1_REQUEST_BOOK" -> safe(requestTitleField) + "|" + safe(requestAuthorField) + "|" + safe(requestGenreField) + "|" + safe(requestReasonArea);
             default -> "";
         };
         SessionManager.saveScreenState(screen, state);
@@ -1645,6 +1942,13 @@ public class StudentStaffPortalApp extends Application {
                 if (p.length > 0 && notificationSearchField != null) notificationSearchField.setText(p[0]);
                 if (p.length > 1 && notificationCategoryFilterBox != null && !p[1].isBlank()) notificationCategoryFilterBox.setValue(p[1]);
                 refreshNotifications();
+            }
+            case "TASK1_REQUEST_BOOK" -> {
+                if (p.length > 0 && requestTitleField != null) requestTitleField.setText(p[0]);
+                if (p.length > 1 && requestAuthorField != null) requestAuthorField.setText(p[1]);
+                if (p.length > 2 && requestGenreField != null) requestGenreField.setText(p[2]);
+                if (p.length > 3 && requestReasonArea != null) requestReasonArea.setText(p[3]);
+                refreshMyRequests();
             }
             default -> {
             }

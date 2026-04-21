@@ -21,11 +21,14 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Comparator;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -39,6 +42,8 @@ public class StudentStaffPortalService {
     private static final String LEGACY_TASK1_NOTIFICATIONS_FILE = "data/task1/notifications.txt";
     private static final String TASK1_NOTIFICATION_SCOPE = "TASK1";
     private static final String TASK1_READING_PROGRESS_FILE = "data/task1/reading_progress.txt";
+    private static final String TASK1_BOOK_REVIEWS_FILE = "data/task1/book_reviews.txt";
+    private static final String TASK1_BOOK_REQUESTS_FILE = "data/task1/book_requests.txt";
     private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     private final StudentStaffRepository studentstaffRepository;
@@ -46,6 +51,7 @@ public class StudentStaffPortalService {
     private final SharedAuthFacade sharedAuthFacade;
     private final SubmissionRepository submissionRepository;
     private final UnifiedNotificationStore notificationStore;
+    private final LibrarianRepository librarianRepository;
 
     public StudentStaffPortalService(StudentStaffRepository studentstaffRepository, BookRepository bookRepository) {
         this(studentstaffRepository, bookRepository, new AuthorRepository(), new LibrarianRepository());
@@ -64,6 +70,7 @@ public class StudentStaffPortalService {
                 authorRepository,
                 librarianRepository
         );
+        this.librarianRepository = librarianRepository;
         this.submissionRepository = new SubmissionRepository();
         this.notificationStore = new UnifiedNotificationStore();
         migrateLegacyTask1Notifications();
@@ -267,6 +274,8 @@ public class StudentStaffPortalService {
                 normalizedBorrower,
                 book.getId(),
                 book.getTitle(),
+                book.getAuthor(),
+                book.getGenre(),
                 LocalDate.now(),
                 LocalDate.now().plusDays(borrowDays)
         );
@@ -748,6 +757,44 @@ public class StudentStaffPortalService {
                 .orElse(new ReadingProgressView("", "", ""));
     }
 
+    public OperationResult setReadingProgress(String username, String bookId, String bookmark, String highlightNotes) {
+        String normalizedUser = safeTrim(username);
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        if (normalizedUser.isEmpty() || normalizedBookId.isEmpty()) {
+            return OperationResult.failure("Reading update failed: invalid user/book.");
+        }
+        String normalizedBookmark = bookmark == null ? "" : bookmark.trim();
+        String normalizedHighlights = highlightNotes == null ? "" : highlightNotes.trim();
+
+        List<ReadingProgress> rows = loadReadingProgress();
+        boolean updated = false;
+        for (int i = 0; i < rows.size(); i++) {
+            ReadingProgress row = rows.get(i);
+            if (normalizedUser.equals(row.username()) && normalizedBookId.equalsIgnoreCase(row.bookId())) {
+                rows.set(i, new ReadingProgress(
+                        row.username(),
+                        row.bookId(),
+                        row.pdfPath(),
+                        normalizedBookmark,
+                        normalizedHighlights
+                ));
+                updated = true;
+                break;
+            }
+        }
+        if (!updated) {
+            rows.add(new ReadingProgress(
+                    normalizedUser,
+                    normalizedBookId,
+                    "",
+                    normalizedBookmark,
+                    normalizedHighlights
+            ));
+        }
+        saveReadingProgress(rows);
+        return OperationResult.success("Reading progress updated.");
+    }
+
     public List<String> getBorrowHistory(String username) {
         String normalizedUser = safeTrim(username);
         if (normalizedUser.isEmpty()) {
@@ -780,6 +827,221 @@ public class StudentStaffPortalService {
         }
     }
 
+    public List<ReadingHistoryView> getReadingHistory(
+            String username,
+            String titleFilter,
+            String authorFilter,
+            String genreFilter,
+            LocalDate borrowDateFrom,
+            LocalDate borrowDateTo
+    ) {
+        String normalizedUser = safeTrim(username);
+        if (normalizedUser.isEmpty()) {
+            return List.of();
+        }
+        String title = safeTrim(titleFilter).toLowerCase();
+        String author = safeTrim(authorFilter).toLowerCase();
+        String genre = safeTrim(genreFilter).toLowerCase();
+
+        Map<String, ReadingProgress> progressByBook = loadReadingProgress().stream()
+                .filter(r -> normalizedUser.equals(r.username()))
+                .collect(Collectors.toMap(
+                        r -> r.bookId().toUpperCase(),
+                        r -> r,
+                        (a, b) -> b,
+                        HashMap::new
+                ));
+
+        List<ReadingHistoryView> rows = new ArrayList<>();
+        for (BorrowRecord record : loadBorrowRecords()) {
+            if (!normalizedUser.equals(record.username())) {
+                continue;
+            }
+            if (!title.isEmpty() && !record.bookTitle().toLowerCase().contains(title)) {
+                continue;
+            }
+            if (!author.isEmpty() && !safeTrim(record.bookAuthor()).toLowerCase().contains(author)) {
+                continue;
+            }
+            if (!genre.isEmpty() && !safeTrim(record.bookGenre()).toLowerCase().contains(genre)) {
+                continue;
+            }
+            if (borrowDateFrom != null && record.borrowDate().isBefore(borrowDateFrom)) {
+                continue;
+            }
+            if (borrowDateTo != null && record.borrowDate().isAfter(borrowDateTo)) {
+                continue;
+            }
+            LocalDate end = record.returnDate() == null ? LocalDate.now() : record.returnDate();
+            long durationDays = Math.max(0, ChronoUnit.DAYS.between(record.borrowDate(), end));
+            ReadingProgress progress = progressByBook.getOrDefault(record.bookId().toUpperCase(), null);
+            String progressText = progress == null
+                    ? ""
+                    : buildProgressSummary(progress.bookmark(), progress.highlightNotes());
+            rows.add(new ReadingHistoryView(
+                    record.bookId(),
+                    record.bookTitle(),
+                    safeTrim(record.bookAuthor()),
+                    safeTrim(record.bookGenre()),
+                    record.borrowDate(),
+                    record.returnDate(),
+                    durationDays,
+                    progressText
+            ));
+        }
+        rows.sort(Comparator.comparing(ReadingHistoryView::borrowDate).reversed());
+        return rows;
+    }
+
+    public OperationResult submitBookReview(String username, String bookId, int rating, String reviewText) {
+        String normalizedUser = safeTrim(username);
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        String normalizedReview = reviewText == null ? "" : reviewText.trim();
+        if (normalizedUser.isEmpty() || normalizedBookId.isEmpty()) {
+            return OperationResult.failure("Review failed: invalid user/book.");
+        }
+        if (rating < 1 || rating > 5) {
+            return OperationResult.failure("Review failed: rating must be from 1 to 5.");
+        }
+        if (!hasBorrowedBook(normalizedUser, normalizedBookId)) {
+            return OperationResult.failure("Review failed: you can only review books you have borrowed.");
+        }
+
+        Optional<Book> bookOpt = bookRepository.findById(normalizedBookId);
+        String title = bookOpt.map(Book::getTitle).orElse(normalizedBookId);
+        String author = bookOpt.map(Book::getAuthor).orElse("");
+        String genre = bookOpt.map(Book::getGenre).orElse("");
+
+        List<BookReview> reviews = loadBookReviews();
+        BookReview row = new BookReview(
+                normalizedUser,
+                normalizedBookId,
+                title,
+                author,
+                genre,
+                rating,
+                normalizedReview,
+                LocalDateTime.now()
+        );
+        boolean replaced = false;
+        for (int i = 0; i < reviews.size(); i++) {
+            BookReview existing = reviews.get(i);
+            if (normalizedUser.equals(existing.username())
+                    && normalizedBookId.equalsIgnoreCase(existing.bookId())) {
+                reviews.set(i, row);
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) {
+            reviews.add(row);
+        }
+        saveBookReviews(reviews);
+        return OperationResult.success("Review saved successfully.");
+    }
+
+    public List<BookReviewView> getBookReviews(String bookId) {
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        if (normalizedBookId.isEmpty()) {
+            return List.of();
+        }
+        return loadBookReviews().stream()
+                .filter(r -> normalizedBookId.equalsIgnoreCase(r.bookId()))
+                .sorted(Comparator.comparing(BookReview::updatedAt).reversed())
+                .map(r -> new BookReviewView(
+                        r.username(),
+                        r.bookId(),
+                        r.bookTitle(),
+                        r.bookAuthor(),
+                        r.bookGenre(),
+                        r.rating(),
+                        r.reviewText(),
+                        r.updatedAt()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    public BookRatingSummary getBookRatingSummary(String bookId) {
+        List<BookReviewView> rows = getBookReviews(bookId);
+        if (rows.isEmpty()) {
+            return new BookRatingSummary(0.0, 0);
+        }
+        double avg = rows.stream().mapToInt(BookReviewView::rating).average().orElse(0.0);
+        return new BookRatingSummary(avg, rows.size());
+    }
+
+    public Map<String, BookRatingSummary> getRatingSummaryByBookId() {
+        Map<String, List<BookReview>> grouped = loadBookReviews().stream()
+                .collect(Collectors.groupingBy(r -> r.bookId().toUpperCase()));
+        Map<String, BookRatingSummary> map = new HashMap<>();
+        for (Map.Entry<String, List<BookReview>> entry : grouped.entrySet()) {
+            List<BookReview> rows = entry.getValue();
+            double avg = rows.stream().mapToInt(BookReview::rating).average().orElse(0.0);
+            map.put(entry.getKey(), new BookRatingSummary(avg, rows.size()));
+        }
+        return map;
+    }
+
+    public OperationResult submitBookRequest(
+            String username,
+            String title,
+            String author,
+            String genre,
+            String reason
+    ) {
+        String normalizedUser = safeTrim(username);
+        String normalizedTitle = safeTrim(title);
+        String normalizedAuthor = safeTrim(author);
+        String normalizedGenre = safeTrim(genre);
+        String normalizedReason = safeTrim(reason);
+        if (normalizedUser.isEmpty()) {
+            return OperationResult.failure("Request failed: invalid user.");
+        }
+        if (normalizedTitle.isEmpty() || normalizedAuthor.isEmpty() || normalizedGenre.isEmpty() || normalizedReason.isEmpty()) {
+            return OperationResult.failure("Request failed: title, author, genre, and reason are all required.");
+        }
+        String requestId = "REQ" + System.currentTimeMillis();
+        List<BookRequest> rows = loadBookRequests();
+        rows.add(new BookRequest(
+                requestId,
+                normalizedUser,
+                normalizedTitle,
+                normalizedAuthor,
+                normalizedGenre,
+                normalizedReason,
+                "PENDING",
+                "",
+                LocalDateTime.now(),
+                null
+        ));
+        saveBookRequests(rows);
+        notifyLibrariansOfBookRequest(requestId, normalizedUser, normalizedTitle, normalizedAuthor);
+        return OperationResult.success("Request submitted successfully. Request ID: " + requestId);
+    }
+
+    public List<BookRequestView> getMyBookRequests(String username) {
+        String normalizedUser = safeTrim(username);
+        if (normalizedUser.isEmpty()) {
+            return List.of();
+        }
+        return loadBookRequests().stream()
+                .filter(r -> normalizedUser.equals(r.username()))
+                .sorted(Comparator.comparing(BookRequest::createdAt).reversed())
+                .map(r -> new BookRequestView(
+                        r.requestId(),
+                        r.username(),
+                        r.title(),
+                        r.author(),
+                        r.genre(),
+                        r.reason(),
+                        r.status(),
+                        r.librarianComment(),
+                        r.createdAt(),
+                        r.decidedAt()
+                ))
+                .collect(Collectors.toList());
+    }
+
     private void recordBorrowHistory(String username, String bookId, String bookTitle) {
         try {
             Files.createDirectories(Paths.get("data"));
@@ -800,9 +1062,17 @@ public class StudentStaffPortalService {
         }
     }
 
-    private void recordBorrowRecord(String username, String bookId, String bookTitle, LocalDate borrowDate, LocalDate dueDate) {
+    private void recordBorrowRecord(
+            String username,
+            String bookId,
+            String bookTitle,
+            String bookAuthor,
+            String bookGenre,
+            LocalDate borrowDate,
+            LocalDate dueDate
+    ) {
         List<BorrowRecord> records = loadBorrowRecords();
-        records.add(new BorrowRecord(username, bookId, bookTitle, borrowDate, dueDate, null, ""));
+        records.add(new BorrowRecord(username, bookId, bookTitle, bookAuthor, bookGenre, borrowDate, dueDate, null, ""));
         saveBorrowRecords(records);
     }
 
@@ -839,10 +1109,14 @@ public class StudentStaffPortalService {
                         decode(parts[0]),
                         decode(parts[1]),
                         decode(parts[2]),
-                        LocalDate.parse(parts[3]),
-                        LocalDate.parse(parts[4]),
-                        parts[5].isBlank() ? null : LocalDate.parse(parts[5]),
-                        decode(parts[6])
+                        parts.length >= 9 ? decode(parts[3]) : "",
+                        parts.length >= 9 ? decode(parts[4]) : "",
+                        LocalDate.parse(parts[3 + (parts.length >= 9 ? 2 : 0)]),
+                        LocalDate.parse(parts[4 + (parts.length >= 9 ? 2 : 0)]),
+                        parts[5 + (parts.length >= 9 ? 2 : 0)].isBlank()
+                                ? null
+                                : LocalDate.parse(parts[5 + (parts.length >= 9 ? 2 : 0)]),
+                        decode(parts[6 + (parts.length >= 9 ? 2 : 0)])
                 ));
             }
             return records;
@@ -860,6 +1134,8 @@ public class StudentStaffPortalService {
                         encode(r.username()),
                         encode(r.bookId()),
                         encode(r.bookTitle()),
+                        encode(r.bookAuthor()),
+                        encode(r.bookGenre()),
                         r.borrowDate().toString(),
                         r.dueDate().toString(),
                         r.returnDate() == null ? "" : r.returnDate().toString(),
@@ -979,6 +1255,148 @@ public class StudentStaffPortalService {
         }
     }
 
+    private boolean hasBorrowedBook(String username, String bookId) {
+        return loadBorrowRecords().stream()
+                .anyMatch(r -> username.equals(r.username()) && bookId.equalsIgnoreCase(r.bookId()));
+    }
+
+    private String buildProgressSummary(String bookmark, String highlights) {
+        List<String> parts = new ArrayList<>();
+        if (bookmark != null && !bookmark.isBlank()) {
+            parts.add("Bookmark: " + bookmark);
+        }
+        if (highlights != null && !highlights.isBlank()) {
+            int count = (int) highlights.lines().filter(line -> !line.isBlank()).count();
+            parts.add("Highlights: " + Math.max(1, count) + " note(s)");
+        }
+        return String.join(" | ", parts);
+    }
+
+    private List<BookReview> loadBookReviews() {
+        Path path = Paths.get(TASK1_BOOK_REVIEWS_FILE);
+        if (!Files.exists(path)) {
+            return new ArrayList<>();
+        }
+        try {
+            List<BookReview> list = new ArrayList<>();
+            for (String line : Files.readAllLines(path)) {
+                if (line == null || line.trim().isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 8) {
+                    continue;
+                }
+                list.add(new BookReview(
+                        decode(parts[0]),
+                        decode(parts[1]),
+                        decode(parts[2]),
+                        decode(parts[3]),
+                        decode(parts[4]),
+                        Integer.parseInt(parts[5]),
+                        decode(parts[6]),
+                        LocalDateTime.parse(parts[7], HISTORY_TIME_FORMAT)
+                ));
+            }
+            return list;
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    private void saveBookReviews(List<BookReview> rows) {
+        try {
+            Files.createDirectories(Paths.get("data/task1"));
+            List<String> lines = new ArrayList<>();
+            for (BookReview r : rows) {
+                lines.add(String.join("|",
+                        encode(r.username()),
+                        encode(r.bookId()),
+                        encode(r.bookTitle()),
+                        encode(r.bookAuthor()),
+                        encode(r.bookGenre()),
+                        Integer.toString(r.rating()),
+                        encode(r.reviewText() == null ? "" : r.reviewText()),
+                        r.updatedAt().format(HISTORY_TIME_FORMAT)
+                ));
+            }
+            Files.write(Paths.get(TASK1_BOOK_REVIEWS_FILE), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private List<BookRequest> loadBookRequests() {
+        Path path = Paths.get(TASK1_BOOK_REQUESTS_FILE);
+        if (!Files.exists(path)) {
+            return new ArrayList<>();
+        }
+        try {
+            List<BookRequest> list = new ArrayList<>();
+            for (String line : Files.readAllLines(path)) {
+                if (line == null || line.trim().isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 10) {
+                    continue;
+                }
+                list.add(new BookRequest(
+                        decode(parts[0]),
+                        decode(parts[1]),
+                        decode(parts[2]),
+                        decode(parts[3]),
+                        decode(parts[4]),
+                        decode(parts[5]),
+                        decode(parts[6]),
+                        decode(parts[7]),
+                        LocalDateTime.parse(parts[8], HISTORY_TIME_FORMAT),
+                        parts[9].isBlank() ? null : LocalDateTime.parse(parts[9], HISTORY_TIME_FORMAT)
+                ));
+            }
+            return list;
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    private void saveBookRequests(List<BookRequest> rows) {
+        try {
+            Files.createDirectories(Paths.get("data/task1"));
+            List<String> lines = new ArrayList<>();
+            for (BookRequest r : rows) {
+                lines.add(String.join("|",
+                        encode(r.requestId()),
+                        encode(r.username()),
+                        encode(r.title()),
+                        encode(r.author()),
+                        encode(r.genre()),
+                        encode(r.reason()),
+                        encode(r.status()),
+                        encode(r.librarianComment() == null ? "" : r.librarianComment()),
+                        r.createdAt().format(HISTORY_TIME_FORMAT),
+                        r.decidedAt() == null ? "" : r.decidedAt().format(HISTORY_TIME_FORMAT)
+                ));
+            }
+            Files.write(Paths.get(TASK1_BOOK_REQUESTS_FILE), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private void notifyLibrariansOfBookRequest(String requestId, String requester, String title, String author) {
+        for (var librarian : librarianRepository.getAllUsers()) {
+            notificationStore.create(
+                    "TASK3",
+                    librarian.getUsername(),
+                    "NEW_BOOK_REQUEST",
+                    "New request " + requestId + ": \"" + title + "\" by " + author + " (requested by " + requester + ").",
+                    "NEW_BOOK_REQUEST",
+                    "NEW_BOOK_REQUEST",
+                    true,
+                    requestId
+            );
+        }
+    }
+
     private void clearReadingProgressForBook(String bookId) {
         String normalizedBookId = safeTrim(bookId).toUpperCase();
         if (normalizedBookId.isEmpty()) {
@@ -1047,13 +1465,15 @@ public class StudentStaffPortalService {
             String username,
             String bookId,
             String bookTitle,
+            String bookAuthor,
+            String bookGenre,
             LocalDate borrowDate,
             LocalDate dueDate,
             LocalDate returnDate,
             String returnMode
     ) {
         private BorrowRecord withReturnDate(LocalDate date, String mode) {
-            return new BorrowRecord(username, bookId, bookTitle, borrowDate, dueDate, date, mode);
+            return new BorrowRecord(username, bookId, bookTitle, bookAuthor, bookGenre, borrowDate, dueDate, date, mode);
         }
     }
 
@@ -1063,6 +1483,67 @@ public class StudentStaffPortalService {
             LocalDate borrowDate,
             LocalDate dueDate,
             String status
+    ) {}
+
+    public record ReadingHistoryView(
+            String bookId,
+            String bookTitle,
+            String author,
+            String genre,
+            LocalDate borrowDate,
+            LocalDate returnDate,
+            long readingDurationDays,
+            String progressSummary
+    ) {}
+
+    private record BookReview(
+            String username,
+            String bookId,
+            String bookTitle,
+            String bookAuthor,
+            String bookGenre,
+            int rating,
+            String reviewText,
+            LocalDateTime updatedAt
+    ) {}
+
+    public record BookReviewView(
+            String username,
+            String bookId,
+            String bookTitle,
+            String bookAuthor,
+            String bookGenre,
+            int rating,
+            String reviewText,
+            LocalDateTime updatedAt
+    ) {}
+
+    public record BookRatingSummary(double averageRating, int reviewCount) {}
+
+    private record BookRequest(
+            String requestId,
+            String username,
+            String title,
+            String author,
+            String genre,
+            String reason,
+            String status,
+            String librarianComment,
+            LocalDateTime createdAt,
+            LocalDateTime decidedAt
+    ) {}
+
+    public record BookRequestView(
+            String requestId,
+            String username,
+            String title,
+            String author,
+            String genre,
+            String reason,
+            String status,
+            String librarianComment,
+            LocalDateTime createdAt,
+            LocalDateTime decidedAt
     ) {}
 
     public record NotificationView(
