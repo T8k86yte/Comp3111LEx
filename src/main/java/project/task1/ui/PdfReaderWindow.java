@@ -6,6 +6,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
@@ -53,6 +54,8 @@ public class PdfReaderWindow {
     private final Label pageInfoLabel = new Label();
     private final Label statusLabel = new Label();
     private final TextField pageJumpField = new TextField();
+    private final ComboBox<String> highlightColorBox = new ComboBox<>();
+    private ScrollPane viewerScrollPane;
 
     private PDDocument document;
     private PDFRenderer renderer;
@@ -155,18 +158,18 @@ public class PdfReaderWindow {
 
     private ScrollPane buildViewerArea() {
         pageImageView.setPreserveRatio(true);
-        overlayPane.setPickOnBounds(false);
+        overlayPane.setPickOnBounds(true);
         installHighlightDrawingHandlers();
 
         StackPane pageStack = new StackPane(pageImageView, overlayPane);
         pageStack.setAlignment(Pos.TOP_CENTER);
         pageStack.setStyle("-fx-background-color: #f8fafc;");
-        ScrollPane scrollPane = new ScrollPane(pageStack);
-        scrollPane.setPannable(true);
-        scrollPane.setFitToWidth(false);
-        scrollPane.setFitToHeight(false);
-        scrollPane.setStyle("-fx-background: #eef2f7;");
-        return scrollPane;
+        viewerScrollPane = new ScrollPane(pageStack);
+        viewerScrollPane.setPannable(true);
+        viewerScrollPane.setFitToWidth(false);
+        viewerScrollPane.setFitToHeight(false);
+        viewerScrollPane.setStyle("-fx-background: #eef2f7;");
+        return viewerScrollPane;
     }
 
     private VBox buildSidebar() {
@@ -192,12 +195,17 @@ public class PdfReaderWindow {
 
         Label hlTitle = new Label("Highlights");
         hlTitle.setStyle("-fx-font-weight: bold;");
+        highlightColorBox.setItems(FXCollections.observableArrayList("RED", "GREEN", "BLUE"));
+        highlightColorBox.setValue("BLUE");
         Button toggleDrawBtn = new Button("Toggle Draw Highlight");
         toggleDrawBtn.setMaxWidth(Double.MAX_VALUE);
         toggleDrawBtn.setOnAction(e -> {
             drawHighlightMode = !drawHighlightMode;
+            if (viewerScrollPane != null) {
+                viewerScrollPane.setPannable(!drawHighlightMode);
+            }
             statusLabel.setText(drawHighlightMode
-                    ? "Draw mode ON: drag over page to add highlight."
+                    ? "Draw mode ON: drag over page to add " + highlightColorBox.getValue() + " highlight."
                     : "Draw mode OFF.");
         });
         Button removeHighlightBtn = new Button("Remove Selected");
@@ -222,6 +230,8 @@ public class PdfReaderWindow {
                 removeBookmarkBtn,
                 bookmarkListView,
                 hlTitle,
+                new Label("Highlight Color"),
+                highlightColorBox,
                 toggleDrawBtn,
                 removeHighlightBtn,
                 highlightListView
@@ -301,13 +311,14 @@ public class PdfReaderWindow {
             if (!drawHighlightMode || event.getButton() != MouseButton.PRIMARY) {
                 return;
             }
+            event.consume();
             dragStartX = event.getX();
             dragStartY = event.getY();
             draftHighlightRect = new Rectangle();
             draftHighlightRect.setX(dragStartX);
             draftHighlightRect.setY(dragStartY);
-            draftHighlightRect.setFill(Color.rgb(250, 204, 21, 0.35));
-            draftHighlightRect.setStroke(Color.web("#ca8a04"));
+            draftHighlightRect.setFill(getColorFill(highlightColorBox.getValue(), false));
+            draftHighlightRect.setStroke(getColorStroke(highlightColorBox.getValue()));
             draftHighlightRect.setStrokeWidth(1.2);
             overlayPane.getChildren().add(draftHighlightRect);
         });
@@ -316,6 +327,7 @@ public class PdfReaderWindow {
             if (draftHighlightRect == null) {
                 return;
             }
+            event.consume();
             double x = Math.min(dragStartX, event.getX());
             double y = Math.min(dragStartY, event.getY());
             double w = Math.abs(event.getX() - dragStartX);
@@ -330,6 +342,7 @@ public class PdfReaderWindow {
             if (draftHighlightRect == null) {
                 return;
             }
+            event.consume();
             Rectangle finished = draftHighlightRect;
             draftHighlightRect = null;
             overlayPane.getChildren().remove(finished);
@@ -349,7 +362,8 @@ public class PdfReaderWindow {
                     clamp01(finished.getX() / width),
                     clamp01(finished.getY() / height),
                     clamp01(finished.getWidth() / width),
-                    clamp01(finished.getHeight() / height)
+                    clamp01(finished.getHeight() / height),
+                    highlightColorBox.getValue()
             );
             highlights.add(region);
             refreshHighlightList();
@@ -378,8 +392,8 @@ public class PdfReaderWindow {
             );
             String key = toHighlightLabel(highlight);
             boolean selected = key.equals(selectedHighlightKey);
-            rect.setFill(selected ? Color.rgb(253, 224, 71, 0.55) : Color.rgb(250, 204, 21, 0.35));
-            rect.setStroke(selected ? Color.web("#b91c1c") : Color.web("#ca8a04"));
+            rect.setFill(getColorFill(highlight.colorName(), selected));
+            rect.setStroke(getColorStroke(highlight.colorName()));
             rect.setStrokeWidth(selected ? 2.0 : 1.1);
             rect.setOnMouseClicked(e -> {
                 selectedHighlightKey = key;
@@ -452,6 +466,7 @@ public class PdfReaderWindow {
 
     private String toHighlightLabel(PdfReaderStateStore.HighlightRegion region) {
         return "P" + (region.pageIndex() + 1)
+                + " [" + region.colorName() + "]"
                 + " @ (" + percent(region.x()) + ", " + percent(region.y()) + ") "
                 + percent(region.width()) + "x" + percent(region.height());
     }
@@ -501,6 +516,33 @@ public class PdfReaderWindow {
             return 0.0;
         }
         return Math.max(0.0, Math.min(1.0, value));
+    }
+
+    private Color getColorFill(String colorName, boolean selected) {
+        return switch (safeColor(colorName)) {
+            case "RED" -> selected ? Color.rgb(252, 165, 165, 0.55) : Color.rgb(248, 113, 113, 0.35);
+            case "GREEN" -> selected ? Color.rgb(134, 239, 172, 0.55) : Color.rgb(74, 222, 128, 0.35);
+            default -> selected ? Color.rgb(147, 197, 253, 0.55) : Color.rgb(96, 165, 250, 0.35);
+        };
+    }
+
+    private Color getColorStroke(String colorName) {
+        return switch (safeColor(colorName)) {
+            case "RED" -> Color.web("#b91c1c");
+            case "GREEN" -> Color.web("#15803d");
+            default -> Color.web("#1d4ed8");
+        };
+    }
+
+    private String safeColor(String colorName) {
+        if (colorName == null) {
+            return "BLUE";
+        }
+        String normalized = colorName.trim().toUpperCase();
+        return switch (normalized) {
+            case "RED", "GREEN", "BLUE" -> normalized;
+            default -> "BLUE";
+        };
     }
 
     public record ReaderSessionResult(String bookmarkSummary, String highlightSummary) {

@@ -11,7 +11,6 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
-import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.PasswordField;
@@ -103,6 +102,8 @@ public class StudentStaffPortalApp extends Application {
     private TextField borrowedRecordFilterField;
     private TextField bookmarkField;
     private TextArea highlightField;
+    private ComboBox<Integer> borrowedReviewRatingBox;
+    private TextArea borrowedReviewTextArea;
     private Label readingInfoLabel;
     private TextField profileFullNameField;
     private PasswordField profilePasswordField;
@@ -552,9 +553,6 @@ public class StudentStaffPortalApp extends Application {
         Button readSummaryBtn = new Button("Read Summary");
         readSummaryBtn.getStyleClass().add("secondary-btn");
         readSummaryBtn.setOnAction(event -> handleReadSummary());
-        Button quickReviewBtn = new Button("Review / Rate");
-        quickReviewBtn.getStyleClass().add("secondary-btn");
-        quickReviewBtn.setOnAction(event -> handleReviewRateSelectedBook());
         Button borrowSelectedBtn = new Button("Borrow Selected");
         borrowSelectedBtn.getStyleClass().add("primary-btn");
         borrowSelectedBtn.setOnAction(event -> handleBorrowSelectedFromTable());
@@ -581,7 +579,7 @@ public class StudentStaffPortalApp extends Application {
         });
 
         VBox.setVgrow(bookTable, Priority.ALWAYS);
-        HBox actions = new HBox(10, readSummaryBtn, quickReviewBtn, borrowSelectedBtn);
+        HBox actions = new HBox(10, readSummaryBtn, borrowSelectedBtn);
         actions.setAlignment(Pos.CENTER_LEFT);
         wrapper.getChildren().addAll(heading, filters, bookTable, actions);
         return wrapper;
@@ -800,6 +798,11 @@ public class StudentStaffPortalApp extends Application {
         highlightField = new TextArea();
         highlightField.setPromptText("Highlight note text");
         highlightField.setPrefRowCount(3);
+        borrowedReviewRatingBox = new ComboBox<>(FXCollections.observableArrayList(1, 2, 3, 4, 5));
+        borrowedReviewRatingBox.setValue(5);
+        borrowedReviewTextArea = new TextArea();
+        borrowedReviewTextArea.setPromptText("Write your review for this borrowed book");
+        borrowedReviewTextArea.setPrefRowCount(3);
         readingInfoLabel = new Label("Select one borrowed book to manage PDF/bookmark/highlight.");
         readingInfoLabel.getStyleClass().add("muted");
 
@@ -815,6 +818,9 @@ public class StudentStaffPortalApp extends Application {
         Button returnSelectedBtn = new Button("Return Selected");
         returnSelectedBtn.getStyleClass().add("primary-btn");
         returnSelectedBtn.setOnAction(e -> handleReturnSelectedBorrowedRecords());
+        Button submitReviewBtn = new Button("Submit Review/Rating");
+        submitReviewBtn.getStyleClass().add("secondary-btn");
+        submitReviewBtn.setOnAction(e -> handleSubmitReviewForBorrowedBook());
 
         borrowedRecordTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, newValue) -> {
             if (newValue == null || currentUser == null) {
@@ -824,15 +830,40 @@ public class StudentStaffPortalApp extends Application {
             StudentStaffPortalService.ReadingProgressView reading = portalService.getReadingProgress(currentUser.username(), newValue.bookId());
             bookmarkField.setText(reading.bookmark());
             highlightField.setText(reading.highlightNotes());
+            List<StudentStaffPortalService.BookReviewView> reviews = portalService.getBookReviews(newValue.bookId());
+            StudentStaffPortalService.BookReviewView mine = reviews.stream()
+                    .filter(r -> currentUser.username().equalsIgnoreCase(r.username()))
+                    .findFirst()
+                    .orElse(null);
+            if (mine != null) {
+                borrowedReviewRatingBox.setValue(mine.rating());
+                borrowedReviewTextArea.setText(mine.reviewText() == null ? "" : mine.reviewText());
+            } else {
+                borrowedReviewRatingBox.setValue(5);
+                borrowedReviewTextArea.clear();
+            }
             readingInfoLabel.setText(resolvedPdfPath.isBlank()
                     ? "No PDF linked yet for " + newValue.bookId() + "."
                     : "PDF linked: " + resolvedPdfPath);
         });
 
-        HBox actions = new HBox(10, openPdfBtn, bookmarkBtn, highlightBtn, returnSelectedBtn);
+        HBox actions = new HBox(10, openPdfBtn, bookmarkBtn, highlightBtn, returnSelectedBtn, submitReviewBtn);
         actions.setAlignment(Pos.CENTER_LEFT);
         VBox.setVgrow(borrowedRecordTable, Priority.ALWAYS);
-        card.getChildren().addAll(heading, hint, filterRow, borrowedRecordTable, readingInfoLabel, bookmarkField, highlightField, actions);
+        card.getChildren().addAll(
+                heading,
+                hint,
+                filterRow,
+                borrowedRecordTable,
+                readingInfoLabel,
+                bookmarkField,
+                highlightField,
+                new Label("Rating (1-5)"),
+                borrowedReviewRatingBox,
+                new Label("Review"),
+                borrowedReviewTextArea,
+                actions
+        );
         return card;
     }
 
@@ -1087,44 +1118,20 @@ public class StudentStaffPortalApp extends Application {
         showSummaryPopup(selected);
     }
 
-    private void handleReviewRateSelectedBook() {
-        if (bookTable == null) {
-            showErrorPopup("Review / Rate", "Book list is not open.", "Open Book List first.");
+    private void handleSubmitReviewForBorrowedBook() {
+        StudentStaffPortalService.BorrowRecordView selected = getSingleSelectedBorrowedRecord();
+        if (selected == null || currentUser == null) {
             return;
         }
-        Book selected = bookTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showErrorPopup("Review / Rate", "No book selected.", "Select a book first.");
-            return;
-        }
-        if (currentUser == null) {
-            showErrorPopup("Review / Rate", "User not logged in.", "Please log in first.");
-            return;
-        }
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Review / Rate Book");
-        dialog.setHeaderText(selected.getTitle() + " (" + selected.getId() + ")");
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-
-        VBox form = new VBox(8);
-        ComboBox<Integer> ratingBox = new ComboBox<>(FXCollections.observableArrayList(1, 2, 3, 4, 5));
-        ratingBox.setValue(5);
-        TextArea reviewArea = new TextArea();
-        reviewArea.setPromptText("Write your review...");
-        reviewArea.setPrefRowCount(4);
-        form.getChildren().addAll(new Label("Rating (1-5)"), ratingBox, new Label("Review"), reviewArea);
-        dialog.getDialogPane().setContent(form);
-
-        Optional<ButtonType> choice = dialog.showAndWait();
-        if (choice.isEmpty() || choice.get() != ButtonType.OK) {
-            return;
-        }
-        int rating = ratingBox.getValue() == null ? 5 : ratingBox.getValue();
+        int rating = borrowedReviewRatingBox == null || borrowedReviewRatingBox.getValue() == null
+                ? 5
+                : borrowedReviewRatingBox.getValue();
+        String reviewText = borrowedReviewTextArea == null ? "" : borrowedReviewTextArea.getText();
         StudentStaffPortalService.OperationResult result = portalService.submitBookReview(
                 currentUser.username(),
-                selected.getId(),
+                selected.bookId(),
                 rating,
-                reviewArea.getText()
+                reviewText
         );
         if (!result.success()) {
             showErrorPopup("Review / Rate", "Submit failed.", result.message());

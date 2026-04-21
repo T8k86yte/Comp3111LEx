@@ -167,8 +167,9 @@ public class PdfReaderStateStore {
                 double y = clamp01(Double.parseDouble(parts[2]));
                 double width = clamp01(Double.parseDouble(parts[3]));
                 double height = clamp01(Double.parseDouble(parts[4]));
+                String colorName = parts.length >= 6 ? normalizeColor(parts[5]) : "BLUE";
                 if (pageIndex >= 0 && width > 0.001 && height > 0.001) {
-                    highlights.add(new HighlightRegion(pageIndex, x, y, width, height));
+                    highlights.add(new HighlightRegion(pageIndex, x, y, width, height, colorName));
                 }
             } catch (Exception ignored) {
             }
@@ -186,7 +187,8 @@ public class PdfReaderStateStore {
                         + ":" + format(h.x())
                         + ":" + format(h.y())
                         + ":" + format(h.width())
-                        + ":" + format(h.height()))
+                        + ":" + format(h.height())
+                        + ":" + normalizeColor(h.colorName()))
                 .collect(Collectors.joining(";"));
     }
 
@@ -207,6 +209,14 @@ public class PdfReaderStateStore {
 
     private static String safeTrim(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static String normalizeColor(String value) {
+        String normalized = safeTrim(value).toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "RED", "GREEN", "BLUE" -> normalized;
+            default -> "BLUE";
+        };
     }
 
     private static String encode(String value) {
@@ -231,7 +241,8 @@ public class PdfReaderStateStore {
             double x,
             double y,
             double width,
-            double height
+            double height,
+            String colorName
     ) {}
 
     public record PdfReaderState(
