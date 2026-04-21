@@ -12,6 +12,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import project.task2.model.AuthorAccount;
 import project.task2.service.AuthorPortalService;
+import project.task2.service.llm.LLMService;
 import project.task2.utils.SessionManager;
 
 import java.io.File;
@@ -24,6 +25,7 @@ import java.util.function.Consumer;
 
 public class PublishBookFX {
     private AuthorPortalService authorService;
+    private LLMService llmService;
     private AuthorAccount currentAuthor;
     private Stage stage;
     private Consumer<Void> onBookPublished;
@@ -51,6 +53,9 @@ public class PublishBookFX {
     private Label previewFile;
     private ImageView previewCover;
     
+    private Button aiGenerateBtn;
+    private ProgressIndicator aiProgress;
+    
     private Timer autoSaveTimer;
     private boolean hasUnsavedChanges = false;
     private static final int AUTO_SAVE_DELAY = 5000;
@@ -59,6 +64,7 @@ public class PublishBookFX {
     public PublishBookFX(AuthorAccount author, Consumer<Void> onBookPublished) {
         this.currentAuthor = author;
         this.authorService = new AuthorPortalService();
+        this.llmService = new LLMService();
         this.stage = new Stage();
         this.genreCheckBoxes = new ArrayList<>();
         this.onBookPublished = onBookPublished;
@@ -101,7 +107,7 @@ public class PublishBookFX {
         loadDraft();
         setupAutoSave();
 
-        Scene scene = new Scene(root, 900, 900);
+        Scene scene = new Scene(root, 900, 950);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         stage.setTitle("Publish New Book - " + currentAuthor.getFullName());
@@ -115,7 +121,6 @@ public class PublishBookFX {
             saveDraft();
         });
         
-        // Save session for crash recovery
         SessionManager.setCurrentScreen("PUBLISH_BOOK", null);
     }
 
@@ -156,8 +161,9 @@ public class PublishBookFX {
         Label info3 = new Label("• Book file must be in PDF, TXT, DOC, or DOCX format");
         Label info4 = new Label("• Optional: Upload a cover image (JPG, PNG - max 5MB)");
         Label info5 = new Label("• Click on cover image to magnify (full resolution)");
-        Label info6 = new Label("• Your book will be reviewed by a librarian");
-        Label info7 = new Label("• Form auto-saves every 5 seconds - you can close and return later");
+        Label info6 = new Label("• 🤖 AI Summary: Click 'Generate with AI' to auto-create a summary");
+        Label info7 = new Label("• You can edit the AI-generated summary before submission");
+        Label info8 = new Label("• Form auto-saves every 5 seconds - you can close and return later");
 
         info1.getStyleClass().add("muted");
         info2.getStyleClass().add("muted");
@@ -166,8 +172,9 @@ public class PublishBookFX {
         info5.getStyleClass().add("muted");
         info6.getStyleClass().add("muted");
         info7.getStyleClass().add("muted");
+        info8.getStyleClass().add("muted");
 
-        infoCard.getChildren().addAll(infoTitle, info1, info2, info3, info4, info5, info6, info7);
+        infoCard.getChildren().addAll(infoTitle, info1, info2, info3, info4, info5, info6, info7, info8);
         return infoCard;
     }
 
@@ -229,12 +236,31 @@ public class PublishBookFX {
 
         genreBox.getChildren().addAll(genreLabel, genreFlowPane);
 
-        // Description field
+        // Description field with AI Generate button
         VBox descBox = new VBox(5);
         Label descLabel = new Label("Description/Abstract *");
         descLabel.getStyleClass().add("muted");
+        
+        // AI Generate button row
+        HBox aiRow = new HBox(10);
+        aiRow.setAlignment(Pos.CENTER_LEFT);
+        
+        aiGenerateBtn = new Button("🤖 Generate with AI");
+        aiGenerateBtn.getStyleClass().addAll("button", "primary-btn");
+        aiGenerateBtn.setPrefWidth(180);
+        aiGenerateBtn.setOnAction(e -> generateAISummary());
+        
+        aiProgress = new ProgressIndicator();
+        aiProgress.setVisible(false);
+        aiProgress.setPrefSize(20, 20);
+        
+        Label aiHint = new Label("AI will generate a summary based on your book title and genre");
+        aiHint.setStyle("-fx-font-size: 11px; -fx-text-fill: #64748b;");
+        
+        aiRow.getChildren().addAll(aiGenerateBtn, aiProgress, aiHint);
+        
         descArea = new TextArea();
-        descArea.setPromptText("Write a brief description of your book");
+        descArea.setPromptText("Write a brief description of your book (or click 'Generate with AI')");
         descArea.setPrefRowCount(6);
         descArea.setWrapText(true);
         descArea.getStyleClass().add("text-area");
@@ -242,7 +268,8 @@ public class PublishBookFX {
             if (!isLoadingDraft) hasUnsavedChanges = true;
             saveScreenState();
         });
-        descBox.getChildren().addAll(descLabel, descArea);
+        
+        descBox.getChildren().addAll(descLabel, aiRow, descArea);
 
         // Book file upload
         VBox fileBox = new VBox(5);
@@ -267,7 +294,7 @@ public class PublishBookFX {
         selectedFileLabel.getStyleClass().add("status-approved");
         selectedFileLabel.setVisible(false);
 
-        // Cover image upload with click-to-magnify
+        // Cover image upload
         VBox coverBox = new VBox(5);
         Label coverLabel = new Label("Book Cover Image (Optional - Click to magnify)");
         coverLabel.getStyleClass().add("muted");
@@ -290,7 +317,6 @@ public class PublishBookFX {
         
         coverInputBox.getChildren().addAll(coverImageField, browseCoverBtn, removeCoverBtn);
         
-        // Cover preview with click handler
         HBox previewBox = new HBox(10);
         previewBox.setAlignment(Pos.CENTER_LEFT);
         coverPreview = new ImageView();
@@ -419,7 +445,6 @@ public class PublishBookFX {
             }
         });
         
-        // Remove cover button action
         removeCoverBtn.setOnAction(e -> {
             coverImageField.clear();
             coverPreview.setImage(null);
@@ -438,6 +463,53 @@ public class PublishBookFX {
         });
 
         return formCard;
+    }
+    
+    private void generateAISummary() {
+        String title = titleField.getText().trim();
+        if (title.isEmpty()) {
+            showMessage(messageLabel, "❌ Please enter a book title first", "status-rejected");
+            return;
+        }
+        
+        String selectedGenres = getSelectedGenresString();
+        if (selectedGenres.isEmpty()) {
+            showMessage(messageLabel, "❌ Please select at least one genre", "status-rejected");
+            return;
+        }
+        
+        String filePath = fileField.getText().trim();
+        
+        // Disable button and show progress
+        aiGenerateBtn.setDisable(true);
+        aiProgress.setVisible(true);
+        showMessage(messageLabel, "🤖 AI is generating a summary...", "status-pending");
+        
+        // Run in background thread
+        new Thread(() -> {
+            try {
+                String generatedSummary;
+                if (!filePath.isEmpty()) {
+                    generatedSummary = llmService.generateSummaryFromFile(filePath, title, selectedGenres);
+                } else {
+                    generatedSummary = llmService.generateSummary(title, selectedGenres, "");
+                }
+                
+                javafx.application.Platform.runLater(() -> {
+                    descArea.setText(generatedSummary);
+                    aiGenerateBtn.setDisable(false);
+                    aiProgress.setVisible(false);
+                    showMessage(messageLabel, "✅ AI summary generated! You can edit it if needed.", "status-approved");
+                    hasUnsavedChanges = true;
+                });
+            } catch (Exception ex) {
+                javafx.application.Platform.runLater(() -> {
+                    aiGenerateBtn.setDisable(false);
+                    aiProgress.setVisible(false);
+                    showMessage(messageLabel, "❌ AI generation failed: " + ex.getMessage(), "status-rejected");
+                });
+            }
+        }).start();
     }
 
     private void saveScreenState() {
@@ -603,82 +675,7 @@ public class PublishBookFX {
     
     private void showMagnifiedFromPreview(MouseEvent event) {
         if (originalCoverImage == null) return;
-        
-        Stage magnifyStage = new Stage();
-        magnifyStage.setTitle("Cover Image - Full Resolution");
-        
-        BorderPane root = new BorderPane();
-        root.setStyle("-fx-background-color: #1e293b;");
-        
-        ImageView largeImageView = new ImageView(originalCoverImage);
-        largeImageView.setPreserveRatio(true);
-        
-        double maxWidth = 600;
-        double maxHeight = 700;
-        double imgWidth = originalCoverImage.getWidth();
-        double imgHeight = originalCoverImage.getHeight();
-        
-        if (imgWidth > maxWidth || imgHeight > maxHeight) {
-            double scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
-            largeImageView.setFitWidth(imgWidth * scale);
-            largeImageView.setFitHeight(imgHeight * scale);
-        } else {
-            largeImageView.setFitWidth(imgWidth);
-            largeImageView.setFitHeight(imgHeight);
-        }
-        
-        ScrollPane scrollPane = new ScrollPane();
-        scrollPane.setContent(largeImageView);
-        scrollPane.setPannable(true);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setFitToHeight(true);
-        scrollPane.setStyle("-fx-background-color: transparent;");
-        
-        HBox zoomControls = new HBox(10);
-        zoomControls.setAlignment(Pos.CENTER);
-        zoomControls.setPadding(new Insets(10));
-        
-        Button zoomInBtn = new Button("🔍 +");
-        zoomInBtn.getStyleClass().addAll("button", "secondary-btn");
-        zoomInBtn.setOnAction(e -> {
-            largeImageView.setFitWidth(largeImageView.getFitWidth() * 1.2);
-            largeImageView.setFitHeight(largeImageView.getFitHeight() * 1.2);
-        });
-        
-        Button zoomOutBtn = new Button("🔍 -");
-        zoomOutBtn.getStyleClass().addAll("button", "secondary-btn");
-        zoomOutBtn.setOnAction(e -> {
-            largeImageView.setFitWidth(largeImageView.getFitWidth() / 1.2);
-            largeImageView.setFitHeight(largeImageView.getFitHeight() / 1.2);
-        });
-        
-        Button resetZoomBtn = new Button("⟳ Reset");
-        resetZoomBtn.getStyleClass().addAll("button", "secondary-btn");
-        resetZoomBtn.setOnAction(e -> {
-            if (imgWidth > maxWidth || imgHeight > maxHeight) {
-                double scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
-                largeImageView.setFitWidth(imgWidth * scale);
-                largeImageView.setFitHeight(imgHeight * scale);
-            } else {
-                largeImageView.setFitWidth(imgWidth);
-                largeImageView.setFitHeight(imgHeight);
-            }
-        });
-        
-        Button closeBtn = new Button("✕ Close");
-        closeBtn.getStyleClass().addAll("button", "primary-btn");
-        closeBtn.setOnAction(e -> magnifyStage.close());
-        
-        zoomControls.getChildren().addAll(zoomInBtn, zoomOutBtn, resetZoomBtn, closeBtn);
-        
-        root.setCenter(scrollPane);
-        root.setBottom(zoomControls);
-        
-        Scene scene = new Scene(root, 700, 750);
-        scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
-        
-        magnifyStage.setScene(scene);
-        magnifyStage.show();
+        showMagnifiedImage(event);
     }
 
     private void togglePreview() {
@@ -687,11 +684,6 @@ public class PublishBookFX {
         } else {
             updatePreview();
             previewCard.setVisible(true);
-            
-            ScrollPane scrollPane = (ScrollPane) previewCard.getScene().lookup(".scroll-pane");
-            if (scrollPane != null) {
-                scrollPane.setVvalue(1.0);
-            }
         }
     }
 
@@ -700,7 +692,6 @@ public class PublishBookFX {
         List<String> selectedGenres = getSelectedGenres();
         String description = descArea.getText().trim();
         String file = fileField.getText().trim();
-        String coverPath = coverImageField.getText().trim();
 
         previewTitle.setText(title.isEmpty() ? "[No title provided]" : "📌 " + title);
         previewAuthor.setText("✍️ By: " + currentAuthor.getFullName());
@@ -802,6 +793,10 @@ public class PublishBookFX {
         }
         return selected;
     }
+    
+    private String getSelectedGenresString() {
+        return String.join(", ", getSelectedGenres());
+    }
 
     private void setSelectedGenres(String genresStr) {
         if (genresStr == null || genresStr.isEmpty()) return;
@@ -830,6 +825,20 @@ public class PublishBookFX {
         label.setText(message);
         label.getStyleClass().setAll("status", styleClass);
         label.setVisible(true);
+        
+        // Auto-hide after 3 seconds for non-error messages
+        if (!styleClass.equals("status-rejected")) {
+            new Timer().schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    javafx.application.Platform.runLater(() -> {
+                        if (label.getText().equals(message)) {
+                            label.setVisible(false);
+                        }
+                    });
+                }
+            }, 3000);
+        }
     }
 
     private void setupAutoSave() {
