@@ -73,7 +73,7 @@ public class AuthorDashboardFX extends Application {
         centerContent.getChildren().addAll(titleLabel, statsBox, refreshDashboardBtn, menuGrid);
         root.setCenter(centerContent);
 
-        Scene scene = new Scene(root, 1100, 700);
+        Scene scene = new Scene(root, 1100, 800);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         primaryStage.setTitle("Author Dashboard");
@@ -259,11 +259,17 @@ public class AuthorDashboardFX extends Application {
         // Row 2
         Button profileBtn = createMenuButton("👤 Profile", "Manage your profile information");
         Button notifBtn = createMenuButton("🔔 Notifications", "View your notifications");
+        Button statsBtn = createMenuButton("📈 Statistics", "View book statistics and charts");
 
-        // Row 3 - Crash Test button
+        // Row 3
+        Button reviewsBtn = createMenuButton("📝 Reviews", "View and reply to reader feedback");
         Button crashBtn = createMenuButton("💥 Crash Test", "Simulate application crash");
-        crashBtn.getStyleClass().addAll("button", "danger-btn");
         Button randomCrashBtn = createMenuButton("🎲 Random Crash: OFF", "Toggle random runtime crashes");
+
+        // Style buttons
+        statsBtn.getStyleClass().addAll("button", "primary-btn");
+        reviewsBtn.getStyleClass().addAll("button", "primary-btn");
+        crashBtn.getStyleClass().addAll("button", "danger-btn");
 
         // Publish Book button
         publishBtn.setOnAction(e -> {
@@ -348,6 +354,34 @@ public class AuthorDashboardFX extends Application {
             }
         });
         
+        // Statistics button
+        statsBtn.setOnAction(e -> {
+            System.out.println("📈 Opening Statistics Dashboard...");
+            try {
+                AuthorStatsFX statsScreen = new AuthorStatsFX(currentAuthor);
+                statsScreen.show();
+                registerChildWindow(statsScreen.getStage(), "STATISTICS");
+                SessionManager.setCurrentScreen("STATISTICS", null);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                showAlert("Error", "Could not open statistics window: " + ex.getMessage(), Alert.AlertType.ERROR);
+            }
+        });
+        
+        // Reviews button
+        reviewsBtn.setOnAction(e -> {
+            System.out.println("📝 Opening Reviews & Feedback...");
+            try {
+                AuthorReviewsFX reviewsScreen = new AuthorReviewsFX(currentAuthor);
+                reviewsScreen.show();
+                registerChildWindow(reviewsScreen.getStage(), "REVIEWS");
+                SessionManager.setCurrentScreen("REVIEWS", null);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                showAlert("Error", "Could not open reviews window: " + ex.getMessage(), Alert.AlertType.ERROR);
+            }
+        });
+        
         // Crash Test button action
         crashBtn.setOnAction(e -> simulateCrash());
         randomCrashBtn.setOnAction(e -> {
@@ -364,13 +398,20 @@ public class AuthorDashboardFX extends Application {
         });
 
         // Add buttons to grid
+        // Row 0
         menuGrid.add(publishBtn, 0, 0);
         menuGrid.add(viewBtn, 1, 0);
         menuGrid.add(booksBtn, 2, 0);
+        
+        // Row 1
         menuGrid.add(profileBtn, 0, 1);
         menuGrid.add(notifBtn, 1, 1);
-        menuGrid.add(crashBtn, 2, 1);
-        menuGrid.add(randomCrashBtn, 0, 2);
+        menuGrid.add(statsBtn, 2, 1);
+        
+        // Row 2
+        menuGrid.add(reviewsBtn, 0, 2);
+        menuGrid.add(crashBtn, 1, 2);
+        menuGrid.add(randomCrashBtn, 2, 2);
 
         return menuGrid;
     }
@@ -652,6 +693,26 @@ public class AuthorDashboardFX extends Application {
                     NotificationBoardFX notifBoard = new NotificationBoardFX(currentAuthor);
                     notifBoard.show();
                     registerChildWindow(notifBoard.getStage(), "NOTIFICATIONS");
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+                break;
+                
+            case "STATISTICS":
+                try {
+                    AuthorStatsFX statsScreen = new AuthorStatsFX(currentAuthor);
+                    statsScreen.show();
+                    registerChildWindow(statsScreen.getStage(), "STATISTICS");
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+                break;
+                
+            case "REVIEWS":
+                try {
+                    AuthorReviewsFX reviewsScreen = new AuthorReviewsFX(currentAuthor);
+                    reviewsScreen.show();
+                    registerChildWindow(reviewsScreen.getStage(), "REVIEWS");
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }

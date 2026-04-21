@@ -4,6 +4,8 @@ import project.task2.model.AuthorAccount;
 import project.task2.repo.AuthorRepository;
 import project.task2.utils.PasswordUtils;
 import project.task2.model.BookSubmission;
+import project.task2.model.Review;
+import project.task2.model.BookStats;
 import project.task2.repo.SubmissionRepository;
 import project.task2.repo.DraftRepository;
 import project.task2.repo.NotificationRepository;
@@ -28,6 +30,7 @@ public class AuthorPortalService {
     private final NotificationRepository notificationRepository;
     private final LibrarianRepository librarianRepository;
     private final UnifiedNotificationStore notificationStore;
+    private final project.task2.repo.ReviewRepository reviewRepo;
 
     public AuthorPortalService() {
         this.authorRepository = new AuthorRepository();
@@ -36,6 +39,7 @@ public class AuthorPortalService {
         this.notificationRepository = new NotificationRepository();
         this.librarianRepository = new LibrarianRepository();
         this.notificationStore = new UnifiedNotificationStore();
+        this.reviewRepo = new project.task2.repo.ReviewRepository();
     }
 
     // ========== REGISTRATION ==========
@@ -152,7 +156,7 @@ public class AuthorPortalService {
         
         String[] parts = draftData.split("\\|", 5);
         if (parts.length >= 4) {
-            return parts; // [title, genres, description, filePath, coverImagePath]
+            return parts;
         }
         return null;
     }
@@ -185,7 +189,6 @@ public class AuthorPortalService {
                 FileHandler.getAllowedFileTypes());
         }
 
-        // Validate cover image if provided
         if (coverImagePath != null && !coverImagePath.isEmpty()) {
             if (!isValidCoverImage(coverImagePath)) {
                 return SubmissionResult.failure("Invalid cover image. Allowed: JPG, PNG (max 5MB)");
@@ -203,7 +206,6 @@ public class AuthorPortalService {
             submissionRepository.save(submission);
             clearDraft(authorUsername);
             
-            // Send notification for submission
             sendNotification(authorUsername, 
                 "📝 Book Submitted: " + title,
                 "Your book '" + title + "' has been submitted and is pending review by a librarian.",
@@ -223,11 +225,9 @@ public class AuthorPortalService {
 
     private boolean isValidCoverImage(String filePath) {
         String lower = filePath.toLowerCase();
-        // Check extension
         if (!lower.endsWith(".jpg") && !lower.endsWith(".jpeg") && !lower.endsWith(".png")) {
             return false;
         }
-        // Check file size (5MB limit)
         try {
             java.io.File file = new java.io.File(filePath);
             if (file.exists() && file.length() > 5 * 1024 * 1024) {
@@ -420,6 +420,113 @@ public class AuthorPortalService {
     
     public void deleteReadNotifications(String authorUsername) {
         notificationRepository.deleteReadByAuthor(authorUsername);
+    }
+
+    // ========== STATS METHODS (Task 2.8) ==========
+    
+    public List<BookStats> getAuthorBookStats(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        List<BookStats> statsList = new java.util.ArrayList<>();
+        
+        for (BookSubmission sub : submissions) {
+            if (sub.isApproved()) {
+                double avgRating = reviewRepo.getAverageRatingForBook(sub.getSubmissionId());
+                int reviewCount = reviewRepo.getReviewCountForBook(sub.getSubmissionId());
+                
+                statsList.add(new BookStats(
+                    sub.getSubmissionId(),
+                    sub.getTitle(),
+                    sub.getTotalBorrowedCount(),
+                    avgRating,
+                    reviewCount,
+                    sub.getTotalBorrowedCount(),
+                    sub.getStatus()
+                ));
+            }
+        }
+        return statsList;
+    }
+    
+    public int getTotalBorrowsForAuthor(String authorUsername) {
+        return getAuthorSubmissions(authorUsername).stream()
+                .filter(BookSubmission::isApproved)
+                .mapToInt(BookSubmission::getTotalBorrowedCount)
+                .sum();
+    }
+    
+    public double getAverageRatingForAuthor(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        double sum = 0.0;
+        int count = 0;
+        for (BookSubmission sub : submissions) {
+            if (sub.isApproved()) {
+                sum += reviewRepo.getAverageRatingForBook(sub.getSubmissionId());
+                count++;
+            }
+        }
+        return count > 0 ? sum / count : 0.0;
+    }
+    
+    public int getTotalReviewsForAuthor(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        int total = 0;
+        for (BookSubmission sub : submissions) {
+            if (sub.isApproved()) {
+                total += reviewRepo.getReviewCountForBook(sub.getSubmissionId());
+            }
+        }
+        return total;
+    }
+
+    // ========== REVIEW METHODS (Task 2.9) ==========
+    
+    public List<Review> getReviewsForAuthorBooks(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        List<String> bookIds = submissions.stream()
+                .map(BookSubmission::getSubmissionId)
+                .collect(java.util.stream.Collectors.toList());
+        return reviewRepo.findByAuthorBooks(bookIds);
+    }
+    
+    public boolean replyToReview(String reviewId, String replyMessage) {
+        var reviewOpt = reviewRepo.findById(reviewId);
+        if (reviewOpt.isEmpty()) {
+            return false;
+        }
+        Review review = reviewOpt.get();
+        review.setAuthorReply(replyMessage);
+        reviewRepo.update(review);
+        
+        // Send notification to reviewer
+        sendNotificationToReviewer(review, replyMessage);
+        return true;
+    }
+    
+    public boolean flagReview(String reviewId, String reason) {
+        var reviewOpt = reviewRepo.findById(reviewId);
+        if (reviewOpt.isEmpty()) {
+            return false;
+        }
+        Review review = reviewOpt.get();
+        review.setFlagged(true, reason);
+        reviewRepo.update(review);
+        return true;
+    }
+    
+    private void sendNotificationToReviewer(Review review, String replyMessage) {
+        String title = "📝 Author replied to your review";
+        String message = "Author replied to your review on '" + review.getBookTitle() + "':\n\"" + replyMessage + "\"";
+        
+        notificationStore.create(
+            "TASK1",
+            review.getReviewerUsername(),
+            title,
+            message,
+            "AUTHOR_REPLY",
+            "AUTHOR_REPLY",
+            false,
+            review.getReviewId()
+        );
     }
 
     // ========== VALIDATION HELPER METHODS ==========
