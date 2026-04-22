@@ -310,7 +310,7 @@ public class StudentStaffPortalService {
             return OperationResult.failure("Return failed: unable to complete return.");
         }
         closeBorrowRecord(normalizedBorrower, normalizedBookId, LocalDate.now(), "SELF_RETURN");
-        clearReadingProgressForBook(normalizedBookId);
+        clearReadingProgressForUserBook(normalizedBorrower, normalizedBookId);
         appendNotification(
                 normalizedBorrower,
                 "BOOK_RETURN",
@@ -347,7 +347,7 @@ public class StudentStaffPortalService {
                 boolean returned = bookRepository.returnBook(record.bookId(), record.username());
                 if (returned) {
                     records.set(i, record.withReturnDate(today, "AUTO_RETURN"));
-                    clearReadingProgressForBook(record.bookId());
+                    clearReadingProgressForUserBook(record.username(), record.bookId());
                     appendNotification(
                             record.username(),
                             "AUTO_RETURN",
@@ -643,7 +643,7 @@ public class StudentStaffPortalService {
         if (changed) {
             saveBorrowRecords(records);
         }
-        clearReadingProgressForBook(normalizedBookId);
+        clearReadingProgressForAllUsersForBook(normalizedBookId);
     }
 
     public OperationResult setBorrowedBookPdfPath(String username, String bookId, String pdfPath) {
@@ -673,11 +673,19 @@ public class StudentStaffPortalService {
     public String getBorrowedBookPdfPath(String username, String bookId) {
         String normalizedUser = safeTrim(username);
         String normalizedBookId = safeTrim(bookId).toUpperCase();
+        String bookOwnedPath = bookRepository.findById(normalizedBookId)
+                .map(Book::getPdfFilePath)
+                .map(StudentStaffPortalService::safeTrim)
+                .orElse("");
+        if (!bookOwnedPath.isBlank()) {
+            return bookOwnedPath;
+        }
         return loadReadingProgress()
                 .stream()
                 .filter(r -> normalizedUser.equals(r.username()) && normalizedBookId.equalsIgnoreCase(r.bookId()))
                 .map(ReadingProgress::pdfPath)
-                .filter(p -> p != null && !p.isBlank())
+                .map(StudentStaffPortalService::safeTrim)
+                .filter(path -> !path.isBlank())
                 .findFirst()
                 .orElse("");
     }
@@ -702,21 +710,22 @@ public class StudentStaffPortalService {
             return "";
         }
 
-        String autoPath = findApprovedSubmissionPdfPath(
+        String fallbackPath = findApprovedSubmissionPdfPath(
                 borrowedBook.get().getTitle(),
                 borrowedBook.get().getAuthor()
         );
-        if (autoPath.isBlank()) {
+        if (fallbackPath.isBlank()) {
             return "";
         }
 
-        File autoFile = new File(autoPath);
-        if (!autoFile.exists()) {
+        File fallbackFile = new File(fallbackPath);
+        if (!fallbackFile.exists()) {
             return "";
         }
 
-        setBorrowedBookPdfPath(normalizedUser, normalizedBookId, autoPath);
-        return autoPath;
+        // Keep legacy mapping for older books that do not yet store pdf in Book entity.
+        setBorrowedBookPdfPath(normalizedUser, normalizedBookId, fallbackPath);
+        return fallbackPath;
     }
 
     private String findApprovedSubmissionPdfPath(String bookTitle, String authorFullName) {
@@ -1397,7 +1406,20 @@ public class StudentStaffPortalService {
         }
     }
 
-    private void clearReadingProgressForBook(String bookId) {
+    private void clearReadingProgressForUserBook(String username, String bookId) {
+        String normalizedUser = safeTrim(username);
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        if (normalizedUser.isEmpty() || normalizedBookId.isEmpty()) {
+            return;
+        }
+        List<ReadingProgress> remaining = loadReadingProgress()
+                .stream()
+                .filter(r -> !(normalizedUser.equals(r.username()) && normalizedBookId.equalsIgnoreCase(r.bookId())))
+                .collect(Collectors.toCollection(ArrayList::new));
+        saveReadingProgress(remaining);
+    }
+
+    private void clearReadingProgressForAllUsersForBook(String bookId) {
         String normalizedBookId = safeTrim(bookId).toUpperCase();
         if (normalizedBookId.isEmpty()) {
             return;

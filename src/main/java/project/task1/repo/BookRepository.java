@@ -26,4 +26,16 @@ public interface BookRepository {
     default void addApprovedBook(String title, String author, LocalDate publishDate, String summary, String genre, String coverImagePath) {
         addApprovedBook(title, author, publishDate, summary, genre);
     }
+
+    default void addApprovedBook(
+            String title,
+            String author,
+            LocalDate publishDate,
+            String summary,
+            String genre,
+            String pdfFilePath,
+            String coverImagePath
+    ) {
+        addApprovedBook(title, author, publishDate, summary, genre, coverImagePath);
+    }
 }
