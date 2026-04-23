@@ -293,6 +293,7 @@ public class LibrarianPortalService {
                     LocalDate.now(),
                     summary,
                     request.genre(),
+                    "",
                     ""
             );
             BookRequestView decided = new BookRequestView(
@@ -468,6 +469,7 @@ public class LibrarianPortalService {
                 LocalDate.now(),
                 s.getDescription(),
                 s.getGenre(),
+                s.getFilePath(),
                 s.getCoverImagePath()
         );//Note that description is just an alias of summary for book
         bookSubmissionRepository.update(s);//Changes should be saved once there are updates
