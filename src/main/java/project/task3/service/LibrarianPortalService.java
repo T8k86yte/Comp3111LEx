@@ -441,6 +441,15 @@ public class LibrarianPortalService {
         return success ? OperationResult.success("Modification successful: Modified book with Id \"" + bookId + "\".") :
                 OperationResult.failure("Modification failed: Invalid parameters.");
     }
+    public OperationResult createBook(String title,
+                                      String author,
+                                      String genre,
+                                      String description,
+                                      String filePath,
+                                      String coverPath) {
+        bookRepository.addApprovedBook(title, author, LocalDate.now(), description, genre, filePath, coverPath);
+        return OperationResult.success("Creation successful: Created the book + \"" + title + "\".");
+    }
 
 
     private static String csv(String value) {

@@ -1147,7 +1147,7 @@ public class LibrarianPortalApp extends Application {
         publishedBookDescription.setPromptText("Description: ");
         publishedBookFilePath = new TextField();
         publishedBookFilePath.setPromptText("Book File: ");
-        publishedBookFilePath.textProperty().addListener((val, prev, next) -> {
+        publishedBookFilePath.selectionProperty().addListener((val, prev, next) -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Select Book File");
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files (*.pdf)","*.pdf"));
@@ -1159,7 +1159,7 @@ public class LibrarianPortalApp extends Application {
         });
         publishedBookCoverPath = new TextField();
         publishedBookCoverPath.setPromptText("Book Cover File: ");
-        publishedBookCoverPath.textProperty().addListener((val, prev, next) -> {
+        publishedBookCoverPath.selectionProperty().addListener((val, prev, next) -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Select Book Cover File");
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("image files (*.png, *.jpg)", "*.png", "*.jpg"));
@@ -1760,7 +1760,14 @@ public class LibrarianPortalApp extends Application {
     }
 
     private void handleCreateBook() {
+        LibrarianPortalService.OperationResult result = portalService.createBook(publishedBookTitle.getText(),
+                publishedBookAuthorName.getText(),
+                publishedBookGenre.getText(),
+                publishedBookDescription.getText(),
+                publishedBookFilePath.getText(),
+                publishedBookCoverPath.getText());
 
+        setStatus(result.message());
     }
 
 
