@@ -1,36 +1,80 @@
 package project.task3.model;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
 
+import com.google.gson.Gson;
 import dev.langchain4j.model.openai.*;
 import dev.langchain4j.model.chat.*;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.loader.FileSystemDocumentLoader;
 import dev.langchain4j.data.document.parser.apache.pdfbox.ApachePdfBoxDocumentParser;
+import lombok.Builder;
+import lombok.Data;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.RequestBody;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.internal.ws.RealWebSocket;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.*;
+import org.apache.pdfbox.text.PDFTextStripper;
 
 public class SummaryGenerator {
-    public String generate(String filePath) {
-        String key = System.getenv("DEEPSEEK_APIKEY");
+    public class DeepseekClient {
+        private static final String API_URL = "https://api.deepseek.com/v1/chat/completions";
+        private final OkHttpClient client = new OkHttpClient();
+        private final Gson gson = new Gson();
 
-        ChatModel model = OpenAiChatModel.builder()
-                .baseUrl("https://api.deepseek.com/v1")
+        public String getResponse(String apiKey, String prompt) throws IOException {
+            DeepseekRequest.Message message = new DeepseekRequest.Message("user", prompt);
+            DeepseekRequest requestBody = new DeepseekRequest("deepseek-chat", Collections.singletonList(message));
+
+            Request request = new Request.Builder()
+                    .url(API_URL)
+                    .post(RequestBody.create(gson.toJson(requestBody), MediaType.get("application/json")))
+                    .addHeader("Authorization", "Bearer " + apiKey)
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    throw new IOException("Unexpected code " + response);
+                }
+                return response.body().string();
+            }
+        }
+    }
+
+    public String generate(String filePath) {
+        String key = System.getenv("DEEPSEEK_APIKEY");//The computer executing this should set the environment variable to the API key of deepseek
+
+
+        String text;
+        try (PDDocument document = Loader.loadPDF(new File(filePath))) {
+            PDFTextStripper pdfStripper = new PDFTextStripper();
+            text = pdfStripper.getText(document);
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+            return "";
+        }
+
+        try {
+            return new DeepseekClient().getResponse(key, "Please summarize the contents below in English: \n" + text);
+        } catch (IOException e) {
+            return "Error：" + e.getMessage();
+        }
+        /*
+                ChatModel model = OpenAiChatModel.builder()
+                .baseUrl("https://api.deepseek.com/v1/chat/completions")
                 .apiKey("sk-8cce4cd2a2434f83a64c696aa2308ea7")
                 .modelName("deepseek-reasoner")
                 .build();
-
-        Path pdfFilePath = Paths.get(filePath);
-        Document pdfDocument = FileSystemDocumentLoader.loadDocument(pdfFilePath, new ApachePdfBoxDocumentParser());
-        pdfDocument.text();
-
-
-        return model.chat("Hello!");
-    }
-
-    public static void main(String[] s) {
-        SummaryGenerator g = new SummaryGenerator();
-        System.out.println(g.generate("C:\\Users\\jeff_\\Downloads\\四麻全书.pdf"));
+        */
     }
 }
