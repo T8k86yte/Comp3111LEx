@@ -9,8 +9,8 @@ module project.library {
     requires langchain4j.open.ai;
     requires langchain4j.core;
     requires langchain4j.document.parser.apache.pdfbox;
-    requires lombok;
-    requires com.google.gson;
+    requires static lombok;
+    requires static com.google.gson;
     requires okhttp3;
 
     exports project;

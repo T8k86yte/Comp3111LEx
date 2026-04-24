@@ -65,7 +65,7 @@ public class SummaryGenerator {
         }
 
         try {
-            return new DeepseekClient().getResponse(key, "Please summarize the contents below in English: \n" + text);
+            return new DeepseekClient().getResponse(key, "Please summarize the contents below in English, with less than 300 words: \n" + text);
         } catch (IOException e) {
             return "Error：" + e.getMessage();
         }
@@ -76,5 +76,9 @@ public class SummaryGenerator {
                 .modelName("deepseek-reasoner")
                 .build();
         */
+    }
+
+    public static void main(String[] v) {
+        System.out.println(new SummaryGenerator().generate("C:\\Users\\jeff_\\Downloads\\低效无限 最终版.pdf"));
     }
 }
