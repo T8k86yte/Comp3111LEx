@@ -2,26 +2,14 @@ package project.task3.model;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.Collections;
-import java.util.List;
 
 import com.google.gson.Gson;
-import dev.langchain4j.model.openai.*;
-import dev.langchain4j.model.chat.*;
-import dev.langchain4j.data.document.Document;
-import dev.langchain4j.data.document.loader.FileSystemDocumentLoader;
-import dev.langchain4j.data.document.parser.apache.pdfbox.ApachePdfBoxDocumentParser;
-import lombok.Builder;
-import lombok.Data;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.RequestBody;
 import okhttp3.Request;
 import okhttp3.Response;
-import okhttp3.internal.ws.RealWebSocket;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.*;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -71,9 +59,5 @@ public class SummaryGenerator {
         } catch (IOException e) {
             return "Error：" + e.getMessage();
         }
-    }
-
-    public static void main(String[] v) {
-        System.out.println(new SummaryGenerator().generate("C:\\Users\\jeff_\\Downloads\\低效无限 最终版.pdf"));
     }
 }
