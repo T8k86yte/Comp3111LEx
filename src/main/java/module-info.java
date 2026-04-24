@@ -10,14 +10,15 @@ module project.library {
     requires langchain4j.core;
     requires langchain4j.document.parser.apache.pdfbox;
     requires static lombok;
-    requires static com.google.gson;
     requires okhttp3;
+    requires com.google.gson;
 
     exports project;
     exports project.ui;
     exports project.task1.ui;
     exports project.task2.ui.javafx;
     exports project.task3.ui;
+
     exports project.task3.model to lombok;
 
     opens project.task1.model to javafx.base;
