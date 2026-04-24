@@ -8,8 +8,8 @@ import lombok.Setter;
 import java.util.List;
 
 @Data
-public class DeepseekRequest {
-    public DeepseekRequest(String model, List<Message> messages) {
+public class DeepSeekRequest {
+    public DeepSeekRequest(String model, List<Message> messages) {
         this.model = model;
         this.messages = messages;
     }

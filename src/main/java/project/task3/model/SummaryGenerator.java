@@ -33,8 +33,8 @@ public class SummaryGenerator {
         private final Gson gson = new Gson();
 
         public String getResponse(String apiKey, String prompt) throws IOException {
-            DeepseekRequest.Message message = new DeepseekRequest.Message("user", prompt);
-            DeepseekRequest requestBody = new DeepseekRequest("deepseek-chat", Collections.singletonList(message));
+            DeepSeekRequest.Message message = new DeepSeekRequest.Message("user", prompt);
+            DeepSeekRequest requestBody = new DeepSeekRequest("deepseek-chat", Collections.singletonList(message));
 
             Request request = new Request.Builder()
                     .url(API_URL)
@@ -53,8 +53,6 @@ public class SummaryGenerator {
 
     public String generate(String filePath) {
         String key = System.getenv("DEEPSEEK_APIKEY");//The computer executing this should set the environment variable to the API key of deepseek
-
-
         String text;
         try (PDDocument document = Loader.loadPDF(new File(filePath))) {
             PDFTextStripper pdfStripper = new PDFTextStripper();
@@ -65,17 +63,14 @@ public class SummaryGenerator {
         }
 
         try {
-            return new DeepseekClient().getResponse(key, "Please summarize the contents below in English, with less than 300 words: \n" + text);
+            String responseString = new DeepseekClient().getResponse(
+                    key,
+                    "Please summarize the contents below in English, with less than 300 words: \n" + text);
+            DeepSeekResponse response = new Gson().fromJson(responseString, DeepSeekResponse.class);
+            return response.getChoices().getFirst().getMessage().getContent();
         } catch (IOException e) {
             return "Error：" + e.getMessage();
         }
-        /*
-                ChatModel model = OpenAiChatModel.builder()
-                .baseUrl("https://api.deepseek.com/v1/chat/completions")
-                .apiKey("sk-8cce4cd2a2434f83a64c696aa2308ea7")
-                .modelName("deepseek-reasoner")
-                .build();
-        */
     }
 
     public static void main(String[] v) {
