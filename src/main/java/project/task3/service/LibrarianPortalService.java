@@ -15,6 +15,7 @@ import project.task2.model.BookSubmission;
 import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
+import project.task3.model.SummaryGenerator;
 import project.task3.repo.LibrarianRepository;
 import project.shared.notification.UnifiedNotification;
 import project.shared.notification.UnifiedNotificationStore;

@@ -18,6 +18,7 @@ import javafx.stage.WindowEvent;
 import project.shared.SharedAuthFacade;
 import project.shared.CrashSimulationManager;
 import project.task1.model.Book;
+import project.task3.model.SummaryGenerator;
 import project.task1.repo.StudentStaffRepository;
 import project.task1.model.UserAccount;
 import project.task2.model.BookSubmission;
@@ -134,6 +135,7 @@ public class LibrarianPortalApp extends Application {
     private TextField publishedBookAuthorName;
     private TextField publishedBookGenre;
     private TextField publishedBookDescription;
+    private Button publishedBookGenerateButton;
     private TextField publishedBookFilePath;
     private TextField publishedBookCoverPath;
     private Label publishedBookStatusLabel;
@@ -1146,8 +1148,10 @@ public class LibrarianPortalApp extends Application {
         publishedBookDescription = new TextField();
         publishedBookDescription.setPromptText("Description: ");
         publishedBookFilePath = new TextField();
-        publishedBookFilePath.setPromptText("Book File: ");
-        publishedBookFilePath.selectionProperty().addListener((val, prev, next) -> {
+        publishedBookFilePath.setPromptText("Book File");
+        Button selectBookFileBtn = new Button("Select Book PDF");
+        selectBookFileBtn.getStyleClass().add("primary-btn");
+        selectBookFileBtn.setOnAction(event -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Select Book File");
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files (*.pdf)","*.pdf"));
@@ -1158,8 +1162,10 @@ public class LibrarianPortalApp extends Application {
             }
         });
         publishedBookCoverPath = new TextField();
-        publishedBookCoverPath.setPromptText("Book Cover File: ");
-        publishedBookCoverPath.selectionProperty().addListener((val, prev, next) -> {
+        publishedBookCoverPath.setPromptText("Book Cover File");
+        Button selectBookCoverBtn = new Button("Select Book Cover Image");
+        selectBookCoverBtn.getStyleClass().add("primary-btn");
+        selectBookCoverBtn.setOnAction(event -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Select Book Cover File");
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("image files (*.png, *.jpg)", "*.png", "*.jpg"));
@@ -1172,7 +1178,7 @@ public class LibrarianPortalApp extends Application {
 
         //adjust the length of description text field dynamically
         publishedBookDescription.textProperty().addListener((obs, oldText, newText) -> {
-            double width = Math.max(100, newText.length() * 8 + 20);
+            double width = Math.clamp((long)newText.length() * 8 + 20, 100, 500);
             publishedBookDescription.setPrefWidth(width);
         });
 
@@ -1182,6 +1188,9 @@ public class LibrarianPortalApp extends Application {
         Button createBtn = new Button("Create Book");
         createBtn.getStyleClass().add("primary-btn");
         createBtn.setOnAction(event -> handleCreateBook());
+        publishedBookGenerateButton = new Button("Generate Description");
+        publishedBookGenerateButton.getStyleClass().add("primary-btn");
+        publishedBookGenerateButton.setOnAction(event -> handleGenerateDescription());
 
         HBox fields1 = new HBox(5);
         HBox fields2 = new HBox(5);
@@ -1192,9 +1201,12 @@ public class LibrarianPortalApp extends Application {
         fields1.getChildren().add(publishedBookGenre);
         fields2.getChildren().add(publishedBookDescription);
         fields2.getChildren().add(publishedBookFilePath);
+        fields2.getChildren().add(selectBookFileBtn);
         fields2.getChildren().add(publishedBookCoverPath);
+        fields2.getChildren().add(selectBookCoverBtn);
         actions.getChildren().add(modifyBtn);
         actions.getChildren().add(createBtn);
+        actions.getChildren().add(publishedBookGenerateButton);
 
         card.getChildren().addAll(heading, hint, fields1, fields2, actions);
 
@@ -1768,6 +1780,49 @@ public class LibrarianPortalApp extends Application {
                 publishedBookCoverPath.getText());
 
         setStatus(result.message());
+    }
+
+    private class generateThread extends Thread {
+        public generateThread(String filePath, TextField resultField, Button generateButton, String recoverText) {
+            this.filePath = filePath;
+            this.resultField = resultField;
+            this.generateButton = generateButton;
+            this.recoverText = recoverText;
+        }
+
+        @Override
+        public void run() {
+            try {
+                String result = new SummaryGenerator().generate(filePath);
+
+                Platform.runLater(() -> {
+                    resultField.setText(result);
+                    generateButton.setText(recoverText);
+                    generateButton.setDisable(false);
+                    setStatus("Successfully generated description for the book file.");
+                });
+            }
+            catch (Exception e) {
+                Platform.runLater(() -> {
+                    setStatus(e.getMessage());
+                    showErrorPopup("Generate Description", "Action Failed", "The file is invalid, or internet issues.");
+                });
+            }
+        }
+
+        private final String filePath;
+        private final TextField resultField;
+        private final Button generateButton;
+        private final String recoverText;
+    }
+    private void handleGenerateDescription() {
+        String path = publishedBookFilePath.getText();
+        if (path.isEmpty()) showErrorPopup("Generate Description", "Action Failed", "Please select a file to generate first.");
+
+        String recoverText = publishedBookGenerateButton.getText();
+        publishedBookGenerateButton.setText("Generating...");
+        publishedBookGenerateButton.setDisable(true);
+        new generateThread(path, publishedBookDescription, publishedBookGenerateButton, recoverText).start();
     }
 
 
