@@ -37,6 +37,7 @@ public class PublishBookFX {
     private Label selectedFileLabel;
     private Label messageLabel;
     private Label draftIndicator;
+    private Label apiStatusLabel;
     
     private TextField coverImageField;
     private Label selectedCoverLabel;
@@ -55,6 +56,8 @@ public class PublishBookFX {
     
     private Button aiGenerateBtn;
     private ProgressIndicator aiProgress;
+    private ComboBox<LLMService.SummaryStyle> styleComboBox;
+    private Label styleDescriptionLabel;
     
     private Timer autoSaveTimer;
     private boolean hasUnsavedChanges = false;
@@ -107,7 +110,7 @@ public class PublishBookFX {
         loadDraft();
         setupAutoSave();
 
-        Scene scene = new Scene(root, 900, 950);
+        Scene scene = new Scene(root, 900, 1050);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         stage.setTitle("Publish New Book - " + currentAuthor.getFullName());
@@ -161,7 +164,7 @@ public class PublishBookFX {
         Label info3 = new Label("• Book file must be in PDF, TXT, DOC, or DOCX format");
         Label info4 = new Label("• Optional: Upload a cover image (JPG, PNG - max 5MB)");
         Label info5 = new Label("• Click on cover image to magnify (full resolution)");
-        Label info6 = new Label("• 🤖 AI Summary: Click 'Generate with AI' to auto-create a summary");
+        Label info6 = new Label("• 🤖 AI Summary: Choose from Short, Medium, or Detailed styles");
         Label info7 = new Label("• You can edit the AI-generated summary before submission");
         Label info8 = new Label("• Form auto-saves every 5 seconds - you can close and return later");
 
@@ -187,6 +190,11 @@ public class PublishBookFX {
         Label formTitle = new Label("Book Details");
         formTitle.getStyleClass().add("card-title");
 
+        // API Status
+        apiStatusLabel = new Label();
+        apiStatusLabel.setStyle("-fx-text-fill: #10b981; -fx-font-weight: bold; -fx-font-size: 12px;");
+        apiStatusLabel.setText("🤖 AI Powered: Multiple Summary Styles Available");
+        
         // Title field
         VBox titleBox = new VBox(5);
         Label titleLabel2 = new Label("Book Title *");
@@ -236,10 +244,33 @@ public class PublishBookFX {
 
         genreBox.getChildren().addAll(genreLabel, genreFlowPane);
 
-        // Description field with AI Generate button
+        // Description field with AI Generate button and style selector
         VBox descBox = new VBox(5);
         Label descLabel = new Label("Description/Abstract *");
         descLabel.getStyleClass().add("muted");
+        
+        // Style selector row
+        HBox styleRow = new HBox(10);
+        styleRow.setAlignment(Pos.CENTER_LEFT);
+        
+        Label styleLabel = new Label("Summary Style:");
+        styleLabel.setStyle("-fx-font-weight: 500; -fx-text-fill: #334155;");
+        
+        styleComboBox = new ComboBox<>();
+        styleComboBox.getItems().addAll(llmService.getAvailableStyles());
+        styleComboBox.setValue(LLMService.SummaryStyle.MEDIUM);
+        styleComboBox.setPrefWidth(150);
+        styleComboBox.getSelectionModel().selectedItemProperty().addListener((obs, old, newVal) -> {
+            if (newVal != null) {
+                styleDescriptionLabel.setText(newVal.getDescription());
+            }
+        });
+        
+        styleDescriptionLabel = new Label();
+        styleDescriptionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #64748b;");
+        styleDescriptionLabel.setText(LLMService.SummaryStyle.MEDIUM.getDescription());
+        
+        styleRow.getChildren().addAll(styleLabel, styleComboBox, styleDescriptionLabel);
         
         // AI Generate button row
         HBox aiRow = new HBox(10);
@@ -254,7 +285,7 @@ public class PublishBookFX {
         aiProgress.setVisible(false);
         aiProgress.setPrefSize(20, 20);
         
-        Label aiHint = new Label("AI will generate a summary based on your book title and genre");
+        Label aiHint = new Label("AI will generate a summary based on your book title, genre, and selected style");
         aiHint.setStyle("-fx-font-size: 11px; -fx-text-fill: #64748b;");
         
         aiRow.getChildren().addAll(aiGenerateBtn, aiProgress, aiHint);
@@ -269,7 +300,7 @@ public class PublishBookFX {
             saveScreenState();
         });
         
-        descBox.getChildren().addAll(descLabel, aiRow, descArea);
+        descBox.getChildren().addAll(descLabel, styleRow, aiRow, descArea);
 
         // Book file upload
         VBox fileBox = new VBox(5);
@@ -360,7 +391,7 @@ public class PublishBookFX {
 
         actionBox.getChildren().addAll(previewBtn, submitBtn, clearDraftBtn);
 
-        formCard.getChildren().addAll(formTitle, titleBox, authorBox, genreBox, 
+        formCard.getChildren().addAll(apiStatusLabel, formTitle, titleBox, authorBox, genreBox, 
                                       descBox, fileBox, selectedFileLabel,
                                       coverBox, messageLabel, actionBox);
 
@@ -479,27 +510,26 @@ public class PublishBookFX {
         }
         
         String filePath = fileField.getText().trim();
+        LLMService.SummaryStyle selectedStyle = styleComboBox.getValue();
         
-        // Disable button and show progress
         aiGenerateBtn.setDisable(true);
         aiProgress.setVisible(true);
-        showMessage(messageLabel, "🤖 AI is generating a summary...", "status-pending");
+        showMessage(messageLabel, "🤖 AI is generating a " + selectedStyle.getDisplayName().toLowerCase() + " summary...", "status-pending");
         
-        // Run in background thread
         new Thread(() -> {
             try {
                 String generatedSummary;
                 if (!filePath.isEmpty()) {
-                    generatedSummary = llmService.generateSummaryFromFile(filePath, title, selectedGenres);
+                    generatedSummary = llmService.generateSummaryFromFile(filePath, title, selectedGenres, selectedStyle);
                 } else {
-                    generatedSummary = llmService.generateSummary(title, selectedGenres, "");
+                    generatedSummary = llmService.generateSummary(title, selectedGenres, "", selectedStyle);
                 }
                 
                 javafx.application.Platform.runLater(() -> {
                     descArea.setText(generatedSummary);
                     aiGenerateBtn.setDisable(false);
                     aiProgress.setVisible(false);
-                    showMessage(messageLabel, "✅ AI summary generated! You can edit it if needed.", "status-approved");
+                    showMessage(messageLabel, "✅ AI " + selectedStyle.getDisplayName().toLowerCase() + " summary generated! You can edit it if needed.", "status-approved");
                     hasUnsavedChanges = true;
                 });
             } catch (Exception ex) {
@@ -826,7 +856,6 @@ public class PublishBookFX {
         label.getStyleClass().setAll("status", styleClass);
         label.setVisible(true);
         
-        // Auto-hide after 3 seconds for non-error messages
         if (!styleClass.equals("status-rejected")) {
             new Timer().schedule(new TimerTask() {
                 @Override
