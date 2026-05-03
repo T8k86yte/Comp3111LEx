@@ -9,6 +9,7 @@ import javafx.stage.Stage;
 import project.task2.model.AuthorAccount;
 import project.task2.model.Notification;
 import project.task2.service.AuthorPortalService;
+import project.task2.utils.ProfilePictureManager;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -21,7 +22,6 @@ public class NotificationBoardFX {
     private VBox notificationsContainer;
     private Label unreadCountLabel;
     
-    // Filter components
     private TextField searchField;
     private ComboBox<String> typeFilterCombo;
     private DatePicker dateFilterPicker;
@@ -63,13 +63,9 @@ public class NotificationBoardFX {
         
         titleSection.getChildren().addAll(titleLabel, subtitleLabel);
 
-        // Filter bar
         VBox filterBox = createFilterBox();
-        
-        // Control bar
         HBox controlBar = createControlBar();
         
-        // Notifications container
         notificationsContainer = new VBox(10);
         notificationsContainer.setPadding(new Insets(10));
         
@@ -97,12 +93,11 @@ public class NotificationBoardFX {
         topBar.setAlignment(Pos.CENTER_RIGHT);
         topBar.setStyle("-fx-background-color: white; -fx-border-color: #e2e8f0; -fx-border-width: 0 0 1 0;");
 
-        String initial = currentAuthor.getUsername().substring(0, 1).toUpperCase();
-        Label avatar = new Label(initial);
-        avatar.setStyle("-fx-background-color: #2563eb; -fx-text-fill: white; -fx-font-weight: bold; " +
-                       "-fx-padding: 8px; -fx-background-radius: 20px; -fx-font-size: 14px;");
-        avatar.setPrefSize(36, 36);
-        avatar.setAlignment(Pos.CENTER);
+        StackPane avatarContainer = ProfilePictureManager.createAvatar(
+            currentAuthor.getUsername(), 
+            currentAuthor.getFullName(), 
+            40
+        );
 
         Label usernameLabel = new Label(currentAuthor.getUsername());
         usernameLabel.setStyle("-fx-font-weight: 600; -fx-text-fill: #1e293b;");
@@ -111,12 +106,12 @@ public class NotificationBoardFX {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeBtn = new Button("✕");
-        closeBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #64748b; -fx-font-size: 18px; -fx-cursor: hand;");
+        closeBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #64748b; -fx-font-size: 18px; -fx-cursor: hand");
         closeBtn.setOnAction(e -> stage.close());
 
         HBox userInfo = new HBox(12);
         userInfo.setAlignment(Pos.CENTER);
-        userInfo.getChildren().addAll(avatar, usernameLabel);
+        userInfo.getChildren().addAll(avatarContainer, usernameLabel);
         
         topBar.getChildren().addAll(userInfo, spacer, closeBtn);
         return topBar;
@@ -136,7 +131,6 @@ public class NotificationBoardFX {
         filterGrid.setVgap(10);
         filterGrid.setPadding(new Insets(10, 0, 0, 0));
         
-        // Search by title/message
         Label searchLabel = new Label("Search:");
         searchLabel.getStyleClass().add("muted");
         searchField = new TextField();
@@ -144,7 +138,6 @@ public class NotificationBoardFX {
         searchField.setPrefWidth(200);
         searchField.textProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Filter by type
         Label typeLabel = new Label("Type:");
         typeLabel.getStyleClass().add("muted");
         typeFilterCombo = new ComboBox<>();
@@ -152,19 +145,16 @@ public class NotificationBoardFX {
         typeFilterCombo.setValue("All");
         typeFilterCombo.valueProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Filter by date
         Label dateLabel = new Label("Date:");
         dateLabel.getStyleClass().add("muted");
         dateFilterPicker = new DatePicker();
         dateFilterPicker.setPromptText("Filter by date");
         dateFilterPicker.valueProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Urgent only
         urgentOnlyCheckBox = new CheckBox("⚠️ Show urgent only");
         urgentOnlyCheckBox.getStyleClass().add("muted");
         urgentOnlyCheckBox.selectedProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Sort options
         Label sortLabel = new Label("Sort:");
         sortLabel.getStyleClass().add("muted");
         sortCombo = new ComboBox<>();
@@ -172,7 +162,6 @@ public class NotificationBoardFX {
         sortCombo.setValue("Priority First");
         sortCombo.valueProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Clear filters button
         Button clearFiltersBtn = new Button("Clear Filters");
         clearFiltersBtn.getStyleClass().addAll("button", "secondary-btn");
         clearFiltersBtn.setPrefWidth(100);
@@ -191,7 +180,6 @@ public class NotificationBoardFX {
         
         filterBox.getChildren().addAll(filterTitle, filterGrid);
         
-        // Add clear filters button row
         HBox clearRow = new HBox();
         clearRow.setAlignment(Pos.CENTER_RIGHT);
         clearRow.getChildren().add(clearFiltersBtn);
@@ -220,27 +208,23 @@ public class NotificationBoardFX {
         
         List<Notification> filtered = allNotifications.stream()
             .filter(n -> {
-                // Search filter
                 if (!searchText.isEmpty()) {
                     if (!n.getTitle().toLowerCase().contains(searchText) &&
                         !n.getMessage().toLowerCase().contains(searchText)) {
                         return false;
                     }
                 }
-                // Type filter
                 if (!typeFilter.equals("All")) {
                     String notificationType = getTypeDisplayName(n.getType());
                     if (!notificationType.equals(typeFilter)) {
                         return false;
                     }
                 }
-                // Date filter
                 if (dateFilter != null) {
                     if (!n.getCreatedAt().toLocalDate().equals(dateFilter)) {
                         return false;
                     }
                 }
-                // Urgent only filter
                 if (urgentOnly && !n.isPriority()) {
                     return false;
                 }
@@ -248,7 +232,6 @@ public class NotificationBoardFX {
             })
             .collect(Collectors.toList());
         
-        // Sort
         switch (sortOption) {
             case "Newest First":
                 filtered.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
@@ -355,7 +338,6 @@ public class NotificationBoardFX {
                      "-fx-border-color: #e2e8f0; -fx-border-radius: 12px; " +
                      "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.03), 4, 0, 0, 1);");
         
-        // Priority highlight
         if (notification.isPriority()) {
             card.setStyle(card.getStyle() + "-fx-border-color: #f97316; -fx-border-width: 2px; " +
                           "-fx-background-color: #fff7ed;");
@@ -369,7 +351,6 @@ public class NotificationBoardFX {
         Label typeIcon = new Label(notification.getTypeIcon());
         typeIcon.setStyle("-fx-font-size: 20px;");
         
-        // Priority badge
         if (notification.isPriority()) {
             Label priorityBadge = new Label("URGENT");
             priorityBadge.setStyle("-fx-background-color: #f97316; -fx-text-fill: white; " +

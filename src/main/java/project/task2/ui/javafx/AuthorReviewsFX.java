@@ -10,6 +10,7 @@ import project.task2.model.AuthorAccount;
 import project.task2.model.BookSubmission;
 import project.task2.model.Review;
 import project.task2.service.AuthorPortalService;
+import project.task2.utils.ProfilePictureManager;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,7 +25,6 @@ public class AuthorReviewsFX {
     private VBox reviewsContainer;
     private Label statusLabel;
     
-    // Filter components
     private ComboBox<String> bookFilterCombo;
     private ComboBox<Integer> ratingFilterCombo;
     private ComboBox<String> dateFilterCombo;
@@ -68,13 +68,9 @@ public class AuthorReviewsFX {
         
         titleSection.getChildren().addAll(titleLabel, subtitleLabel);
 
-        // Filter section
         VBox filterSection = createFilterSection();
-        
-        // Control bar with refresh and filter count
         HBox controlBar = createControlBar();
         
-        // Reviews container
         reviewsContainer = new VBox(15);
         reviewsContainer.setPadding(new Insets(10));
         
@@ -106,12 +102,11 @@ public class AuthorReviewsFX {
         topBar.setAlignment(Pos.CENTER_RIGHT);
         topBar.setStyle("-fx-background-color: white; -fx-border-color: #e2e8f0; -fx-border-width: 0 0 1 0;");
 
-        String initial = currentAuthor.getUsername().substring(0, 1).toUpperCase();
-        Label avatar = new Label(initial);
-        avatar.setStyle("-fx-background-color: #2563eb; -fx-text-fill: white; -fx-font-weight: bold; " +
-                       "-fx-padding: 8px; -fx-background-radius: 20px; -fx-font-size: 14px;");
-        avatar.setPrefSize(36, 36);
-        avatar.setAlignment(Pos.CENTER);
+        StackPane avatarContainer = ProfilePictureManager.createAvatar(
+            currentAuthor.getUsername(), 
+            currentAuthor.getFullName(), 
+            40
+        );
 
         Label usernameLabel = new Label(currentAuthor.getUsername());
         usernameLabel.setStyle("-fx-font-weight: 600; -fx-text-fill: #1e293b;");
@@ -125,7 +120,7 @@ public class AuthorReviewsFX {
 
         HBox userInfo = new HBox(12);
         userInfo.setAlignment(Pos.CENTER);
-        userInfo.getChildren().addAll(avatar, usernameLabel);
+        userInfo.getChildren().addAll(avatarContainer, usernameLabel);
         
         topBar.getChildren().addAll(userInfo, spacer, closeBtn);
         return topBar;
@@ -145,7 +140,6 @@ public class AuthorReviewsFX {
         filterGrid.setVgap(10);
         filterGrid.setPadding(new Insets(10, 0, 0, 0));
         
-        // Filter by Book
         Label bookLabel = new Label("Book:");
         bookLabel.getStyleClass().add("muted");
         bookFilterCombo = new ComboBox<>();
@@ -153,7 +147,6 @@ public class AuthorReviewsFX {
         bookFilterCombo.setPrefWidth(200);
         bookFilterCombo.valueProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Filter by Rating
         Label ratingLabel = new Label("Rating:");
         ratingLabel.getStyleClass().add("muted");
         ratingFilterCombo = new ComboBox<>();
@@ -163,7 +156,6 @@ public class AuthorReviewsFX {
         ratingFilterCombo.setPrefWidth(100);
         ratingFilterCombo.valueProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Filter by Date
         Label dateLabel = new Label("Date:");
         dateLabel.getStyleClass().add("muted");
         dateFilterCombo = new ComboBox<>();
@@ -172,7 +164,6 @@ public class AuthorReviewsFX {
         dateFilterCombo.setPrefWidth(120);
         dateFilterCombo.valueProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Search by keyword
         Label searchLabel = new Label("Search:");
         searchLabel.getStyleClass().add("muted");
         searchField = new TextField();
@@ -180,12 +171,10 @@ public class AuthorReviewsFX {
         searchField.setPrefWidth(200);
         searchField.textProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Flagged only
         flaggedOnlyCheckBox = new CheckBox("⚠️ Show flagged reviews only");
         flaggedOnlyCheckBox.getStyleClass().add("muted");
         flaggedOnlyCheckBox.selectedProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Clear filters button
         Button clearFiltersBtn = new Button("Clear Filters");
         clearFiltersBtn.getStyleClass().addAll("button", "secondary-btn");
         clearFiltersBtn.setPrefWidth(100);
@@ -204,7 +193,6 @@ public class AuthorReviewsFX {
         
         filterBox.getChildren().addAll(filterTitle, filterGrid);
         
-        // Add clear filters button row
         HBox clearRow = new HBox();
         clearRow.setAlignment(Pos.CENTER_RIGHT);
         clearRow.getChildren().add(clearFiltersBtn);
@@ -249,7 +237,6 @@ public class AuthorReviewsFX {
         
         allReviews = authorService.getReviewsForAuthorBooks(currentAuthor.getUsername());
         
-        // Populate book filter
         bookFilterCombo.getItems().clear();
         bookFilterCombo.getItems().add("All Books");
         for (BookSubmission book : authorBooks) {
@@ -271,17 +258,14 @@ public class AuthorReviewsFX {
         
         List<Review> filtered = allReviews.stream()
             .filter(review -> {
-                // Filter by book
                 if (selectedBook != null && !selectedBook.equals("All Books")) {
                     if (!review.getBookTitle().equals(selectedBook)) {
                         return false;
                     }
                 }
-                // Filter by rating
                 if (minRating > 0 && review.getRating() < minRating) {
                     return false;
                 }
-                // Filter by date range
                 if (dateRange != null && !dateRange.equals("All Time")) {
                     LocalDateTime now = LocalDateTime.now();
                     LocalDateTime cutoff = switch (dateRange) {
@@ -294,14 +278,12 @@ public class AuthorReviewsFX {
                         return false;
                     }
                 }
-                // Filter by search text
                 if (!searchText.isEmpty()) {
                     if (!review.getComment().toLowerCase().contains(searchText) &&
                         !review.getReviewerFullName().toLowerCase().contains(searchText)) {
                         return false;
                     }
                 }
-                // Filter flagged only
                 if (flaggedOnly && !review.isFlagged()) {
                     return false;
                 }
@@ -342,14 +324,12 @@ public class AuthorReviewsFX {
             card.setStyle(card.getStyle() + "-fx-border-color: #ef4444; -fx-border-width: 2px;");
         }
 
-        // Header: Book title and rating
         HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
         
         Label bookTitle = new Label("📖 " + review.getBookTitle());
         bookTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #0f172a;");
         
-        // Star rating
         String stars = getStarRating(review.getRating());
         Label ratingLabel = new Label(stars);
         ratingLabel.setStyle("-fx-font-size: 12px;");
@@ -362,18 +342,15 @@ public class AuthorReviewsFX {
         
         header.getChildren().addAll(bookTitle, ratingLabel, spacer, dateLabel);
         
-        // Reviewer info
         Label reviewerLabel = new Label("⭐ " + review.getReviewerFullName() + " (" + review.getReviewerUsername() + ") rated " + review.getRating() + "/5");
         reviewerLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #475569;");
         
-        // Review comment
         TextArea commentArea = new TextArea(review.getComment());
         commentArea.setEditable(false);
         commentArea.setWrapText(true);
         commentArea.setPrefRowCount(3);
         commentArea.setStyle("-fx-background-color: #f8fafc; -fx-font-size: 13px;");
         
-        // Author reply section
         VBox replySection = new VBox(8);
         Label replyLabel = new Label("📝 Your Reply:");
         replyLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #0f172a;");
@@ -415,7 +392,6 @@ public class AuthorReviewsFX {
             actionBox.getChildren().add(repliedLabel);
         }
         
-        // Flag button (if not already flagged)
         if (!review.isFlagged()) {
             Button flagBtn = new Button("🚩 Flag as Inappropriate");
             flagBtn.getStyleClass().addAll("button", "danger-btn");

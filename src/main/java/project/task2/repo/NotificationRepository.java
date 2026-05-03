@@ -47,7 +47,6 @@ public class NotificationRepository {
         return store.findByScopeAndUser(SCOPE, authorUsername).stream()
                 .map(this::toTask2Notification)
                 .sorted((a, b) -> {
-                    // Priority notifications come first, then by date (newest first)
                     if (a.isPriority() && !b.isPriority()) return -1;
                     if (!a.isPriority() && b.isPriority()) return 1;
                     return b.getCreatedAt().compareTo(a.getCreatedAt());
@@ -75,17 +74,14 @@ public class NotificationRepository {
         store.markAllRead(SCOPE, authorUsername);
     }
     
-    // NEW: Delete a single notification
     public void delete(String notificationId) {
         store.deleteById(SCOPE, notificationId);
     }
     
-    // NEW: Delete all notifications for an author
     public void deleteAllByAuthor(String authorUsername) {
         store.deleteByUser(SCOPE, authorUsername);
     }
     
-    // NEW: Delete read notifications for an author
     public void deleteReadByAuthor(String authorUsername) {
         store.deleteReadByUser(SCOPE, authorUsername);
     }
@@ -120,7 +116,8 @@ public class NotificationRepository {
                 row.read(),
                 row.createdAt(),
                 row.relatedId().isBlank() ? null : row.relatedId(),
-                row.priority()
+                row.priority(),
+                false  // isArchived - default false for now
         );
     }
 }

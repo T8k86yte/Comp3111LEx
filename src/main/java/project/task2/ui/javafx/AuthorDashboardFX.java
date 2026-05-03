@@ -13,6 +13,7 @@ import project.task2.model.AuthorAccount;
 import project.task2.model.BookSubmission;
 import project.task2.service.AuthorPortalService;
 import project.task2.utils.SessionManager;
+import project.task2.utils.ProfilePictureManager;
 import project.shared.CrashSimulationManager;
 
 import java.time.format.DateTimeFormatter;
@@ -34,9 +35,9 @@ public class AuthorDashboardFX extends Application {
     private HBox statsBox;
     private List<Stage> childWindows = new ArrayList<>();
     private Label welcomeLabel;
+    private StackPane avatarContainer;
     private boolean randomCrashEnabled = false;
     
-    // Track currently open screen
     private String currentActiveScreen = "DASHBOARD";
 
     public AuthorDashboardFX(AuthorAccount author) {
@@ -86,7 +87,6 @@ public class AuthorDashboardFX extends Application {
         startDashboardAutoRefresh();
         startAutoSave();
         
-        // Save session when dashboard is opened
         SessionManager.setCurrentUser(currentAuthor.getUsername(), currentAuthor.getFullName());
         setActiveScreen("DASHBOARD");
     }
@@ -94,7 +94,6 @@ public class AuthorDashboardFX extends Application {
     private void handleWindowClose(WindowEvent event) {
         System.out.println("🚪 Closing Author Dashboard window...");
         
-        // Clear session on normal close (not crash)
         SessionManager.clearSession();
         
         for (Stage child : childWindows) {
@@ -110,11 +109,9 @@ public class AuthorDashboardFX extends Application {
 
     private void registerChildWindow(Stage stage, String screenName) {
         childWindows.add(stage);
-        // When child window opens, set it as active
         setActiveScreen(screenName);
         stage.setOnCloseRequest(e -> {
             childWindows.remove(stage);
-            // When child window closes, revert to dashboard
             setActiveScreen("DASHBOARD");
         });
     }
@@ -198,6 +195,13 @@ public class AuthorDashboardFX extends Application {
 
         welcomeLabel = new Label("Welcome, " + currentAuthor.getFullName());
         welcomeLabel.getStyleClass().add("current-user");
+        
+        // Avatar with profile picture
+        avatarContainer = ProfilePictureManager.createAvatar(
+            currentAuthor.getUsername(), 
+            currentAuthor.getFullName(), 
+            40
+        );
 
         Button logoutBtn = new Button("Logout");
         logoutBtn.getStyleClass().addAll("button", "secondary-btn");
@@ -206,7 +210,7 @@ public class AuthorDashboardFX extends Application {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        topBar.getChildren().addAll(welcomeLabel, spacer, logoutBtn);
+        topBar.getChildren().addAll(avatarContainer, welcomeLabel, spacer, logoutBtn);
         return topBar;
     }
 
@@ -251,33 +255,25 @@ public class AuthorDashboardFX extends Application {
         menuGrid.setVgap(20);
         menuGrid.setAlignment(Pos.CENTER);
 
-        // Row 1
         Button publishBtn = createMenuButton("📚 Publish Book", "Submit a new book for review");
         Button viewBtn = createMenuButton("📋 My Submissions", "View your book submissions");
         Button booksBtn = createMenuButton("📖 My Books", "View, edit, or delete your books");
-
-        // Row 2
         Button profileBtn = createMenuButton("👤 Profile", "Manage your profile information");
         Button notifBtn = createMenuButton("🔔 Notifications", "View your notifications");
         Button statsBtn = createMenuButton("📈 Statistics", "View book statistics and charts");
-
-        // Row 3
         Button reviewsBtn = createMenuButton("📝 Reviews", "View and reply to reader feedback");
         Button crashBtn = createMenuButton("💥 Crash Test", "Simulate application crash");
         Button randomCrashBtn = createMenuButton("🎲 Random Crash: OFF", "Toggle random runtime crashes");
 
-        // Style buttons
         statsBtn.getStyleClass().addAll("button", "primary-btn");
         reviewsBtn.getStyleClass().addAll("button", "primary-btn");
         crashBtn.getStyleClass().addAll("button", "danger-btn");
 
-        // Publish Book button
         publishBtn.setOnAction(e -> {
             System.out.println("📚 Opening Publish Book window...");
             try {
                 PublishBookFX publishUI = new PublishBookFX(currentAuthor, updated -> {
                     refreshDashboardStats();
-                    System.out.println("✅ Dashboard stats refreshed after book published");
                 });
                 publishUI.show();
                 registerChildWindow(publishUI.getStage(), "PUBLISH_BOOK");
@@ -287,20 +283,17 @@ public class AuthorDashboardFX extends Application {
             }
         });
 
-        // My Submissions button
         viewBtn.setOnAction(e -> {
             System.out.println("📋 Opening My Submissions...");
             showSubmissions();
             setActiveScreen("MY_SUBMISSIONS");
         });
         
-        // My Books button
         booksBtn.setOnAction(e -> {
             System.out.println("📖 Opening My Books...");
             try {
                 PublishedBookScreenFX bookScreen = new PublishedBookScreenFX(currentAuthor, updated -> {
                     refreshDashboardStats();
-                    System.out.println("✅ Dashboard stats refreshed after book update");
                 });
                 bookScreen.show();
                 registerChildWindow(bookScreen.getStage(), "MY_BOOKS");
@@ -310,13 +303,11 @@ public class AuthorDashboardFX extends Application {
             }
         });
         
-        // Profile button
         profileBtn.setOnAction(e -> {
             System.out.println("👤 Opening Profile Management...");
             try {
                 ProfileManagementFX profileScreen = new ProfileManagementFX(currentAuthor, updatedAuthor -> {
                     if (updatedAuthor == null) {
-                        // Password was changed - need to logout
                         System.out.println("🔐 Password changed - logging out...");
                         showAlert("Password Changed", 
                             "Your password has been changed. You will be logged out for security reasons.\n\n" +
@@ -324,13 +315,17 @@ public class AuthorDashboardFX extends Application {
                             Alert.AlertType.INFORMATION);
                         logout();
                     } else {
-                        // Normal profile update
                         this.currentAuthor = updatedAuthor;
                         if (welcomeLabel != null) {
                             welcomeLabel.setText("Welcome, " + updatedAuthor.getFullName());
                         }
+                        // Refresh avatar
+                        avatarContainer = ProfilePictureManager.createAvatar(
+                            currentAuthor.getUsername(), 
+                            currentAuthor.getFullName(), 
+                            40
+                        );
                         refreshDashboardStats();
-                        System.out.println("✅ Dashboard updated with new profile info");
                     }
                 });
                 profileScreen.show();
@@ -341,7 +336,6 @@ public class AuthorDashboardFX extends Application {
             }
         });
         
-        // Notifications button
         notifBtn.setOnAction(e -> {
             System.out.println("🔔 Opening Notifications...");
             try {
@@ -354,35 +348,30 @@ public class AuthorDashboardFX extends Application {
             }
         });
         
-        // Statistics button
         statsBtn.setOnAction(e -> {
             System.out.println("📈 Opening Statistics Dashboard...");
             try {
                 AuthorStatsFX statsScreen = new AuthorStatsFX(currentAuthor);
                 statsScreen.show();
                 registerChildWindow(statsScreen.getStage(), "STATISTICS");
-                SessionManager.setCurrentScreen("STATISTICS", null);
             } catch (Exception ex) {
                 ex.printStackTrace();
                 showAlert("Error", "Could not open statistics window: " + ex.getMessage(), Alert.AlertType.ERROR);
             }
         });
         
-        // Reviews button
         reviewsBtn.setOnAction(e -> {
             System.out.println("📝 Opening Reviews & Feedback...");
             try {
                 AuthorReviewsFX reviewsScreen = new AuthorReviewsFX(currentAuthor);
                 reviewsScreen.show();
                 registerChildWindow(reviewsScreen.getStage(), "REVIEWS");
-                SessionManager.setCurrentScreen("REVIEWS", null);
             } catch (Exception ex) {
                 ex.printStackTrace();
                 showAlert("Error", "Could not open reviews window: " + ex.getMessage(), Alert.AlertType.ERROR);
             }
         });
         
-        // Crash Test button action
         crashBtn.setOnAction(e -> simulateCrash());
         randomCrashBtn.setOnAction(e -> {
             randomCrashEnabled = !randomCrashEnabled;
@@ -397,18 +386,12 @@ public class AuthorDashboardFX extends Application {
             }
         });
 
-        // Add buttons to grid
-        // Row 0
         menuGrid.add(publishBtn, 0, 0);
         menuGrid.add(viewBtn, 1, 0);
         menuGrid.add(booksBtn, 2, 0);
-        
-        // Row 1
         menuGrid.add(profileBtn, 0, 1);
         menuGrid.add(notifBtn, 1, 1);
         menuGrid.add(statsBtn, 2, 1);
-        
-        // Row 2
         menuGrid.add(reviewsBtn, 0, 2);
         menuGrid.add(crashBtn, 1, 2);
         menuGrid.add(randomCrashBtn, 2, 2);
@@ -562,7 +545,7 @@ public class AuthorDashboardFX extends Application {
 
         if (sub.getStatus().equals("REJECTED") && sub.getRejectionReason() != null) {
             Label reasonLabel = new Label("❌ Reason: " + sub.getRejectionReason());
-            reasonLabel.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 12px;");
+            reasonLabel.setStyle("-fx-text-fill: #dc2626; -fx-font-size: 12px");
             reasonLabel.setWrapText(true);
             card.getChildren().add(reasonLabel);
         }
@@ -583,10 +566,8 @@ public class AuthorDashboardFX extends Application {
         
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
-                // Save current session before crash
                 SessionManager.autoSave();
                 
-                // Show crash message
                 Alert crashAlert = new Alert(Alert.AlertType.WARNING);
                 crashAlert.setTitle("Crash Simulation");
                 crashAlert.setHeaderText("💥 Application Crashing...");
@@ -620,7 +601,6 @@ public class AuthorDashboardFX extends Application {
             submissionsStage.close();
         }
 
-        // Clear session on normal logout
         SessionManager.clearSession();
         
         primaryStage.close();
@@ -633,9 +613,6 @@ public class AuthorDashboardFX extends Application {
         }
     }
 
-    /**
-     * Navigate to a specific screen (used for crash recovery)
-     */
     public void navigateToScreen(String screenName) {
         System.out.println("🎯 Navigating to screen: " + screenName);
         
@@ -725,9 +702,7 @@ public class AuthorDashboardFX extends Application {
     }
 
     @Override
-    public void init() {
-        // Required for Application class
-    }
+    public void init() {}
 
     @Override
     public void stop() {

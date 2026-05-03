@@ -6,22 +6,14 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Manages session persistence for crash recovery.
- * Automatically restores the previous session on startup.
- */
 public class SessionManager {
     private static final String SESSION_FILE = "data/session.dat";
     
-    // Store the current state
     private static String currentUsername = null;
     private static String currentFullName = null;
     private static String currentScreen = null;
     private static Map<String, String> screenStates = new HashMap<>();
     
-    /**
-     * Set the current user session
-     */
     public static void setCurrentUser(String username, String fullName) {
         currentUsername = username;
         currentFullName = fullName;
@@ -29,9 +21,6 @@ public class SessionManager {
         System.out.println("👤 User set: " + username);
     }
     
-    /**
-     * Set the current screen
-     */
     public static void setCurrentScreen(String screenName, String additionalData) {
         currentScreen = screenName;
         if (additionalData != null) {
@@ -41,9 +30,6 @@ public class SessionManager {
         System.out.println("📱 Screen set: " + screenName);
     }
     
-    /**
-     * Save screen state data (like form contents)
-     */
     public static void saveScreenState(String screenName, String stateData) {
         if (stateData != null && !stateData.isEmpty()) {
             screenStates.put(screenName, stateData);
@@ -52,44 +38,26 @@ public class SessionManager {
         }
     }
     
-    /**
-     * Get saved screen state
-     */
     public static String getScreenState(String screenName) {
         return screenStates.get(screenName);
     }
     
-    /**
-     * Get current username
-     */
     public static String getCurrentUsername() {
         return currentUsername;
     }
     
-    /**
-     * Get current full name
-     */
     public static String getCurrentFullName() {
         return currentFullName;
     }
     
-    /**
-     * Get current screen
-     */
     public static String getCurrentScreen() {
         return currentScreen;
     }
     
-    /**
-     * Check if there's a saved session
-     */
     public static boolean hasSavedSession() {
         return currentUsername != null && !currentUsername.isEmpty();
     }
     
-    /**
-     * Save everything to file
-     */
     public static void saveSession() {
         try {
             StringBuilder sb = new StringBuilder();
@@ -112,9 +80,6 @@ public class SessionManager {
         }
     }
     
-    /**
-     * Load everything from file
-     */
     public static void loadSession() {
         try {
             Path sessionPath = Paths.get(SESSION_FILE);
@@ -171,9 +136,6 @@ public class SessionManager {
         }
     }
     
-    /**
-     * Clear all session data
-     */
     public static void clearSession() {
         currentUsername = null;
         currentFullName = null;
@@ -188,9 +150,6 @@ public class SessionManager {
         }
     }
     
-    /**
-     * Auto-save is called automatically on changes
-     */
     public static void autoSave() {
         if (currentUsername != null) {
             saveSession();

@@ -1,7 +1,5 @@
 package project.task2.ui.javafx;
 
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -13,10 +11,10 @@ import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
-import javafx.util.Duration;
 import project.task2.model.AuthorAccount;
 import project.task2.model.BookStats;
 import project.task2.service.AuthorPortalService;
+import project.task2.utils.ProfilePictureManager;
 
 import java.util.List;
 import java.util.Timer;
@@ -27,7 +25,6 @@ public class AuthorStatsFX {
     private AuthorAccount currentAuthor;
     private Stage stage;
     
-    // UI components that need refreshing
     private HBox cardsContainer;
     private BarChart<String, Number> barChart;
     private PieChart pieChart;
@@ -51,11 +48,9 @@ public class AuthorStatsFX {
         root.getStyleClass().add("root-pane");
         root.setStyle("-fx-background-color: linear-gradient(to bottom, #f8fafc, #eef2f7);");
 
-        // Top bar
         HBox topBar = createTopBar();
         root.setTop(topBar);
 
-        // Scrollable content
         ScrollPane scrollPane = new ScrollPane();
         scrollPane.setFitToWidth(true);
         scrollPane.setStyle("-fx-background-color: transparent;");
@@ -64,27 +59,22 @@ public class AuthorStatsFX {
         content.setAlignment(Pos.TOP_CENTER);
         content.setPadding(new Insets(30));
 
-        // Title
         Label titleLabel = new Label("📊 Author Statistics Dashboard");
         titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #0f172a;");
         
         Label subtitleLabel = new Label("View performance metrics for your published books");
         subtitleLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #475569;");
 
-        // Last updated label
         lastUpdatedLabel = new Label("Last updated: Just now");
         lastUpdatedLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #94a3b8;");
         
-        // Auto-refresh status
         Label autoRefreshLabel = new Label("🔄 Auto-refreshes every " + REFRESH_INTERVAL_SECONDS + " seconds");
         autoRefreshLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #10b981;");
 
-        // Summary cards container
         cardsContainer = new HBox(20);
         cardsContainer.setAlignment(Pos.CENTER);
         cardsContainer.setPadding(new Insets(20));
 
-        // Bar chart section
         VBox barChartSection = new VBox(10);
         Label barChartLabel = new Label("📊 Book Borrow Counts");
         barChartLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #0f172a;");
@@ -98,7 +88,6 @@ public class AuthorStatsFX {
         barChartBox.getChildren().addAll(barChart);
         barChartSection.getChildren().addAll(barChartLabel, barChartBox);
 
-        // Pie chart section
         VBox pieChartSection = new VBox(10);
         Label pieChartLabel = new Label("📈 Book Popularity Distribution");
         pieChartLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #0f172a;");
@@ -112,7 +101,6 @@ public class AuthorStatsFX {
         pieChartBox.getChildren().addAll(pieChart);
         pieChartSection.getChildren().addAll(pieChartLabel, pieChartBox);
 
-        // Refresh button
         Button refreshBtn = new Button("🔄 Refresh Now");
         refreshBtn.getStyleClass().addAll("button", "primary-btn");
         refreshBtn.setOnAction(e -> refreshStats());
@@ -130,7 +118,6 @@ public class AuthorStatsFX {
         scrollPane.setContent(content);
         root.setCenter(scrollPane);
 
-        // Bottom close button
         HBox bottomBar = new HBox();
         bottomBar.setAlignment(Pos.CENTER);
         bottomBar.setPadding(new Insets(20));
@@ -152,10 +139,7 @@ public class AuthorStatsFX {
         stage.setScene(scene);
         stage.show();
         
-        // Initial load
         refreshStats();
-        
-        // Start auto-refresh timer
         startAutoRefresh();
         
         stage.setOnCloseRequest(e -> stopAutoRefresh());
@@ -167,12 +151,11 @@ public class AuthorStatsFX {
         topBar.setAlignment(Pos.CENTER_RIGHT);
         topBar.setStyle("-fx-background-color: white; -fx-border-color: #e2e8f0; -fx-border-width: 0 0 1 0;");
 
-        String initial = currentAuthor.getUsername().substring(0, 1).toUpperCase();
-        Label avatar = new Label(initial);
-        avatar.setStyle("-fx-background-color: #2563eb; -fx-text-fill: white; -fx-font-weight: bold; " +
-                       "-fx-padding: 8px; -fx-background-radius: 20px; -fx-font-size: 14px;");
-        avatar.setPrefSize(36, 36);
-        avatar.setAlignment(Pos.CENTER);
+        StackPane avatarContainer = ProfilePictureManager.createAvatar(
+            currentAuthor.getUsername(), 
+            currentAuthor.getFullName(), 
+            40
+        );
 
         Label usernameLabel = new Label(currentAuthor.getUsername());
         usernameLabel.setStyle("-fx-font-weight: 600; -fx-text-fill: #1e293b;");
@@ -189,7 +172,7 @@ public class AuthorStatsFX {
 
         HBox userInfo = new HBox(12);
         userInfo.setAlignment(Pos.CENTER);
-        userInfo.getChildren().addAll(avatar, usernameLabel);
+        userInfo.getChildren().addAll(avatarContainer, usernameLabel);
         
         topBar.getChildren().addAll(userInfo, spacer, closeBtn);
         return topBar;
@@ -241,14 +224,12 @@ public class AuthorStatsFX {
     }
 
     private void refreshStats() {
-        // Get fresh stats
         List<BookStats> stats = authorService.getAuthorBookStats(currentAuthor.getUsername());
         int totalBooks = stats.size();
         int totalBorrows = authorService.getTotalBorrowsForAuthor(currentAuthor.getUsername());
         double avgRating = authorService.getAverageRatingForAuthor(currentAuthor.getUsername());
         int totalReviews = authorService.getTotalReviewsForAuthor(currentAuthor.getUsername());
 
-        // Update summary cards
         cardsContainer.getChildren().clear();
         cardsContainer.getChildren().addAll(
             createStatCard("📚 Total Books", String.valueOf(totalBooks), "Published books"),
@@ -257,7 +238,6 @@ public class AuthorStatsFX {
             createStatCard("💬 Total Reviews", String.valueOf(totalReviews), "User feedback")
         );
 
-        // Update bar chart
         barChart.getData().clear();
         XYChart.Series<String, Number> series = new XYChart.Series<>();
         series.setName("Borrow Count");
@@ -269,7 +249,6 @@ public class AuthorStatsFX {
         }
         barChart.getData().add(series);
 
-        // Update pie chart
         pieChart.getData().clear();
         boolean hasData = false;
         for (BookStats stat : stats) {
@@ -287,7 +266,6 @@ public class AuthorStatsFX {
             pieChart.setTitle("📈 Book Popularity Distribution");
         }
 
-        // Update last updated timestamp
         lastUpdatedLabel.setText("Last updated: " + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
     }
 
