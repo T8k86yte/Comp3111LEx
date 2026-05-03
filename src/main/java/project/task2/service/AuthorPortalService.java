@@ -6,9 +6,11 @@ import project.task2.utils.PasswordUtils;
 import project.task2.model.BookSubmission;
 import project.task2.model.Review;
 import project.task2.model.BookStats;
+import project.task2.model.ArchivedNotification;
 import project.task2.repo.SubmissionRepository;
 import project.task2.repo.DraftRepository;
 import project.task2.repo.NotificationRepository;
+import project.task2.repo.ArchivedNotificationRepository;
 import project.task2.model.Notification;
 import project.task2.utils.FileHandler;
 import project.task1.repo.InMemoryBookRepository;
@@ -22,12 +24,14 @@ import java.util.List;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.ArrayList;
 
 public class AuthorPortalService {
     private final AuthorRepository authorRepository;
     private final SubmissionRepository submissionRepository;
     private final DraftRepository draftRepository;
     private final NotificationRepository notificationRepository;
+    private final ArchivedNotificationRepository archivedNotificationRepository;
     private final LibrarianRepository librarianRepository;
     private final UnifiedNotificationStore notificationStore;
     private final project.task2.repo.ReviewRepository reviewRepo;
@@ -37,6 +41,7 @@ public class AuthorPortalService {
         this.submissionRepository = new SubmissionRepository();
         this.draftRepository = new DraftRepository();
         this.notificationRepository = new NotificationRepository();
+        this.archivedNotificationRepository = new ArchivedNotificationRepository();
         this.librarianRepository = new LibrarianRepository();
         this.notificationStore = new UnifiedNotificationStore();
         this.reviewRepo = new project.task2.repo.ReviewRepository();
@@ -409,7 +414,6 @@ public class AuthorPortalService {
         notificationRepository.markAllAsRead(authorUsername);
     }
 
-    // ========== NOTIFICATION DELETE METHODS ==========
     public void deleteNotification(String notificationId) {
         notificationRepository.delete(notificationId);
     }
@@ -426,7 +430,7 @@ public class AuthorPortalService {
     
     public List<BookStats> getAuthorBookStats(String authorUsername) {
         List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
-        List<BookStats> statsList = new java.util.ArrayList<>();
+        List<BookStats> statsList = new ArrayList<>();
         
         for (BookSubmission sub : submissions) {
             if (sub.isApproved()) {
@@ -497,7 +501,6 @@ public class AuthorPortalService {
         review.setAuthorReply(replyMessage);
         reviewRepo.update(review);
         
-        // Send notification to reviewer
         sendNotificationToReviewer(review, replyMessage);
         return true;
     }
@@ -527,6 +530,62 @@ public class AuthorPortalService {
             false,
             review.getReviewId()
         );
+    }
+
+    // ========== ARCHIVE METHODS (Task 2.6) ==========
+    
+    public void archiveNotification(String notificationId) {
+        List<Notification> notifications = notificationRepository.findByAuthor("");
+        for (Notification notification : notifications) {
+            if (notification.getNotificationId().equals(notificationId)) {
+                archivedNotificationRepository.archive(notification);
+                notificationRepository.delete(notificationId);
+                break;
+            }
+        }
+    }
+    
+    public void archiveAllNotifications(String authorUsername) {
+        List<Notification> notifications = notificationRepository.findByAuthor(authorUsername);
+        for (Notification notification : notifications) {
+            if (notification.isRead()) {
+                archivedNotificationRepository.archive(notification);
+                notificationRepository.delete(notification.getNotificationId());
+            }
+        }
+    }
+    
+    public List<ArchivedNotification> getArchivedNotifications(String authorUsername) {
+        return archivedNotificationRepository.findByAuthor(authorUsername);
+    }
+    
+    public void unarchiveNotification(String originalId) {
+        var archivedOpt = archivedNotificationRepository.findById(originalId);
+        if (archivedOpt.isPresent()) {
+            ArchivedNotification archived = archivedOpt.get();
+            Notification restored = new Notification(
+                archived.getOriginalId(),
+                archived.getAuthorUsername(),
+                archived.getTitle(),
+                archived.getMessage(),
+                archived.getType(),
+                true,
+                archived.getCreatedAt(),
+                archived.getRelatedSubmissionId(),
+                false,
+                false
+            );
+            notificationRepository.save(restored);
+            archivedNotificationRepository.unarchive(originalId);
+        }
+    }
+    
+    public void deleteArchivedNotification(String originalId) {
+        archivedNotificationRepository.deleteArchived(originalId);
+    }
+    
+    public void deleteAllArchivedNotifications(String authorUsername) {
+        archivedNotificationRepository.deleteAllByAuthor(authorUsername);
     }
 
     // ========== VALIDATION HELPER METHODS ==========

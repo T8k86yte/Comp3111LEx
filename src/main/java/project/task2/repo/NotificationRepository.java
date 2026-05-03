@@ -44,7 +44,10 @@ public class NotificationRepository {
     }
 
     public List<Notification> findByAuthor(String authorUsername) {
-        return store.findByScopeAndUser(SCOPE, authorUsername).stream()
+        List<UnifiedNotification> unifiedList = store.findByScopeAndUser(SCOPE, authorUsername);
+        System.out.println("📋 Found " + unifiedList.size() + " unified notifications for " + authorUsername);
+        
+        return unifiedList.stream()
                 .map(this::toTask2Notification)
                 .sorted((a, b) -> {
                     if (a.isPriority() && !b.isPriority()) return -1;
@@ -90,6 +93,51 @@ public class NotificationRepository {
         return store.countByScopeAndUser(SCOPE, authorUsername, true);
     }
 
+    // ========== ARCHIVE METHODS (Task 2.6) ==========
+    
+    public void archiveNotification(String notificationId) {
+        System.out.println("📦 Archiving notification: " + notificationId);
+        var notifications = store.findByScopeAndUser(SCOPE, "");
+        for (var n : notifications) {
+            if (n.id().equals(notificationId)) {
+                Notification updated = toTask2Notification(n);
+                updated.archive();
+                store.upsert(toUnified(updated));
+                System.out.println("✅ Notification archived: " + notificationId);
+                break;
+            }
+        }
+    }
+    
+    public void archiveAllByAuthor(String authorUsername) {
+        System.out.println("📦 Archiving all notifications for: " + authorUsername);
+        var notifications = store.findByScopeAndUser(SCOPE, authorUsername);
+        int count = 0;
+        for (var n : notifications) {
+            Notification updated = toTask2Notification(n);
+            if (!updated.isArchived()) {
+                updated.archive();
+                store.upsert(toUnified(updated));
+                count++;
+            }
+        }
+        System.out.println("✅ Archived " + count + " notifications");
+    }
+    
+    public void unarchiveNotification(String notificationId) {
+        System.out.println("📦 Unarchiving notification: " + notificationId);
+        var notifications = store.findByScopeAndUser(SCOPE, "");
+        for (var n : notifications) {
+            if (n.id().equals(notificationId)) {
+                Notification updated = toTask2Notification(n);
+                updated.unarchive();
+                store.upsert(toUnified(updated));
+                System.out.println("✅ Notification unarchived: " + notificationId);
+                break;
+            }
+        }
+    }
+
     private UnifiedNotification toUnified(Notification n) {
         return new UnifiedNotification(
                 n.getNotificationId(),
@@ -107,17 +155,47 @@ public class NotificationRepository {
     }
 
     private Notification toTask2Notification(UnifiedNotification row) {
-        return new Notification(
+        // We need to store archived status somewhere
+        // For now, let's extract it from the message or use a custom field
+        // Since UnifiedNotification doesn't have archived field, we'll use a workaround
+        // For demo purposes, we'll store archived status in the message temporarily
+        // In production, you'd add an archived field to UnifiedNotification
+        
+        boolean isArchived = false;
+        String message = row.message();
+        if (message != null && message.startsWith("[ARCHIVED]")) {
+            isArchived = true;
+            message = message.substring(10);
+        }
+        
+        Notification notification = new Notification(
                 row.id(),
                 row.username(),
                 row.title(),
-                row.message(),
+                message,
                 row.type().isBlank() ? row.category() : row.type(),
                 row.read(),
                 row.createdAt(),
                 row.relatedId().isBlank() ? null : row.relatedId(),
                 row.priority(),
-                false  // isArchived - default false for now
+                isArchived
         );
+        return notification;
+    }
+    
+    // Helper method to update archived status in unified store
+    private void updateArchivedStatus(String notificationId, boolean archived) {
+        var notifications = store.findByScopeAndUser(SCOPE, "");
+        for (var n : notifications) {
+            if (n.id().equals(notificationId)) {
+                String newMessage = archived ? "[ARCHIVED] " + n.message() : n.message().replace("[ARCHIVED] ", "");
+                UnifiedNotification updated = new UnifiedNotification(
+                    n.id(), n.scope(), n.username(), n.title(), newMessage,
+                    n.category(), n.type(), n.read(), n.priority(), n.relatedId(), n.createdAt()
+                );
+                store.upsert(updated);
+                break;
+            }
+        }
     }
 }
