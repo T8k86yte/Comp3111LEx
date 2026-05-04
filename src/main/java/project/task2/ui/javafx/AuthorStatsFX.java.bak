@@ -12,23 +12,18 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import project.task2.model.AuthorAccount;
 import project.task2.model.BookStats;
 import project.task2.service.AuthorPortalService;
 import project.task2.service.RealTrendDataService;
 import project.task2.utils.ProfilePictureManager;
+import project.task2.utils.HTMLReportExporter;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -132,9 +127,7 @@ public class AuthorStatsFX {
         root.setBottom(bottomBar);
 
         Scene scene = new Scene(root, 1100, 950);
-        try {
-            scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
-        } catch (Exception ex) {}
+        scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         stage.setTitle("Statistics Dashboard - " + currentAuthor.getUsername());
         stage.setScene(scene);
@@ -276,9 +269,9 @@ public class AuthorStatsFX {
         refreshBtn.getStyleClass().addAll("button", "secondary-btn");
         refreshBtn.setOnAction(e -> refreshStats());
         
-        Button exportPDFBtn = new Button("📄 Export to PDF");
-        exportPDFBtn.getStyleClass().addAll("button", "primary-btn");
-        exportPDFBtn.setOnAction(e -> exportToPDF());
+        Button exportHTMLBtn = new Button("📄 Export to HTML");
+        exportHTMLBtn.getStyleClass().addAll("button", "primary-btn");
+        exportHTMLBtn.setOnAction(e -> exportToHTML());
         
         Button exportExcelBtn = new Button("📊 Export to Excel");
         exportExcelBtn.getStyleClass().addAll("button", "primary-btn");
@@ -291,7 +284,7 @@ public class AuthorStatsFX {
         leftBox.getChildren().addAll(lastUpdatedLabel, autoRefreshLabel);
         
         HBox rightBox = new HBox(10);
-        rightBox.getChildren().addAll(refreshBtn, exportPDFBtn, exportExcelBtn);
+        rightBox.getChildren().addAll(refreshBtn, exportHTMLBtn, exportExcelBtn);
         
         controlBar.getChildren().addAll(leftBox, spacer, rightBox);
         return controlBar;
@@ -491,203 +484,34 @@ public class AuthorStatsFX {
         return card;
     }
 
-    private void exportToPDF() {
+    private void exportToHTML() {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Export Statistics to PDF");
+        fileChooser.setTitle("Export Statistics to HTML");
         fileChooser.setInitialFileName("author_stats_" + currentAuthor.getUsername() + "_" + 
-                                       LocalDate.now() + ".pdf");
+                                       LocalDate.now() + ".html");
         fileChooser.getExtensionFilters().add(
-            new FileChooser.ExtensionFilter("PDF Files", "*.pdf")
+            new FileChooser.ExtensionFilter("HTML Files", "*.html")
         );
         
         File file = fileChooser.showSaveDialog(stage);
         if (file != null) {
             try {
-                generatePDFReport(file);
-                showAlert("Export Successful", "PDF report generated at:\n" + file.getAbsolutePath(), Alert.AlertType.INFORMATION);
+                HTMLReportExporter.exportToHTML(
+                    file.getAbsolutePath(),
+                    currentAuthor.getFullName(),
+                    currentAuthor.getUsername(),
+                    currentStats,
+                    authorService.getTotalBorrowsForAuthor(currentAuthor.getUsername()),
+                    authorService.getAverageRatingForAuthor(currentAuthor.getUsername()),
+                    authorService.getTotalReviewsForAuthor(currentAuthor.getUsername()),
+                    currentTrendData
+                );
+                showAlert("Export Successful", "HTML report generated at:\n" + file.getAbsolutePath() + 
+                         "\n\nOpen in browser and press Cmd+P to save as PDF", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                showAlert("Export Failed", "Error generating PDF: " + e.getMessage(), Alert.AlertType.ERROR);
+                showAlert("Export Failed", "Error generating report: " + e.getMessage(), Alert.AlertType.ERROR);
                 e.printStackTrace();
             }
-        }
-    }
-
-    private void generatePDFReport(File file) throws IOException {
-        try (PDDocument document = new PDDocument()) {
-            PDPage page = new PDPage(PDRectangle.A4);
-            document.addPage(page);
-            
-            PDPageContentStream contentStream = new PDPageContentStream(document, page);
-            
-            // Use PDType1Font with Standard PDF fonts - these are static methods now
-            PDType1Font boldFont = PDType1Font.HELVETICA_BOLD;
-            PDType1Font normalFont = PDType1Font.HELVETICA;
-            
-            float margin = 50;
-            float yStart = page.getMediaBox().getHeight() - margin;
-            float yPosition = yStart;
-            
-            // Title
-            contentStream.setFont(boldFont, 18);
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Author Statistics Report");
-            contentStream.endText();
-            
-            yPosition -= 30;
-            
-            // Author info
-            contentStream.setFont(normalFont, 12);
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Author: " + currentAuthor.getFullName() + " (" + currentAuthor.getUsername() + ")");
-            contentStream.endText();
-            
-            yPosition -= 20;
-            
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Generated: " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-            contentStream.endText();
-            
-            yPosition -= 40;
-            
-            // Summary Metrics
-            contentStream.setFont(boldFont, 14);
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Summary Metrics");
-            contentStream.endText();
-            
-            yPosition -= 25;
-            
-            int totalBooks = currentStats.size();
-            int totalBorrows = authorService.getTotalBorrowsForAuthor(currentAuthor.getUsername());
-            double avgRating = authorService.getAverageRatingForAuthor(currentAuthor.getUsername());
-            int totalReviews = authorService.getTotalReviewsForAuthor(currentAuthor.getUsername());
-            
-            contentStream.setFont(normalFont, 12);
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Total Books: " + totalBooks);
-            contentStream.endText();
-            
-            yPosition -= 18;
-            
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Total Borrows: " + totalBorrows);
-            contentStream.endText();
-            
-            yPosition -= 18;
-            
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText(String.format("Average Rating: %.1f / 5", avgRating));
-            contentStream.endText();
-            
-            yPosition -= 18;
-            
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Total Reviews: " + totalReviews);
-            contentStream.endText();
-            
-            yPosition -= 40;
-            
-            // Book Details Table
-            contentStream.setFont(boldFont, 14);
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, yPosition);
-            contentStream.showText("Book Details");
-            contentStream.endText();
-            
-            yPosition -= 25;
-            
-            // Table headers
-            contentStream.setFont(boldFont, 10);
-            float[] colWidths = {30, 150, 80, 80, 60, 80};
-            float xStart = margin;
-            
-            String[] headers = {"#", "Title", "Borrows", "Rating", "Reviews", "Status"};
-            for (int i = 0; i < headers.length; i++) {
-                contentStream.beginText();
-                contentStream.newLineAtOffset(xStart, yPosition);
-                contentStream.showText(headers[i]);
-                contentStream.endText();
-                xStart += colWidths[i];
-            }
-            
-            yPosition -= 15;
-            contentStream.setFont(normalFont, 9);
-            
-            int count = 1;
-            for (BookStats stat : currentStats) {
-                if (yPosition < margin + 50) {
-                    contentStream.close();
-                    page = new PDPage(PDRectangle.A4);
-                    document.addPage(page);
-                    contentStream = new PDPageContentStream(document, page);
-                    yPosition = yStart;
-                    
-                    // Redraw headers on new page
-                    contentStream.setFont(boldFont, 10);
-                    xStart = margin;
-                    for (int i = 0; i < headers.length; i++) {
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(xStart, yPosition);
-                        contentStream.showText(headers[i]);
-                        contentStream.endText();
-                        xStart += colWidths[i];
-                    }
-                    yPosition -= 15;
-                    contentStream.setFont(normalFont, 9);
-                }
-                
-                xStart = margin;
-                
-                contentStream.beginText();
-                contentStream.newLineAtOffset(xStart, yPosition);
-                contentStream.showText(String.valueOf(count++));
-                contentStream.endText();
-                xStart += colWidths[0];
-                
-                contentStream.beginText();
-                String title = stat.getTitle().length() > 18 ? stat.getTitle().substring(0, 15) + "..." : stat.getTitle();
-                contentStream.newLineAtOffset(xStart, yPosition);
-                contentStream.showText(title);
-                contentStream.endText();
-                xStart += colWidths[1];
-                
-                contentStream.beginText();
-                contentStream.newLineAtOffset(xStart, yPosition);
-                contentStream.showText(String.valueOf(stat.getBorrowCount()));
-                contentStream.endText();
-                xStart += colWidths[2];
-                
-                contentStream.beginText();
-                contentStream.newLineAtOffset(xStart, yPosition);
-                contentStream.showText(String.format("%.1f", stat.getAverageRating()));
-                contentStream.endText();
-                xStart += colWidths[3];
-                
-                contentStream.beginText();
-                contentStream.newLineAtOffset(xStart, yPosition);
-                contentStream.showText(String.valueOf(stat.getReviewCount()));
-                contentStream.endText();
-                xStart += colWidths[4];
-                
-                contentStream.beginText();
-                contentStream.newLineAtOffset(xStart, yPosition);
-                contentStream.showText(stat.getStatus());
-                contentStream.endText();
-                
-                yPosition -= 18;
-            }
-            
-            contentStream.close();
-            document.save(file);
-            System.out.println("✅ PDF saved to: " + file.getAbsolutePath());
         }
     }
 
@@ -704,7 +528,7 @@ public class AuthorStatsFX {
         if (file != null) {
             try (PrintWriter writer = new PrintWriter(new FileWriter(file))) {
                 writer.println("AUTHOR STATISTICS REPORT");
-                writer.println("Generated:\t" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+                writer.println("Generated:\t" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
                 writer.println("Author:\t" + currentAuthor.getUsername() + "\t(" + currentAuthor.getFullName() + ")");
                 writer.println();
                 writer.println("SUMMARY METRICS");
