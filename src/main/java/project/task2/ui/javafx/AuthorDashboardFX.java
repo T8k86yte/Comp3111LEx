@@ -36,6 +36,7 @@ public class AuthorDashboardFX extends Application {
     private List<Stage> childWindows = new ArrayList<>();
     private Label welcomeLabel;
     private StackPane avatarContainer;
+    private HBox topBar;
     private boolean randomCrashEnabled = false;
     
     private String currentActiveScreen = "DASHBOARD";
@@ -53,7 +54,7 @@ public class AuthorDashboardFX extends Application {
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
 
-        HBox topBar = createTopBar();
+        topBar = createTopBar();
         root.setTop(topBar);
 
         VBox centerContent = new VBox(30);
@@ -89,6 +90,32 @@ public class AuthorDashboardFX extends Application {
         
         SessionManager.setCurrentUser(currentAuthor.getUsername(), currentAuthor.getFullName());
         setActiveScreen("DASHBOARD");
+    }
+
+    private void refreshTopBarAvatar() {
+        Platform.runLater(() -> {
+            // Create new avatar
+            StackPane newAvatar = ProfilePictureManager.createAvatar(
+                currentAuthor.getUsername(), 
+                currentAuthor.getFullName(), 
+                40
+            );
+            
+            // Replace in top bar
+            if (topBar != null && topBar.getChildren().size() > 0) {
+                // Find the avatar container (first child of userInfo HBox)
+                for (int i = 0; i < topBar.getChildren().size(); i++) {
+                    javafx.scene.Node node = topBar.getChildren().get(i);
+                    if (node instanceof HBox) {
+                        HBox userInfo = (HBox) node;
+                        if (userInfo.getChildren().size() > 0) {
+                            userInfo.getChildren().set(0, newAvatar);
+                            break;
+                        }
+                    }
+                }
+            }
+        });
     }
 
     private void handleWindowClose(WindowEvent event) {
@@ -196,7 +223,6 @@ public class AuthorDashboardFX extends Application {
         welcomeLabel = new Label("Welcome, " + currentAuthor.getFullName());
         welcomeLabel.getStyleClass().add("current-user");
         
-        // Avatar with profile picture
         avatarContainer = ProfilePictureManager.createAvatar(
             currentAuthor.getUsername(), 
             currentAuthor.getFullName(), 
@@ -209,8 +235,12 @@ public class AuthorDashboardFX extends Application {
         
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
+        
+        HBox userInfo = new HBox(12);
+        userInfo.setAlignment(Pos.CENTER);
+        userInfo.getChildren().addAll(avatarContainer, welcomeLabel);
 
-        topBar.getChildren().addAll(avatarContainer, welcomeLabel, spacer, logoutBtn);
+        topBar.getChildren().addAll(userInfo, spacer, logoutBtn);
         return topBar;
     }
 
@@ -319,15 +349,10 @@ public class AuthorDashboardFX extends Application {
                         if (welcomeLabel != null) {
                             welcomeLabel.setText("Welcome, " + updatedAuthor.getFullName());
                         }
-                        // Refresh avatar
-                        avatarContainer = ProfilePictureManager.createAvatar(
-                            currentAuthor.getUsername(), 
-                            currentAuthor.getFullName(), 
-                            40
-                        );
+                        refreshTopBarAvatar();
                         refreshDashboardStats();
                     }
-                });
+                }, this::refreshTopBarAvatar);
                 profileScreen.show();
                 registerChildWindow(profileScreen.getStage(), "PROFILE");
             } catch (Exception ex) {
@@ -657,7 +682,7 @@ public class AuthorDashboardFX extends Application {
                             }
                             refreshDashboardStats();
                         }
-                    });
+                    }, this::refreshTopBarAvatar);
                     profileScreen.show();
                     registerChildWindow(profileScreen.getStage(), "PROFILE");
                 } catch (Exception ex) {
