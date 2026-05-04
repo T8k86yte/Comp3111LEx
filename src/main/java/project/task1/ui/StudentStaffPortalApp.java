@@ -6,14 +6,20 @@ import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.chart.BarChart;
+import javafx.scene.chart.CategoryAxis;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
@@ -23,6 +29,8 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.Clipboard;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
@@ -30,6 +38,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import project.task1.model.Book;
 import project.task1.repo.InMemoryBookRepository;
@@ -98,17 +107,24 @@ public class StudentStaffPortalApp extends Application {
     private TextField readingHistoryGenreFilterField;
     private DatePicker readingHistoryFromDatePicker;
     private DatePicker readingHistoryToDatePicker;
+    private BarChart<String, Number> readingInsightsChart;
+    private ListView<String> readingBadgeListView;
     private TableView<StudentStaffPortalService.BorrowRecordView> borrowedRecordTable;
     private TextField borrowedRecordFilterField;
     private TextField bookmarkField;
     private TextArea highlightField;
     private ComboBox<Integer> borrowedReviewRatingBox;
     private TextArea borrowedReviewTextArea;
+    private CheckBox borrowedReviewAnonymousCheckBox;
+    private ComboBox<String> borrowedReviewSortBox;
     private Label readingInfoLabel;
     private TextField profileFullNameField;
     private PasswordField profilePasswordField;
     private PasswordField profileConfirmPasswordField;
     private Label profilePasswordHintLabel;
+    private ProgressBar profilePasswordStrengthBar;
+    private Label profilePicturePathLabel;
+    private ImageView profilePicturePreview;
     private ListView<StudentStaffPortalService.NotificationView> notificationList;
     private PasswordField profileCurrentPasswordField;
     private TextField bookFilterTitleField;
@@ -118,13 +134,19 @@ public class StudentStaffPortalApp extends Application {
     private ComboBox<String> bookFilterAvailabilityBox;
     private TextField notificationSearchField;
     private ComboBox<String> notificationCategoryFilterBox;
+    private ComboBox<String> notificationArchiveFilterBox;
+    private Label notificationUnreadCounterLabel;
     private TextField requestTitleField;
     private TextField requestAuthorField;
     private TextField requestGenreField;
     private TextArea requestReasonArea;
     private ListView<String> myRequestListView;
     private Timer autoSaveTimer;
+    private Timer borrowLifecycleTimer;
     private boolean randomCrashEnabled;
+    private PdfReaderWindow activeReaderWindow;
+    private String activeReaderUsername;
+    private String activeReaderBookId;
     private Map<String, StudentStaffPortalService.BookRatingSummary> ratingSummaryByBookId = Map.of();
 
     @Override
@@ -145,6 +167,7 @@ public class StudentStaffPortalApp extends Application {
         stage.setTitle("Task 1 - Student/Staff Portal");
         stage.setScene(scene);
         stage.show();
+        startBorrowLifecycleMonitor();
 
         if (SessionManager.hasSavedSession()) {
             showInfoPopup(
@@ -155,6 +178,12 @@ public class StudentStaffPortalApp extends Application {
         }
 
         setStatus("Please log in or register.");
+    }
+
+    @Override
+    public void stop() {
+        stopAutoSave();
+        stopBorrowLifecycleMonitor();
     }
 
     private VBox buildStudentLoginPage() {
@@ -542,7 +571,7 @@ public class StudentStaffPortalApp extends Application {
                 }
                 String tooltipContent = reviews.stream()
                         .limit(3)
-                        .map(r -> r.username() + " [" + r.rating() + "/5]: "
+                        .map(r -> (r.anonymous() ? "Anonymous" : r.username()) + " [" + r.rating() + "/5 | Helpful " + r.helpfulVotes() + "]: "
                                 + ((r.reviewText() == null || r.reviewText().isBlank()) ? "(rating only)" : r.reviewText()))
                         .collect(java.util.stream.Collectors.joining("\n\n"));
                 setTooltip(new Tooltip(tooltipContent));
@@ -703,18 +732,53 @@ public class StudentStaffPortalApp extends Application {
                 cell.getValue().returnDate() == null ? "In Progress" : cell.getValue().returnDate().toString()));
         TableColumn<StudentStaffPortalService.ReadingHistoryView, String> durationCol = new TableColumn<>("Reading Duration");
         durationCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().readingDurationDays() + " day(s)"));
+        TableColumn<StudentStaffPortalService.ReadingHistoryView, String> bookmarkCol = new TableColumn<>("Last Bookmark");
+        bookmarkCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
+                cell.getValue().bookmark() == null || cell.getValue().bookmark().isBlank()
+                        ? "-"
+                        : cell.getValue().bookmark()
+        ));
         TableColumn<StudentStaffPortalService.ReadingHistoryView, String> progressCol = new TableColumn<>("Reading Progress");
         progressCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
                 cell.getValue().progressSummary() == null || cell.getValue().progressSummary().isBlank()
                         ? "No progress saved"
                         : cell.getValue().progressSummary()
         ));
-        readingHistoryTable.getColumns().addAll(titleCol, authorCol, genreCol, borrowDateCol, returnDateCol, durationCol, progressCol);
+        readingHistoryTable.getColumns().addAll(titleCol, authorCol, genreCol, borrowDateCol, returnDateCol, durationCol, bookmarkCol, progressCol);
+
+        Button exportCsvBtn = new Button("Export CSV");
+        exportCsvBtn.getStyleClass().add("secondary-btn");
+        exportCsvBtn.setOnAction(e -> handleExportReadingHistoryCsv());
+        Button exportPdfBtn = new Button("Export PDF");
+        exportPdfBtn.getStyleClass().add("secondary-btn");
+        exportPdfBtn.setOnAction(e -> handleExportReadingHistoryPdf());
+        HBox exportRow = new HBox(8, exportCsvBtn, exportPdfBtn);
+
+        CategoryAxis xAxis = new CategoryAxis();
+        NumberAxis yAxis = new NumberAxis();
+        readingInsightsChart = new BarChart<>(xAxis, yAxis);
+        readingInsightsChart.setLegendVisible(false);
+        readingInsightsChart.setTitle("Most Read Genres");
+        readingInsightsChart.setPrefHeight(220);
+        readingBadgeListView = new ListView<>();
+        readingBadgeListView.setPrefHeight(100);
 
         borrowHistoryList = new ListView<>();
         borrowHistoryList.setPrefHeight(120);
         VBox.setVgrow(readingHistoryTable, Priority.ALWAYS);
-        card.getChildren().addAll(heading, hint, filters, readingHistoryTable, new Label("Legacy Borrow Events"), borrowHistoryList);
+        card.getChildren().addAll(
+                heading,
+                hint,
+                filters,
+                readingHistoryTable,
+                exportRow,
+                new Label("Graphical Insights"),
+                readingInsightsChart,
+                new Label("Achievements / Badges"),
+                readingBadgeListView,
+                new Label("Legacy Borrow Events"),
+                borrowHistoryList
+        );
         return card;
     }
 
@@ -800,6 +864,9 @@ public class StudentStaffPortalApp extends Application {
         highlightField.setPrefRowCount(3);
         borrowedReviewRatingBox = new ComboBox<>(FXCollections.observableArrayList(1, 2, 3, 4, 5));
         borrowedReviewRatingBox.setValue(5);
+        borrowedReviewSortBox = new ComboBox<>(FXCollections.observableArrayList("MOST_RECENT", "MOST_HELPFUL"));
+        borrowedReviewSortBox.setValue("MOST_RECENT");
+        borrowedReviewAnonymousCheckBox = new CheckBox("Submit anonymously");
         borrowedReviewTextArea = new TextArea();
         borrowedReviewTextArea.setPromptText("Write your review for this borrowed book");
         borrowedReviewTextArea.setPrefRowCount(3);
@@ -821,6 +888,9 @@ public class StudentStaffPortalApp extends Application {
         Button submitReviewBtn = new Button("Submit Review/Rating");
         submitReviewBtn.getStyleClass().add("secondary-btn");
         submitReviewBtn.setOnAction(e -> handleSubmitReviewForBorrowedBook());
+        Button viewReviewsBtn = new Button("View Reviews");
+        viewReviewsBtn.getStyleClass().add("secondary-btn");
+        viewReviewsBtn.setOnAction(e -> handleViewBorrowedBookReviews());
 
         borrowedRecordTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, newValue) -> {
             if (newValue == null || currentUser == null) {
@@ -847,7 +917,7 @@ public class StudentStaffPortalApp extends Application {
                     : "PDF linked: " + resolvedPdfPath);
         });
 
-        HBox actions = new HBox(10, openPdfBtn, bookmarkBtn, highlightBtn, returnSelectedBtn, submitReviewBtn);
+        HBox actions = new HBox(10, openPdfBtn, bookmarkBtn, highlightBtn, returnSelectedBtn, submitReviewBtn, viewReviewsBtn);
         actions.setAlignment(Pos.CENTER_LEFT);
         VBox.setVgrow(borrowedRecordTable, Priority.ALWAYS);
         card.getChildren().addAll(
@@ -860,6 +930,9 @@ public class StudentStaffPortalApp extends Application {
                 highlightField,
                 new Label("Rating (1-5)"),
                 borrowedReviewRatingBox,
+                borrowedReviewAnonymousCheckBox,
+                new Label("Review Sort"),
+                borrowedReviewSortBox,
                 new Label("Review"),
                 borrowedReviewTextArea,
                 actions
@@ -872,7 +945,7 @@ public class StudentStaffPortalApp extends Application {
         card.getStyleClass().add("card");
         Label heading = new Label("Manage Profile");
         heading.getStyleClass().add("card-title");
-        Label hint = new Label("Update full name and password.");
+        Label hint = new Label("Update full name/password and optional profile picture.");
         hint.getStyleClass().add("muted");
 
         GridPane grid = new GridPane();
@@ -883,6 +956,8 @@ public class StudentStaffPortalApp extends Application {
         profilePasswordField = new PasswordField();
         profileConfirmPasswordField = new PasswordField();
         profilePasswordHintLabel = new Label();
+        profilePasswordStrengthBar = new ProgressBar(0);
+        profilePasswordStrengthBar.setPrefWidth(220);
         profilePasswordHintLabel.getStyleClass().add("muted");
         profilePasswordField.textProperty().addListener((obs, oldValue, newValue) -> updateProfilePasswordHint());
         profileConfirmPasswordField.textProperty().addListener((obs, oldValue, newValue) -> updateProfilePasswordHint());
@@ -896,15 +971,27 @@ public class StudentStaffPortalApp extends Application {
         grid.add(new Label("Confirm Password"), 0, 3);
         grid.add(profileConfirmPasswordField, 1, 3);
 
+        profilePicturePreview = new ImageView();
+        profilePicturePreview.setFitWidth(120);
+        profilePicturePreview.setFitHeight(120);
+        profilePicturePreview.setPreserveRatio(true);
+        profilePicturePathLabel = new Label("No profile picture selected.");
+        profilePicturePathLabel.getStyleClass().add("muted");
+        Button uploadPictureBtn = new Button("Upload Profile Picture");
+        uploadPictureBtn.getStyleClass().add("secondary-btn");
+        uploadPictureBtn.setOnAction(e -> handleUploadProfilePicture());
+        VBox pictureBox = new VBox(6, new Label("Profile Picture"), profilePicturePreview, profilePicturePathLabel, uploadPictureBtn);
+
         if (currentUser != null) {
             profileFullNameField.setText(currentUser.fullName());
+            refreshProfilePicturePreview();
         }
         updateProfilePasswordHint();
 
         Button updateBtn = new Button("Update Profile");
         updateBtn.getStyleClass().add("primary-btn");
         updateBtn.setOnAction(e -> handleProfileUpdate());
-        card.getChildren().addAll(heading, hint, grid, profilePasswordHintLabel, updateBtn);
+        card.getChildren().addAll(heading, hint, pictureBox, grid, profilePasswordStrengthBar, profilePasswordHintLabel, updateBtn);
         return card;
     }
 
@@ -915,6 +1002,8 @@ public class StudentStaffPortalApp extends Application {
         heading.getStyleClass().add("card-title");
         Label hint = new Label("Timestamped and categorized notifications.");
         hint.getStyleClass().add("muted");
+        notificationUnreadCounterLabel = new Label("Unread: 0");
+        notificationUnreadCounterLabel.getStyleClass().add("muted");
         HBox filterRow = new HBox(8);
         notificationSearchField = new TextField();
         notificationSearchField.setPromptText("Search notifications");
@@ -929,10 +1018,18 @@ public class StudentStaffPortalApp extends Application {
                 "ANNOUNCEMENT"
         ));
         notificationCategoryFilterBox.setValue("All");
+        notificationArchiveFilterBox = new ComboBox<>(FXCollections.observableArrayList("Active", "Archived", "All"));
+        notificationArchiveFilterBox.setValue("Active");
         Button applyBtn = new Button("Apply Filter");
         applyBtn.getStyleClass().add("secondary-btn");
         applyBtn.setOnAction(e -> refreshNotifications());
-        filterRow.getChildren().addAll(new Label("Filter:"), notificationSearchField, notificationCategoryFilterBox, applyBtn);
+        filterRow.getChildren().addAll(
+                new Label("Filter:"),
+                notificationSearchField,
+                notificationCategoryFilterBox,
+                notificationArchiveFilterBox,
+                applyBtn
+        );
         notificationList = new ListView<>();
         notificationList.setCellFactory(list -> new javafx.scene.control.ListCell<StudentStaffPortalService.NotificationView>() {
             @Override
@@ -944,7 +1041,8 @@ public class StudentStaffPortalApp extends Application {
                 }
                 String urgentTag = item.isUrgent() ? "[URGENT] " : "";
                 String readTag = item.read() ? "" : "[NEW] ";
-                setText(readTag + urgentTag
+                String archivedTag = item.archived() ? "[ARCHIVED] " : "";
+                setText(readTag + archivedTag + urgentTag
                         + "[" + item.timestamp().toLocalDate() + " " + item.timestamp().toLocalTime().withNano(0) + "] "
                         + "[" + item.category() + "] " + item.message());
             }
@@ -958,10 +1056,16 @@ public class StudentStaffPortalApp extends Application {
         Button deleteReadBtn = new Button("Delete Read");
         deleteReadBtn.getStyleClass().add("secondary-btn");
         deleteReadBtn.setOnAction(e -> handleDeleteTask1ReadNotifications());
-        HBox actions = new HBox(8, markReadBtn, deleteBtn, deleteReadBtn);
+        Button archiveBtn = new Button("Archive Selected");
+        archiveBtn.getStyleClass().add("secondary-btn");
+        archiveBtn.setOnAction(e -> handleArchiveTask1Notification());
+        Button restoreBtn = new Button("Restore Selected");
+        restoreBtn.getStyleClass().add("secondary-btn");
+        restoreBtn.setOnAction(e -> handleRestoreTask1Notification());
+        HBox actions = new HBox(8, markReadBtn, deleteBtn, deleteReadBtn, archiveBtn, restoreBtn);
         actions.setAlignment(Pos.CENTER_LEFT);
         VBox.setVgrow(notificationList, Priority.ALWAYS);
-        card.getChildren().addAll(heading, hint, filterRow, notificationList, actions);
+        card.getChildren().addAll(heading, hint, notificationUnreadCounterLabel, filterRow, notificationList, actions);
         return card;
     }
 
@@ -1127,11 +1231,13 @@ public class StudentStaffPortalApp extends Application {
                 ? 5
                 : borrowedReviewRatingBox.getValue();
         String reviewText = borrowedReviewTextArea == null ? "" : borrowedReviewTextArea.getText();
+        boolean anonymous = borrowedReviewAnonymousCheckBox != null && borrowedReviewAnonymousCheckBox.isSelected();
         StudentStaffPortalService.OperationResult result = portalService.submitBookReview(
                 currentUser.username(),
                 selected.bookId(),
                 rating,
-                reviewText
+                reviewText,
+                anonymous
         );
         if (!result.success()) {
             showErrorPopup("Review / Rate", "Submit failed.", result.message());
@@ -1161,6 +1267,8 @@ public class StudentStaffPortalApp extends Application {
         }
         String username = currentUser.username();
         currentUser = null;
+        activeReaderUsername = null;
+        activeReaderBookId = null;
         currentUserLabel.setText("Current user: (none)");
         root.setCenter(authPage);
         stopAutoSave();
@@ -1391,7 +1499,27 @@ public class StudentStaffPortalApp extends Application {
                     selected.bookTitle(),
                     pdfFile.getAbsolutePath()
             );
+            activeReaderWindow = readerWindow;
+            activeReaderUsername = currentUser.username();
+            activeReaderBookId = selected.bookId();
             PdfReaderWindow.ReaderSessionResult summary = readerWindow.showAndWait(root.getScene().getWindow());
+            boolean closedByExpiry = readerWindow.wasClosedByBorrowExpiry();
+            activeReaderWindow = null;
+            activeReaderUsername = null;
+            activeReaderBookId = null;
+            if (closedByExpiry) {
+                portalService.processBorrowLifecycleEvents();
+                refreshBorrowedBookRecords();
+                refreshReturnBooks();
+                refreshReadingHistory();
+                refreshNotifications();
+                showInfoPopup(
+                        "Borrow Expired",
+                        "Reading screen closed automatically",
+                        "Borrowing period expired. The book was auto-returned."
+                );
+                return;
+            }
             if (summary.hasData()) {
                 bookmarkField.setText(summary.bookmarkSummary());
                 highlightField.setText(summary.highlightSummary());
@@ -1405,6 +1533,9 @@ public class StudentStaffPortalApp extends Application {
             }
             readingInfoLabel.setText("Opened in built-in reader: " + pdfFile.getAbsolutePath());
         } catch (Exception e) {
+            activeReaderWindow = null;
+            activeReaderUsername = null;
+            activeReaderBookId = null;
             showErrorPopup("Open PDF Failed", "Cannot open in built-in reader.", e.getMessage());
         }
     }
@@ -1535,6 +1666,55 @@ public class StudentStaffPortalApp extends Application {
         showInfoPopup("Profile Update", "Success", result.message());
     }
 
+    private void handleUploadProfilePicture() {
+        if (currentUser == null) {
+            showErrorPopup("Profile Picture", "User not logged in.", "Please log in first.");
+            return;
+        }
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select Profile Picture");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
+                "Images", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp"
+        ));
+        File selected = chooser.showOpenDialog(root.getScene().getWindow());
+        if (selected == null) {
+            return;
+        }
+        StudentStaffPortalService.OperationResult result =
+                portalService.updateProfilePicture(currentUser.username(), selected.getAbsolutePath());
+        if (!result.success()) {
+            showErrorPopup("Profile Picture", "Upload failed", result.message());
+            return;
+        }
+        refreshProfilePicturePreview();
+        showInfoPopup("Profile Picture", "Updated", result.message());
+    }
+
+    private void refreshProfilePicturePreview() {
+        if (currentUser == null || profilePicturePreview == null || profilePicturePathLabel == null) {
+            return;
+        }
+        String path = portalService.getProfilePicturePath(currentUser.username());
+        if (path == null || path.isBlank()) {
+            profilePicturePreview.setImage(null);
+            profilePicturePathLabel.setText("No profile picture selected.");
+            return;
+        }
+        File imageFile = new File(path);
+        if (!imageFile.exists()) {
+            profilePicturePreview.setImage(null);
+            profilePicturePathLabel.setText("Saved image not found.");
+            return;
+        }
+        try {
+            profilePicturePreview.setImage(new Image(imageFile.toURI().toString(), 120, 120, true, true));
+            profilePicturePathLabel.setText(path);
+        } catch (Exception e) {
+            profilePicturePreview.setImage(null);
+            profilePicturePathLabel.setText("Unable to preview image.");
+        }
+    }
+
     private StudentStaffPortalService.BorrowRecordView getSingleSelectedBorrowedRecord() {
         if (borrowedRecordTable == null) {
             showErrorPopup("Borrowed Books", "Borrowed book screen is not open.", "Open Borrowed Books first.");
@@ -1626,6 +1806,113 @@ public class StudentStaffPortalApp extends Application {
                 to
         );
         readingHistoryTable.setItems(FXCollections.observableArrayList(rows));
+        refreshReadingHistoryInsights();
+        refreshReadingBadges();
+    }
+
+    private void refreshReadingHistoryInsights() {
+        if (currentUser == null || readingInsightsChart == null) {
+            return;
+        }
+        StudentStaffPortalService.ReadingHistoryInsights insights = portalService.getReadingHistoryInsights(currentUser.username());
+        XYChart.Series<String, Number> series = new XYChart.Series<>();
+        insights.genreReadCounts().entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .limit(6)
+                .forEach(entry -> series.getData().add(new XYChart.Data<>(entry.getKey(), entry.getValue())));
+        readingInsightsChart.getData().setAll(series);
+    }
+
+    private void refreshReadingBadges() {
+        if (readingBadgeListView == null || currentUser == null) {
+            return;
+        }
+        readingBadgeListView.setItems(FXCollections.observableArrayList(portalService.getReadingBadges(currentUser.username())));
+    }
+
+    private void handleExportReadingHistoryCsv() {
+        if (currentUser == null) {
+            return;
+        }
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Export Reading History CSV");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        chooser.setInitialFileName("reading_history_" + currentUser.username() + ".csv");
+        File file = chooser.showSaveDialog(root.getScene().getWindow());
+        if (file == null) {
+            return;
+        }
+        StudentStaffPortalService.OperationResult result = portalService.exportReadingHistoryCsv(currentUser.username(), file.toPath());
+        if (!result.success()) {
+            showErrorPopup("Export Reading History", "CSV export failed", result.message());
+            return;
+        }
+        showInfoPopup("Export Reading History", "CSV exported", result.message());
+    }
+
+    private void handleExportReadingHistoryPdf() {
+        if (currentUser == null) {
+            return;
+        }
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Export Reading History PDF");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
+        chooser.setInitialFileName("reading_history_" + currentUser.username() + ".pdf");
+        File file = chooser.showSaveDialog(root.getScene().getWindow());
+        if (file == null) {
+            return;
+        }
+        StudentStaffPortalService.OperationResult result = portalService.exportReadingHistoryPdf(currentUser.username(), file.toPath());
+        if (!result.success()) {
+            showErrorPopup("Export Reading History", "PDF export failed", result.message());
+            return;
+        }
+        showInfoPopup("Export Reading History", "PDF exported", result.message());
+    }
+
+    private void handleViewBorrowedBookReviews() {
+        StudentStaffPortalService.BorrowRecordView selected = getSingleSelectedBorrowedRecord();
+        if (selected == null || currentUser == null) {
+            return;
+        }
+        String sort = borrowedReviewSortBox == null ? "MOST_RECENT" : borrowedReviewSortBox.getValue();
+        List<StudentStaffPortalService.BookReviewView> reviews = portalService.getBookReviews(selected.bookId(), sort);
+        if (reviews.isEmpty()) {
+            showInfoPopup("Reviews", "No reviews", "No reviews submitted yet.");
+            return;
+        }
+        List<String> lines = reviews.stream()
+                .limit(8)
+                .map(r -> {
+                    String name = r.anonymous() ? "Anonymous" : r.username();
+                    String text = r.reviewText() == null || r.reviewText().isBlank() ? "(rating only)" : r.reviewText();
+                    return name + " [" + r.rating() + "/5] Helpful: " + r.helpfulVotes() + "\n" + text;
+                })
+                .collect(java.util.stream.Collectors.toList());
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Book Reviews");
+        alert.setHeaderText(selected.bookTitle() + " (" + sort + ")");
+        TextArea area = new TextArea(String.join("\n\n", lines));
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setPrefColumnCount(60);
+        area.setPrefRowCount(16);
+        alert.getDialogPane().setContent(area);
+        alert.getButtonTypes().setAll(ButtonType.OK, ButtonType.APPLY, ButtonType.CANCEL);
+        ButtonType response = alert.showAndWait().orElse(ButtonType.CANCEL);
+        if (response == ButtonType.APPLY) {
+            StudentStaffPortalService.BookReviewView top = reviews.get(0);
+            StudentStaffPortalService.OperationResult vote = portalService.markReviewHelpful(
+                    currentUser.username(),
+                    selected.bookId(),
+                    top.username()
+            );
+            if (!vote.success()) {
+                showErrorPopup("Helpful Vote", "Unable to vote", vote.message());
+            } else {
+                showInfoPopup("Helpful Vote", "Saved", vote.message());
+            }
+        }
     }
 
     private void handleSubmitBookRequest() {
@@ -1658,10 +1945,12 @@ public class StudentStaffPortalApp extends Application {
         }
         List<String> rows = portalService.getMyBookRequests(currentUser.username()).stream()
                 .map(r -> "[" + r.status() + "] "
+                        + (r.urgent() ? "[URGENT] " : "")
                         + r.requestId() + " | "
                         + r.title() + " by " + r.author()
                         + " | Genre: " + r.genre()
                         + " | Submitted: " + r.createdAt().toLocalDate()
+                        + (r.decidedAt() == null ? "" : (" | Decided: " + r.decidedAt().toLocalDate()))
                         + (r.librarianComment() == null || r.librarianComment().isBlank()
                         ? ""
                         : (" | Comment: " + r.librarianComment())))
@@ -1707,8 +1996,12 @@ public class StudentStaffPortalApp extends Application {
         List<StudentStaffPortalService.NotificationView> rows = portalService.getNotificationBoard(
                         currentUser.username(),
                         notificationSearchField == null ? "" : notificationSearchField.getText(),
-                        notificationCategoryFilterBox == null ? "All" : notificationCategoryFilterBox.getValue()
+                        notificationCategoryFilterBox == null ? "All" : notificationCategoryFilterBox.getValue(),
+                        notificationArchiveFilterBox == null ? "Active" : notificationArchiveFilterBox.getValue()
                 );
+        if (notificationUnreadCounterLabel != null) {
+            notificationUnreadCounterLabel.setText("Unread: " + portalService.getUnreadNotificationCount(currentUser.username()));
+        }
         if (rows.isEmpty()) {
             notificationList.setItems(FXCollections.observableArrayList());
             return;
@@ -1751,6 +2044,12 @@ public class StudentStaffPortalApp extends Application {
         }
         String password = profilePasswordField == null ? "" : profilePasswordField.getText();
         String confirm = profileConfirmPasswordField == null ? "" : profileConfirmPasswordField.getText();
+        double strength = calculatePasswordStrength(password);
+        if (profilePasswordStrengthBar != null) {
+            profilePasswordStrengthBar.setProgress(strength);
+            String color = strength >= 0.8 ? "#16a34a" : strength >= 0.5 ? "#f59e0b" : "#dc2626";
+            profilePasswordStrengthBar.setStyle("-fx-accent: " + color + ";");
+        }
         if (password == null || password.isEmpty()) {
             profilePasswordHintLabel.setText("Leave password fields blank to keep current password.");
             profilePasswordHintLabel.setStyle("-fx-text-fill: #64748b; -fx-font-size: 11px;");
@@ -1774,6 +2073,20 @@ public class StudentStaffPortalApp extends Application {
         profilePasswordHintLabel.setStyle("-fx-text-fill: #16a34a; -fx-font-size: 11px;");
     }
 
+    private double calculatePasswordStrength(String password) {
+        if (password == null || password.isBlank()) {
+            return 0.0;
+        }
+        int score = 0;
+        if (password.length() >= 8) score++;
+        if (password.length() >= 12) score++;
+        if (password.matches(".*[a-z].*")) score++;
+        if (password.matches(".*[A-Z].*")) score++;
+        if (password.matches(".*\\d.*")) score++;
+        if (password.matches(".*[^A-Za-z0-9].*")) score++;
+        return Math.min(1.0, score / 6.0);
+    }
+
     private String formatNotificationRow(LocalDateTime timestamp, String category, String message) {
         boolean urgent = "AUTO_RETURN".equalsIgnoreCase(category)
                 || "BOOK_DELETION".equalsIgnoreCase(category)
@@ -1793,10 +2106,6 @@ public class StudentStaffPortalApp extends Application {
             showErrorPopup("Notifications", "No selection.", "Select a notification first.");
             return;
         }
-        if (selected.notificationId().startsWith("DUE-")) {
-            showInfoPopup("Notifications", "Not applicable", "Due reminders are generated dynamically and cannot be marked as read.");
-            return;
-        }
         portalService.markNotificationAsRead(currentUser.username(), selected.notificationId());
         refreshNotifications();
     }
@@ -1810,10 +2119,6 @@ public class StudentStaffPortalApp extends Application {
             showErrorPopup("Notifications", "No selection.", "Select a notification first.");
             return;
         }
-        if (selected.notificationId().startsWith("DUE-")) {
-            showInfoPopup("Notifications", "Not applicable", "Due reminders are generated dynamically and cannot be deleted.");
-            return;
-        }
         portalService.deleteNotification(currentUser.username(), selected.notificationId());
         refreshNotifications();
     }
@@ -1823,6 +2128,32 @@ public class StudentStaffPortalApp extends Application {
             return;
         }
         portalService.deleteReadNotifications(currentUser.username());
+        refreshNotifications();
+    }
+
+    private void handleArchiveTask1Notification() {
+        if (currentUser == null || notificationList == null) {
+            return;
+        }
+        StudentStaffPortalService.NotificationView selected = notificationList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showErrorPopup("Notifications", "No selection.", "Select a notification first.");
+            return;
+        }
+        portalService.archiveNotification(currentUser.username(), selected.notificationId());
+        refreshNotifications();
+    }
+
+    private void handleRestoreTask1Notification() {
+        if (currentUser == null || notificationList == null) {
+            return;
+        }
+        StudentStaffPortalService.NotificationView selected = notificationList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showErrorPopup("Notifications", "No selection.", "Select a notification first.");
+            return;
+        }
+        portalService.restoreArchivedNotification(currentUser.username(), selected.notificationId());
         refreshNotifications();
     }
 
@@ -1868,6 +2199,43 @@ public class StudentStaffPortalApp extends Application {
         return true;
     }
 
+    private void startBorrowLifecycleMonitor() {
+        stopBorrowLifecycleMonitor();
+        borrowLifecycleTimer = new Timer(true);
+        borrowLifecycleTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                Platform.runLater(() -> processBorrowLifecycleTick());
+            }
+        }, 1000, 60_000);
+    }
+
+    private void stopBorrowLifecycleMonitor() {
+        if (borrowLifecycleTimer != null) {
+            borrowLifecycleTimer.cancel();
+            borrowLifecycleTimer = null;
+        }
+    }
+
+    private void processBorrowLifecycleTick() {
+        if (activeReaderWindow != null && activeReaderWindow.isOpen() && activeReaderUsername != null && activeReaderBookId != null) {
+            Optional<LocalDate> dueDate = portalService.getActiveBorrowDueDate(activeReaderUsername, activeReaderBookId);
+            if (dueDate.isPresent() && LocalDate.now().isAfter(dueDate.get())) {
+                activeReaderWindow.forceCloseForBorrowExpiry("Borrow period expired. Closing reader before auto-return.");
+                return;
+            }
+        }
+        StudentStaffPortalService.LifecycleProcessingResult result = portalService.processBorrowLifecycleEvents();
+        if (result.autoReturnedCount() > 0 || result.reminderCount() > 0) {
+            if (currentUser != null) {
+                refreshBorrowedBookRecords();
+                refreshReturnBooks();
+                refreshReadingHistory();
+                refreshNotifications();
+            }
+        }
+    }
+
     private void startAutoSave() {
         stopAutoSave();
         autoSaveTimer = new Timer(true);
@@ -1907,7 +2275,9 @@ public class StudentStaffPortalApp extends Application {
             case "TASK1_RETURN" -> safe(returnBookIdField);
             case "TASK1_BORROWED" -> safe(borrowedRecordFilterField) + "|" + safe(bookmarkField) + "|" + safe(highlightField);
             case "TASK1_PROFILE" -> safe(profileFullNameField);
-            case "TASK1_NOTIFICATIONS" -> safe(notificationSearchField) + "|" + (notificationCategoryFilterBox == null ? "All" : notificationCategoryFilterBox.getValue());
+            case "TASK1_NOTIFICATIONS" -> safe(notificationSearchField)
+                    + "|" + (notificationCategoryFilterBox == null ? "All" : notificationCategoryFilterBox.getValue())
+                    + "|" + (notificationArchiveFilterBox == null ? "Active" : notificationArchiveFilterBox.getValue());
             case "TASK1_REQUEST_BOOK" -> safe(requestTitleField) + "|" + safe(requestAuthorField) + "|" + safe(requestGenreField) + "|" + safe(requestReasonArea);
             default -> "";
         };
@@ -1948,6 +2318,7 @@ public class StudentStaffPortalApp extends Application {
             case "TASK1_NOTIFICATIONS" -> {
                 if (p.length > 0 && notificationSearchField != null) notificationSearchField.setText(p[0]);
                 if (p.length > 1 && notificationCategoryFilterBox != null && !p[1].isBlank()) notificationCategoryFilterBox.setValue(p[1]);
+                if (p.length > 2 && notificationArchiveFilterBox != null && !p[2].isBlank()) notificationArchiveFilterBox.setValue(p[2]);
                 refreshNotifications();
             }
             case "TASK1_REQUEST_BOOK" -> {

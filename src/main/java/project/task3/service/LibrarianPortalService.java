@@ -267,7 +267,8 @@ public class LibrarianPortalService {
                         || r.title().toLowerCase().contains(keyword)
                         || r.author().toLowerCase().contains(keyword)
                         || r.genre().toLowerCase().contains(keyword))
-                .sorted(Comparator.comparing(BookRequestView::createdAt).reversed())
+                .sorted(Comparator.comparing(BookRequestView::urgent).reversed()
+                        .thenComparing(BookRequestView::createdAt).reversed())
                 .collect(Collectors.toList());
     }
 
@@ -304,6 +305,7 @@ public class LibrarianPortalService {
                     request.genre(),
                     request.reason(),
                     "APPROVED",
+                    request.urgent(),
                     safeTrim(comment).isEmpty() ? "Approved by " + normalizedLibrarian : comment.trim(),
                     request.createdAt(),
                     LocalDateTime.now()
@@ -344,6 +346,7 @@ public class LibrarianPortalService {
                     request.genre(),
                     request.reason(),
                     "REJECTED",
+                    request.urgent(),
                     safeTrim(comment).isEmpty() ? "Rejected by " + normalizedLibrarian : comment.trim(),
                     request.createdAt(),
                     LocalDateTime.now()
@@ -360,6 +363,44 @@ public class LibrarianPortalService {
             return OperationResult.success("Book request rejected: " + request.title());
         }
         return OperationResult.failure("Reject failed: request not found.");
+    }
+
+    public OperationResult setBookRequestPriority(String requestId, String librarianUsername, boolean urgent, String comment) {
+        String normalizedRequestId = safeTrim(requestId);
+        String normalizedLibrarian = safeTrim(librarianUsername);
+        if (normalizedRequestId.isEmpty() || normalizedLibrarian.isEmpty()) {
+            return OperationResult.failure("Priority update failed: invalid request or librarian.");
+        }
+        List<BookRequestView> rows = loadBookRequests();
+        for (int i = 0; i < rows.size(); i++) {
+            BookRequestView request = rows.get(i);
+            if (!normalizedRequestId.equalsIgnoreCase(request.requestId())) {
+                continue;
+            }
+            BookRequestView updated = new BookRequestView(
+                    request.requestId(),
+                    request.username(),
+                    request.title(),
+                    request.author(),
+                    request.genre(),
+                    request.reason(),
+                    request.status(),
+                    urgent,
+                    safeTrim(comment).isBlank() ? request.librarianComment() : comment.trim(),
+                    request.createdAt(),
+                    request.decidedAt()
+            );
+            rows.set(i, updated);
+            saveBookRequests(rows);
+            appendNotificationTo(
+                    request.username(),
+                    urgent ? "BOOK_REQUEST_PRIORITY" : "BOOK_REQUEST_NORMAL",
+                    "Your request \"" + request.title() + "\" priority was set to " + (urgent ? "URGENT" : "NORMAL") + ".",
+                    UserRole.STUDENT
+            );
+            return OperationResult.success("Request priority updated.");
+        }
+        return OperationResult.failure("Priority update failed: request not found.");
     }
     public OperationResult exportBorrowedBooksData(File file,
                                                    String titleFilter,
@@ -973,6 +1014,7 @@ public class LibrarianPortalService {
                 if (parts.length < 10) {
                     continue;
                 }
+                boolean urgent = parts.length >= 11 && Boolean.parseBoolean(parts[10]);
                 list.add(new BookRequestView(
                         decode(parts[0]),
                         decode(parts[1]),
@@ -981,6 +1023,7 @@ public class LibrarianPortalService {
                         decode(parts[4]),
                         decode(parts[5]),
                         decode(parts[6]),
+                        urgent,
                         decode(parts[7]),
                         LocalDateTime.parse(parts[8], HISTORY_TIME_FORMAT),
                         parts[9].isBlank() ? null : LocalDateTime.parse(parts[9], HISTORY_TIME_FORMAT)
@@ -1007,7 +1050,8 @@ public class LibrarianPortalService {
                         encode(r.status()),
                         encode(r.librarianComment() == null ? "" : r.librarianComment()),
                         r.createdAt().format(HISTORY_TIME_FORMAT),
-                        r.decidedAt() == null ? "" : r.decidedAt().format(HISTORY_TIME_FORMAT)
+                        r.decidedAt() == null ? "" : r.decidedAt().format(HISTORY_TIME_FORMAT),
+                        Boolean.toString(r.urgent())
                 ));
             }
             Files.write(Paths.get(TASK1_BOOK_REQUESTS_FILE), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
@@ -1256,6 +1300,7 @@ public class LibrarianPortalService {
             String genre,
             String reason,
             String status,
+            boolean urgent,
             String librarianComment,
             LocalDateTime createdAt,
             LocalDateTime decidedAt

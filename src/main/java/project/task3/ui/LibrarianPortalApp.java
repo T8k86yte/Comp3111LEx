@@ -124,6 +124,7 @@ public class LibrarianPortalApp extends Application {
     private TextField requestActionIdField;
     private ComboBox<String> requestActionTypeBox;
     private TextField requestActionCommentField;
+    private CheckBox requestActionUrgentCheckBox;
     private Label bookTableStatusLabel;
 
     private Timer autoSaveTimer;
@@ -1019,6 +1020,10 @@ public class LibrarianPortalApp extends Application {
         requestGenreCol.setCellValueFactory(new PropertyValueFactory<>("genre"));
         TableColumn<BookRequestView, String> requestStatusCol = new TableColumn<>("Status");
         requestStatusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
+        TableColumn<BookRequestView, String> requestPriorityCol = new TableColumn<>("Priority");
+        requestPriorityCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
+                cell.getValue().urgent() ? "URGENT" : "NORMAL"
+        ));
         TableColumn<BookRequestView, String> requestReasonCol = new TableColumn<>("Reason");
         requestReasonCol.setCellValueFactory(new PropertyValueFactory<>("reason"));
         requestReasonCol.setCellFactory(column -> new TableCell<>() {
@@ -1035,10 +1040,13 @@ public class LibrarianPortalApp extends Application {
                 setTooltip(new Tooltip(item));
             }
         });
-        bookRequestTable.getColumns().addAll(requestIdCol, requestUserCol, requestTitleCol, requestAuthorCol, requestGenreCol, requestStatusCol, requestReasonCol);
+        bookRequestTable.getColumns().addAll(requestIdCol, requestUserCol, requestTitleCol, requestAuthorCol, requestGenreCol, requestStatusCol, requestPriorityCol, requestReasonCol);
         bookRequestTable.getSelectionModel().selectedItemProperty().addListener((obs, old, val) -> {
             if (val != null && requestActionIdField != null) {
                 requestActionIdField.setText(val.requestId());
+                if (requestActionUrgentCheckBox != null) {
+                    requestActionUrgentCheckBox.setSelected(val.urgent());
+                }
             }
         });
 
@@ -1047,12 +1055,13 @@ public class LibrarianPortalApp extends Application {
         requestActionIdField.setPromptText("Request ID");
         requestActionTypeBox = new ComboBox<>(FXCollections.observableArrayList("APPROVE", "REJECT"));
         requestActionTypeBox.setValue("APPROVE");
+        requestActionUrgentCheckBox = new CheckBox("Mark as URGENT");
         requestActionCommentField = new TextField();
         requestActionCommentField.setPromptText("Optional comment");
         Button applyRequestActionBtn = new Button("Apply");
         applyRequestActionBtn.getStyleClass().add("primary-btn");
         applyRequestActionBtn.setOnAction(e -> handleBookRequestAction());
-        requestActionRow.getChildren().addAll(requestActionIdField, requestActionTypeBox, requestActionCommentField, applyRequestActionBtn);
+        requestActionRow.getChildren().addAll(requestActionIdField, requestActionTypeBox, requestActionUrgentCheckBox, requestActionCommentField, applyRequestActionBtn);
 
         requestCard.getChildren().addAll(requestHeading, requestHint, requestFilters, bookRequestTable, requestActionRow);
 
@@ -1621,6 +1630,8 @@ public class LibrarianPortalApp extends Application {
         }
         String action = requestActionTypeBox == null ? "APPROVE" : requestActionTypeBox.getValue();
         String comment = requestActionCommentField == null ? "" : requestActionCommentField.getText();
+        boolean urgent = requestActionUrgentCheckBox != null && requestActionUrgentCheckBox.isSelected();
+        portalService.setBookRequestPriority(requestId, currentUser.username(), urgent, comment);
         LibrarianPortalService.OperationResult result;
         if ("REJECT".equalsIgnoreCase(action)) {
             result = portalService.rejectBookRequest(requestId, currentUser.username(), comment);
@@ -1634,6 +1645,7 @@ public class LibrarianPortalApp extends Application {
         }
         if (requestActionCommentField != null) requestActionCommentField.clear();
         if (requestActionIdField != null) requestActionIdField.clear();
+        if (requestActionUrgentCheckBox != null) requestActionUrgentCheckBox.setSelected(false);
         refreshBookRequests();
         refreshBorrowedBooks();
     }

@@ -67,6 +67,7 @@ public class PdfReaderWindow {
     private double dragStartX;
     private double dragStartY;
     private String selectedHighlightKey;
+    private boolean closedByBorrowExpiry;
 
     private final List<Integer> bookmarks = new ArrayList<>();
     private final List<PdfReaderStateStore.HighlightRegion> highlights = new ArrayList<>();
@@ -79,6 +80,7 @@ public class PdfReaderWindow {
     }
 
     public ReaderSessionResult showAndWait(Window ownerWindow) {
+        closedByBorrowExpiry = false;
         try {
             loadPdfAndState();
         } catch (Exception ex) {
@@ -98,6 +100,27 @@ public class PdfReaderWindow {
         });
         stage.showAndWait();
         return buildSummaryResult();
+    }
+
+    public boolean isOpen() {
+        return stage.isShowing();
+    }
+
+    public boolean wasClosedByBorrowExpiry() {
+        return closedByBorrowExpiry;
+    }
+
+    public void forceCloseForBorrowExpiry(String message) {
+        if (!stage.isShowing()) {
+            return;
+        }
+        closedByBorrowExpiry = true;
+        statusLabel.setText(message == null || message.isBlank()
+                ? "Borrow period expired. Closing reader."
+                : message);
+        persistState();
+        closeResources();
+        stage.close();
     }
 
     private BorderPane buildRoot() {

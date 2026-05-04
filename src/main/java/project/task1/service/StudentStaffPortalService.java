@@ -11,6 +11,12 @@ import project.shared.notification.UnifiedNotificationStore;
 import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
 import project.task3.repo.LibrarianRepository;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -44,6 +51,11 @@ public class StudentStaffPortalService {
     private static final String TASK1_READING_PROGRESS_FILE = "data/task1/reading_progress.txt";
     private static final String TASK1_BOOK_REVIEWS_FILE = "data/task1/book_reviews.txt";
     private static final String TASK1_BOOK_REQUESTS_FILE = "data/task1/book_requests.txt";
+    private static final String TASK1_REVIEW_HELPFUL_FILE = "data/task1/review_helpful_votes.txt";
+    private static final String TASK1_NOTIFICATION_ARCHIVE_FILE = "data/task1/notification_archives.txt";
+    private static final String TASK1_PROFILE_PICTURE_FILE = "data/task1/profile_pictures.txt";
+    private static final String TASK1_PROFILE_PICTURE_DIR = "data/task1/profile_pictures";
+    private static final long MAX_PROFILE_PICTURE_SIZE_BYTES = 2L * 1024L * 1024L;
     private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     private final StudentStaffRepository studentstaffRepository;
@@ -332,12 +344,23 @@ public class StudentStaffPortalService {
     }
 
     public OperationResult autoReturnExpiredBooks() {
+        LifecycleProcessingResult result = processBorrowLifecycleEvents();
+        return OperationResult.success("Auto-return completed. Returned "
+                + result.autoReturnedCount()
+                + " overdue book(s), and sent "
+                + result.reminderCount()
+                + " reminder(s).");
+    }
+
+    public LifecycleProcessingResult processBorrowLifecycleEvents() {
         List<BorrowRecord> records = loadBorrowRecords();
         if (records.isEmpty()) {
-            return OperationResult.success("No borrowed books to process.");
+            return new LifecycleProcessingResult(0, 0);
         }
         LocalDate today = LocalDate.now();
         int returnedCount = 0;
+        int reminderCount = 0;
+        boolean recordsChanged = false;
         for (int i = 0; i < records.size(); i++) {
             BorrowRecord record = records.get(i);
             if (record.returnDate() != null) {
@@ -354,11 +377,33 @@ public class StudentStaffPortalService {
                             "Book \"" + record.bookTitle() + "\" was auto-returned after due date (" + record.dueDate() + ")."
                     );
                     returnedCount++;
+                    recordsChanged = true;
                 }
+                continue;
+            }
+            long daysLeft = ChronoUnit.DAYS.between(today, record.dueDate());
+            if (daysLeft >= 0 && daysLeft <= 3) {
+                upsertDueReminder(record, today, daysLeft);
+                reminderCount++;
             }
         }
-        saveBorrowRecords(records);
-        return OperationResult.success("Auto-return completed. Returned " + returnedCount + " overdue book(s).");
+        if (recordsChanged) {
+            saveBorrowRecords(records);
+        }
+        return new LifecycleProcessingResult(returnedCount, reminderCount);
+    }
+
+    public Optional<LocalDate> getActiveBorrowDueDate(String username, String bookId) {
+        String normalizedUser = safeTrim(username);
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        if (normalizedUser.isEmpty() || normalizedBookId.isEmpty()) {
+            return Optional.empty();
+        }
+        return loadBorrowRecords().stream()
+                .filter(r -> r.returnDate() == null)
+                .filter(r -> normalizedUser.equals(r.username()) && normalizedBookId.equalsIgnoreCase(r.bookId()))
+                .map(BorrowRecord::dueDate)
+                .findFirst();
     }
 
     public List<BorrowRecordView> getBorrowedBookRecords(String username) {
@@ -500,42 +545,82 @@ public class StudentStaffPortalService {
         return ProfileUpdateResult.success("Profile updated successfully.", passwordChanged);
     }
 
+    public OperationResult updateProfilePicture(String username, String sourcePath) {
+        String normalizedUser = safeTrim(username);
+        String normalizedPath = safeTrim(sourcePath);
+        if (normalizedUser.isEmpty() || normalizedPath.isEmpty()) {
+            return OperationResult.failure("Profile picture update failed: invalid input.");
+        }
+        Path source = Paths.get(normalizedPath);
+        if (!Files.exists(source) || !Files.isRegularFile(source)) {
+            return OperationResult.failure("Profile picture update failed: file not found.");
+        }
+        String lowerName = source.getFileName().toString().toLowerCase();
+        if (!(lowerName.endsWith(".png")
+                || lowerName.endsWith(".jpg")
+                || lowerName.endsWith(".jpeg")
+                || lowerName.endsWith(".gif")
+                || lowerName.endsWith(".webp"))) {
+            return OperationResult.failure("Profile picture update failed: allowed formats are png/jpg/jpeg/gif/webp.");
+        }
+        try {
+            long size = Files.size(source);
+            if (size > MAX_PROFILE_PICTURE_SIZE_BYTES) {
+                return OperationResult.failure("Profile picture update failed: file size must be <= 2MB.");
+            }
+            Files.createDirectories(Paths.get(TASK1_PROFILE_PICTURE_DIR));
+            String ext = lowerName.substring(lowerName.lastIndexOf('.'));
+            String safeUser = normalizedUser.replaceAll("[^A-Za-z0-9_-]", "_");
+            String filename = safeUser + "_" + System.currentTimeMillis() + ext;
+            Path target = Paths.get(TASK1_PROFILE_PICTURE_DIR, filename);
+            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+            saveProfilePicturePath(normalizedUser, target.toAbsolutePath().toString());
+            appendNotification(normalizedUser, "ANNOUNCEMENT", "Your profile picture was updated.");
+            return OperationResult.success("Profile picture updated.");
+        } catch (Exception e) {
+            return OperationResult.failure("Profile picture update failed: " + e.getMessage());
+        }
+    }
+
+    public String getProfilePicturePath(String username) {
+        String normalized = safeTrim(username);
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        return loadProfilePictures().stream()
+                .filter(row -> normalized.equals(row.username()))
+                .map(ProfilePictureRow::path)
+                .findFirst()
+                .orElse("");
+    }
+
     public List<NotificationView> getNotificationBoard(String username) {
-        return getNotificationBoard(username, "", "ALL");
+        return getNotificationBoard(username, "", "ALL", "ACTIVE");
     }
 
     public List<NotificationView> getNotificationBoard(String username, String searchFilter, String categoryFilter) {
+        return getNotificationBoard(username, searchFilter, categoryFilter, "ACTIVE");
+    }
+
+    public List<NotificationView> getNotificationBoard(String username, String searchFilter, String categoryFilter, String archiveFilter) {
         String normalized = safeTrim(username);
         if (normalized.isEmpty()) {
             return List.of();
         }
         String search = safeTrim(searchFilter).toLowerCase();
         String category = safeTrim(categoryFilter).toUpperCase();
-
-        List<NotificationView> notifications = new ArrayList<>();
-        LocalDate today = LocalDate.now();
-        for (BorrowRecord record : loadBorrowRecords()) {
-            if (!normalized.equals(record.username()) || record.returnDate() != null) {
-                continue;
-            }
-            long daysLeft = today.until(record.dueDate()).getDays();
-            if (daysLeft <= 3) {
-                String msg = daysLeft < 0
-                        ? "Book \"" + record.bookTitle() + "\" is overdue since " + record.dueDate() + "."
-                        : "Book \"" + record.bookTitle() + "\" is due on " + record.dueDate() + " (" + daysLeft + " day(s) left).";
-                notifications.add(new NotificationView(
-                        "DUE-" + record.bookId() + "-" + record.dueDate(),
-                        LocalDateTime.now(),
-                        "DUE_REMINDER",
-                        msg,
-                        false,
-                        false
-                ));
-            }
-        }
-
-        notifications.addAll(loadStoredNotifications(normalized));
+        String archiveMode = safeTrim(archiveFilter).toUpperCase();
+        List<NotificationView> notifications = loadStoredNotifications(normalized);
         return notifications.stream()
+                .filter(n -> {
+                    if ("ARCHIVED".equals(archiveMode)) {
+                        return n.archived();
+                    }
+                    if ("ALL".equals(archiveMode)) {
+                        return true;
+                    }
+                    return !n.archived();
+                })
                 .filter(n -> search.isEmpty()
                         || n.message().toLowerCase().contains(search)
                         || n.category().toLowerCase().contains(search))
@@ -557,6 +642,7 @@ public class StudentStaffPortalService {
             return List.of();
         }
         return loadStoredNotifications(normalized).stream()
+                .filter(n -> !n.archived())
                 .filter(n -> !n.read())
                 .sorted((a, b) -> {
                     if (a.isUrgent() != b.isUrgent()) {
@@ -566,6 +652,17 @@ public class StudentStaffPortalService {
                 })
                 .limit(Math.max(0, limit))
                 .collect(Collectors.toList());
+    }
+
+    public int getUnreadNotificationCount(String username) {
+        String normalized = safeTrim(username);
+        if (normalized.isEmpty()) {
+            return 0;
+        }
+        return (int) loadStoredNotifications(normalized).stream()
+                .filter(n -> !n.archived())
+                .filter(n -> !n.read())
+                .count();
     }
 
     public void markNotificationAsRead(String username, String notificationId) {
@@ -591,6 +688,10 @@ public class StudentStaffPortalService {
                 .anyMatch(n -> n.id().equals(normalizedId));
         if (owned) {
             notificationStore.deleteById(TASK1_NOTIFICATION_SCOPE, normalizedId);
+            List<NotificationArchiveEntry> rows = loadNotificationArchives().stream()
+                    .filter(a -> !(normalized.equals(a.username()) && normalizedId.equals(a.notificationId())))
+                    .collect(Collectors.toCollection(ArrayList::new));
+            saveNotificationArchives(rows);
         }
     }
 
@@ -599,7 +700,49 @@ public class StudentStaffPortalService {
         if (normalized.isEmpty()) {
             return;
         }
+        List<String> deletedIds = notificationStore.findByScopeAndUser(TASK1_NOTIFICATION_SCOPE, normalized).stream()
+                .filter(UnifiedNotification::read)
+                .map(UnifiedNotification::id)
+                .collect(Collectors.toCollection(ArrayList::new));
         notificationStore.deleteReadByUser(TASK1_NOTIFICATION_SCOPE, normalized);
+        if (deletedIds.isEmpty()) {
+            return;
+        }
+        List<NotificationArchiveEntry> remaining = loadNotificationArchives().stream()
+                .filter(a -> !normalized.equals(a.username()) || !deletedIds.contains(a.notificationId()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        saveNotificationArchives(remaining);
+    }
+
+    public void archiveNotification(String username, String notificationId) {
+        String normalized = safeTrim(username);
+        String normalizedId = safeTrim(notificationId);
+        if (normalized.isEmpty() || normalizedId.isEmpty()) {
+            return;
+        }
+        boolean owned = notificationStore.findByScopeAndUser(TASK1_NOTIFICATION_SCOPE, normalized).stream()
+                .anyMatch(n -> n.id().equals(normalizedId));
+        if (!owned) {
+            return;
+        }
+        List<NotificationArchiveEntry> rows = loadNotificationArchives();
+        boolean exists = rows.stream().anyMatch(r -> normalized.equals(r.username()) && normalizedId.equals(r.notificationId()));
+        if (!exists) {
+            rows.add(new NotificationArchiveEntry(normalized, normalizedId));
+            saveNotificationArchives(rows);
+        }
+    }
+
+    public void restoreArchivedNotification(String username, String notificationId) {
+        String normalized = safeTrim(username);
+        String normalizedId = safeTrim(notificationId);
+        if (normalized.isEmpty() || normalizedId.isEmpty()) {
+            return;
+        }
+        List<NotificationArchiveEntry> rows = loadNotificationArchives().stream()
+                .filter(r -> !(normalized.equals(r.username()) && normalizedId.equals(r.notificationId())))
+                .collect(Collectors.toCollection(ArrayList::new));
+        saveNotificationArchives(rows);
     }
 
     public void notifyBookDeletedForBorrowers(String bookId, String bookTitle) {
@@ -884,6 +1027,7 @@ public class StudentStaffPortalService {
             LocalDate end = record.returnDate() == null ? LocalDate.now() : record.returnDate();
             long durationDays = Math.max(0, ChronoUnit.DAYS.between(record.borrowDate(), end));
             ReadingProgress progress = progressByBook.getOrDefault(record.bookId().toUpperCase(), null);
+            String bookmark = progress == null ? "" : safeTrim(progress.bookmark());
             String progressText = progress == null
                     ? ""
                     : buildProgressSummary(progress.bookmark(), progress.highlightNotes());
@@ -895,6 +1039,7 @@ public class StudentStaffPortalService {
                     record.borrowDate(),
                     record.returnDate(),
                     durationDays,
+                    bookmark,
                     progressText
             ));
         }
@@ -902,7 +1047,111 @@ public class StudentStaffPortalService {
         return rows;
     }
 
+    public OperationResult exportReadingHistoryCsv(String username, Path outputPath) {
+        if (outputPath == null) {
+            return OperationResult.failure("Export failed: output path is required.");
+        }
+        List<ReadingHistoryView> rows = getReadingHistory(username, "", "", "", null, null);
+        try {
+            List<String> lines = new ArrayList<>();
+            lines.add("Book ID,Book Title,Author,Genre,Borrow Date,Return Date,Reading Duration Days,Bookmark,Reading Progress");
+            for (ReadingHistoryView row : rows) {
+                lines.add(csv(row.bookId()) + ","
+                        + csv(row.bookTitle()) + ","
+                        + csv(row.author()) + ","
+                        + csv(row.genre()) + ","
+                        + csv(row.borrowDate() == null ? "" : row.borrowDate().toString()) + ","
+                        + csv(row.returnDate() == null ? "" : row.returnDate().toString()) + ","
+                        + csv(Long.toString(row.readingDurationDays())) + ","
+                        + csv(row.bookmark()) + ","
+                        + csv(row.progressSummary()));
+            }
+            Files.write(outputPath, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            return OperationResult.success("Reading history exported to CSV: " + outputPath);
+        } catch (Exception e) {
+            return OperationResult.failure("Export failed: " + e.getMessage());
+        }
+    }
+
+    public OperationResult exportReadingHistoryPdf(String username, Path outputPath) {
+        if (outputPath == null) {
+            return OperationResult.failure("Export failed: output path is required.");
+        }
+        List<ReadingHistoryView> rows = getReadingHistory(username, "", "", "", null, null);
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            PDPageContentStream stream = new PDPageContentStream(document, page);
+            stream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 11);
+            float y = 800;
+            stream.beginText();
+            stream.newLineAtOffset(40, y);
+            stream.showText("Reading History Export - " + safeTrim(username));
+            stream.endText();
+            y -= 22;
+            for (ReadingHistoryView row : rows) {
+                String line = row.borrowDate() + " | " + row.bookTitle()
+                        + " | " + row.genre()
+                        + " | Duration " + row.readingDurationDays() + " day(s)"
+                        + " | Bookmark: " + (row.bookmark().isBlank() ? "-" : row.bookmark());
+                if (y < 60) {
+                    stream.close();
+                    page = new PDPage(PDRectangle.A4);
+                    document.addPage(page);
+                    stream = new PDPageContentStream(document, page);
+                    stream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 10);
+                    y = 800;
+                }
+                stream.beginText();
+                stream.newLineAtOffset(40, y);
+                stream.showText(line.length() > 120 ? line.substring(0, 120) : line);
+                stream.endText();
+                y -= 16;
+            }
+            stream.close();
+            document.save(outputPath.toFile());
+            return OperationResult.success("Reading history exported to PDF: " + outputPath);
+        } catch (Exception e) {
+            return OperationResult.failure("Export failed: " + e.getMessage());
+        }
+    }
+
+    public ReadingHistoryInsights getReadingHistoryInsights(String username) {
+        List<ReadingHistoryView> rows = getReadingHistory(username, "", "", "", null, null);
+        if (rows.isEmpty()) {
+            return new ReadingHistoryInsights(Map.of(), 0.0, 0);
+        }
+        Map<String, Integer> genreCounts = new HashMap<>();
+        long totalDuration = 0;
+        for (ReadingHistoryView row : rows) {
+            genreCounts.merge(safeTrim(row.genre()).isBlank() ? "Unknown" : row.genre(), 1, Integer::sum);
+            totalDuration += row.readingDurationDays();
+        }
+        double averageDuration = totalDuration / (double) rows.size();
+        return new ReadingHistoryInsights(genreCounts, averageDuration, rows.size());
+    }
+
+    public List<String> getReadingBadges(String username) {
+        List<ReadingHistoryView> rows = getReadingHistory(username, "", "", "", null, null);
+        long completed = rows.stream().filter(r -> r.returnDate() != null).count();
+        List<String> badges = new ArrayList<>();
+        if (completed >= 1) badges.add("First Book Finished");
+        if (completed >= 5) badges.add("Book Explorer: Read 5 books");
+        if (completed >= 10) badges.add("Semester Milestone: Read 10 books");
+        if (rows.stream().map(ReadingHistoryView::genre).filter(g -> g != null && !g.isBlank()).distinct().count() >= 3) {
+            badges.add("Genre Hopper: 3+ genres explored");
+        }
+        if (badges.isEmpty()) {
+            badges.add("Start reading to unlock badges");
+        }
+        return badges;
+    }
+
     public OperationResult submitBookReview(String username, String bookId, int rating, String reviewText) {
+        return submitBookReview(username, bookId, rating, reviewText, false);
+    }
+
+    public OperationResult submitBookReview(String username, String bookId, int rating, String reviewText, boolean anonymous) {
         String normalizedUser = safeTrim(username);
         String normalizedBookId = safeTrim(bookId).toUpperCase();
         String normalizedReview = reviewText == null ? "" : reviewText.trim();
@@ -930,6 +1179,7 @@ public class StudentStaffPortalService {
                 genre,
                 rating,
                 normalizedReview,
+                anonymous,
                 LocalDateTime.now()
         );
         boolean replaced = false;
@@ -950,24 +1200,63 @@ public class StudentStaffPortalService {
     }
 
     public List<BookReviewView> getBookReviews(String bookId) {
+        return getBookReviews(bookId, "MOST_RECENT");
+    }
+
+    public List<BookReviewView> getBookReviews(String bookId, String sortMode) {
         String normalizedBookId = safeTrim(bookId).toUpperCase();
         if (normalizedBookId.isEmpty()) {
             return List.of();
         }
+        String sort = safeTrim(sortMode).toUpperCase();
+        Map<String, Integer> helpfulCounts = buildHelpfulVoteCountByReview();
+        Comparator<BookReview> comparator = "MOST_HELPFUL".equals(sort)
+                ? Comparator.<BookReview>comparingInt(r -> helpfulCounts.getOrDefault(reviewKey(r.bookId(), r.username()), 0)).reversed()
+                .thenComparing(BookReview::updatedAt, Comparator.reverseOrder())
+                : Comparator.comparing(BookReview::updatedAt).reversed();
         return loadBookReviews().stream()
                 .filter(r -> normalizedBookId.equalsIgnoreCase(r.bookId()))
-                .sorted(Comparator.comparing(BookReview::updatedAt).reversed())
+                .sorted(comparator)
                 .map(r -> new BookReviewView(
                         r.username(),
+                        r.anonymous(),
                         r.bookId(),
                         r.bookTitle(),
                         r.bookAuthor(),
                         r.bookGenre(),
                         r.rating(),
                         r.reviewText(),
+                        helpfulCounts.getOrDefault(reviewKey(r.bookId(), r.username()), 0),
                         r.updatedAt()
                 ))
                 .collect(Collectors.toList());
+    }
+
+    public OperationResult markReviewHelpful(String voterUsername, String bookId, String reviewOwnerUsername) {
+        String voter = safeTrim(voterUsername);
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        String owner = safeTrim(reviewOwnerUsername);
+        if (voter.isEmpty() || normalizedBookId.isEmpty() || owner.isEmpty()) {
+            return OperationResult.failure("Helpful vote failed: invalid input.");
+        }
+        if (voter.equalsIgnoreCase(owner)) {
+            return OperationResult.failure("Helpful vote failed: you cannot vote your own review.");
+        }
+        boolean reviewExists = loadBookReviews().stream()
+                .anyMatch(r -> normalizedBookId.equalsIgnoreCase(r.bookId()) && owner.equalsIgnoreCase(r.username()));
+        if (!reviewExists) {
+            return OperationResult.failure("Helpful vote failed: review not found.");
+        }
+        List<ReviewHelpfulVote> votes = loadReviewHelpfulVotes();
+        boolean exists = votes.stream().anyMatch(v -> voter.equals(v.voterUsername())
+                && normalizedBookId.equalsIgnoreCase(v.bookId())
+                && owner.equalsIgnoreCase(v.reviewOwnerUsername()));
+        if (exists) {
+            return OperationResult.failure("Helpful vote already submitted.");
+        }
+        votes.add(new ReviewHelpfulVote(voter, normalizedBookId, owner, LocalDateTime.now()));
+        saveReviewHelpfulVotes(votes);
+        return OperationResult.success("Marked as helpful.");
     }
 
     public BookRatingSummary getBookRatingSummary(String bookId) {
@@ -1009,6 +1298,15 @@ public class StudentStaffPortalService {
         if (normalizedTitle.isEmpty() || normalizedAuthor.isEmpty() || normalizedGenre.isEmpty() || normalizedReason.isEmpty()) {
             return OperationResult.failure("Request failed: title, author, genre, and reason are all required.");
         }
+        Optional<BookRequest> duplicate = loadBookRequests().stream()
+                .filter(r -> "PENDING".equalsIgnoreCase(r.status()) || "APPROVED".equalsIgnoreCase(r.status()))
+                .filter(r -> normalizedTitle.equalsIgnoreCase(r.title()))
+                .filter(r -> normalizedAuthor.equalsIgnoreCase(r.author()))
+                .findFirst();
+        if (duplicate.isPresent()) {
+            return OperationResult.failure("Duplicate request detected: existing request ID " + duplicate.get().requestId()
+                    + " is already " + duplicate.get().status() + ".");
+        }
         String requestId = "REQ" + System.currentTimeMillis();
         List<BookRequest> rows = loadBookRequests();
         rows.add(new BookRequest(
@@ -1019,6 +1317,7 @@ public class StudentStaffPortalService {
                 normalizedGenre,
                 normalizedReason,
                 "PENDING",
+                false,
                 "",
                 LocalDateTime.now(),
                 null
@@ -1044,6 +1343,7 @@ public class StudentStaffPortalService {
                         r.genre(),
                         r.reason(),
                         r.status(),
+                        r.urgent(),
                         r.librarianComment(),
                         r.createdAt(),
                         r.decidedAt()
@@ -1170,6 +1470,10 @@ public class StudentStaffPortalService {
     }
 
     private List<NotificationView> loadStoredNotifications(String username) {
+        List<String> archivedIds = loadNotificationArchives().stream()
+                .filter(a -> username.equals(a.username()))
+                .map(NotificationArchiveEntry::notificationId)
+                .collect(Collectors.toCollection(ArrayList::new));
         return notificationStore.findByScopeAndUser(TASK1_NOTIFICATION_SCOPE, username)
                 .stream()
                 .map(n -> new NotificationView(
@@ -1178,9 +1482,114 @@ public class StudentStaffPortalService {
                         n.category().isBlank() ? n.type() : n.category(),
                         n.message(),
                         n.read(),
-                        n.priority()
+                        n.priority(),
+                        archivedIds.contains(n.id())
                 ))
                 .collect(Collectors.toList());
+    }
+
+    private void upsertDueReminder(BorrowRecord record, LocalDate today, long daysLeft) {
+        String message = daysLeft == 0
+                ? "Book \"" + record.bookTitle() + "\" is due today (" + record.dueDate() + ")."
+                : "Book \"" + record.bookTitle() + "\" is due on " + record.dueDate()
+                + " (" + daysLeft + " day(s) left).";
+        String id = "DUE_TASK1_" + record.username() + "_" + record.bookId() + "_" + today;
+        notificationStore.upsert(new UnifiedNotification(
+                id,
+                TASK1_NOTIFICATION_SCOPE,
+                record.username(),
+                "DUE_REMINDER",
+                message,
+                "DUE_REMINDER",
+                "DUE_REMINDER",
+                false,
+                daysLeft <= 1,
+                record.bookId(),
+                LocalDateTime.now()
+        ));
+    }
+
+    private List<NotificationArchiveEntry> loadNotificationArchives() {
+        Path path = Paths.get(TASK1_NOTIFICATION_ARCHIVE_FILE);
+        if (!Files.exists(path)) {
+            return new ArrayList<>();
+        }
+        try {
+            List<NotificationArchiveEntry> rows = new ArrayList<>();
+            for (String line : Files.readAllLines(path)) {
+                if (line == null || line.isBlank()) {
+                    continue;
+                }
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 2) {
+                    continue;
+                }
+                rows.add(new NotificationArchiveEntry(decode(parts[0]), decode(parts[1])));
+            }
+            return rows;
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    private void saveNotificationArchives(List<NotificationArchiveEntry> rows) {
+        try {
+            Files.createDirectories(Paths.get("data/task1"));
+            List<String> lines = new ArrayList<>();
+            for (NotificationArchiveEntry row : rows) {
+                lines.add(encode(row.username()) + "|" + encode(row.notificationId()));
+            }
+            Files.write(Paths.get(TASK1_NOTIFICATION_ARCHIVE_FILE), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private List<ProfilePictureRow> loadProfilePictures() {
+        Path path = Paths.get(TASK1_PROFILE_PICTURE_FILE);
+        if (!Files.exists(path)) {
+            return new ArrayList<>();
+        }
+        try {
+            List<ProfilePictureRow> rows = new ArrayList<>();
+            for (String line : Files.readAllLines(path)) {
+                if (line == null || line.isBlank()) {
+                    continue;
+                }
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 2) {
+                    continue;
+                }
+                rows.add(new ProfilePictureRow(decode(parts[0]), decode(parts[1])));
+            }
+            return rows;
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    private void saveProfilePicturePath(String username, String path) {
+        List<ProfilePictureRow> rows = loadProfilePictures();
+        boolean updated = false;
+        for (int i = 0; i < rows.size(); i++) {
+            ProfilePictureRow row = rows.get(i);
+            if (username.equals(row.username())) {
+                rows.set(i, new ProfilePictureRow(username, path));
+                updated = true;
+                break;
+            }
+        }
+        if (!updated) {
+            rows.add(new ProfilePictureRow(username, path));
+        }
+        try {
+            Files.createDirectories(Paths.get("data/task1"));
+            List<String> lines = new ArrayList<>();
+            for (ProfilePictureRow row : rows) {
+                lines.add(encode(row.username()) + "|" + encode(row.path()));
+            }
+            Files.write(Paths.get(TASK1_PROFILE_PICTURE_FILE), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception ignored) {
+        }
     }
 
     private OperationResult updateReadingProgress(String username, String bookId, String bookmark, String highlight) {
@@ -1296,6 +1705,7 @@ public class StudentStaffPortalService {
                 if (parts.length < 8) {
                     continue;
                 }
+                boolean anonymous = parts.length >= 9 && Boolean.parseBoolean(parts[8]);
                 list.add(new BookReview(
                         decode(parts[0]),
                         decode(parts[1]),
@@ -1304,6 +1714,7 @@ public class StudentStaffPortalService {
                         decode(parts[4]),
                         Integer.parseInt(parts[5]),
                         decode(parts[6]),
+                        anonymous,
                         LocalDateTime.parse(parts[7], HISTORY_TIME_FORMAT)
                 ));
             }
@@ -1326,12 +1737,70 @@ public class StudentStaffPortalService {
                         encode(r.bookGenre()),
                         Integer.toString(r.rating()),
                         encode(r.reviewText() == null ? "" : r.reviewText()),
-                        r.updatedAt().format(HISTORY_TIME_FORMAT)
+                        r.updatedAt().format(HISTORY_TIME_FORMAT),
+                        Boolean.toString(r.anonymous())
                 ));
             }
             Files.write(Paths.get(TASK1_BOOK_REVIEWS_FILE), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException ignored) {
         }
+    }
+
+    private List<ReviewHelpfulVote> loadReviewHelpfulVotes() {
+        Path path = Paths.get(TASK1_REVIEW_HELPFUL_FILE);
+        if (!Files.exists(path)) {
+            return new ArrayList<>();
+        }
+        try {
+            List<ReviewHelpfulVote> rows = new ArrayList<>();
+            for (String line : Files.readAllLines(path)) {
+                if (line == null || line.trim().isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 4) {
+                    continue;
+                }
+                rows.add(new ReviewHelpfulVote(
+                        decode(parts[0]),
+                        decode(parts[1]),
+                        decode(parts[2]),
+                        LocalDateTime.parse(parts[3], HISTORY_TIME_FORMAT)
+                ));
+            }
+            return rows;
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    private void saveReviewHelpfulVotes(List<ReviewHelpfulVote> votes) {
+        try {
+            Files.createDirectories(Paths.get("data/task1"));
+            List<String> lines = new ArrayList<>();
+            for (ReviewHelpfulVote v : votes) {
+                lines.add(String.join("|",
+                        encode(v.voterUsername()),
+                        encode(v.bookId()),
+                        encode(v.reviewOwnerUsername()),
+                        v.votedAt().format(HISTORY_TIME_FORMAT)
+                ));
+            }
+            Files.write(Paths.get(TASK1_REVIEW_HELPFUL_FILE), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private Map<String, Integer> buildHelpfulVoteCountByReview() {
+        Map<String, Integer> map = new HashMap<>();
+        for (ReviewHelpfulVote vote : loadReviewHelpfulVotes()) {
+            map.merge(reviewKey(vote.bookId(), vote.reviewOwnerUsername()), 1, Integer::sum);
+        }
+        return map;
+    }
+
+    private String reviewKey(String bookId, String owner) {
+        return safeTrim(bookId).toUpperCase() + "::" + safeTrim(owner).toLowerCase();
     }
 
     private List<BookRequest> loadBookRequests() {
@@ -1349,6 +1818,7 @@ public class StudentStaffPortalService {
                 if (parts.length < 10) {
                     continue;
                 }
+                boolean urgent = parts.length >= 11 && Boolean.parseBoolean(parts[10]);
                 list.add(new BookRequest(
                         decode(parts[0]),
                         decode(parts[1]),
@@ -1357,6 +1827,7 @@ public class StudentStaffPortalService {
                         decode(parts[4]),
                         decode(parts[5]),
                         decode(parts[6]),
+                        urgent,
                         decode(parts[7]),
                         LocalDateTime.parse(parts[8], HISTORY_TIME_FORMAT),
                         parts[9].isBlank() ? null : LocalDateTime.parse(parts[9], HISTORY_TIME_FORMAT)
@@ -1383,7 +1854,8 @@ public class StudentStaffPortalService {
                         encode(r.status()),
                         encode(r.librarianComment() == null ? "" : r.librarianComment()),
                         r.createdAt().format(HISTORY_TIME_FORMAT),
-                        r.decidedAt() == null ? "" : r.decidedAt().format(HISTORY_TIME_FORMAT)
+                        r.decidedAt() == null ? "" : r.decidedAt().format(HISTORY_TIME_FORMAT),
+                        Boolean.toString(r.urgent())
                 ));
             }
             Files.write(Paths.get(TASK1_BOOK_REQUESTS_FILE), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
@@ -1442,6 +1914,14 @@ public class StudentStaffPortalService {
 
     private static String encode(String value) {
         return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String csv(String value) {
+        String v = value == null ? "" : value;
+        if (v.contains(",") || v.contains("\"") || v.contains("\n")) {
+            return "\"" + v.replace("\"", "\"\"") + "\"";
+        }
+        return v;
     }
 
     private static boolean isPriorityCategory(String category) {
@@ -1515,6 +1995,7 @@ public class StudentStaffPortalService {
             LocalDate borrowDate,
             LocalDate returnDate,
             long readingDurationDays,
+            String bookmark,
             String progressSummary
     ) {}
 
@@ -1526,17 +2007,20 @@ public class StudentStaffPortalService {
             String bookGenre,
             int rating,
             String reviewText,
+            boolean anonymous,
             LocalDateTime updatedAt
     ) {}
 
     public record BookReviewView(
             String username,
+            boolean anonymous,
             String bookId,
             String bookTitle,
             String bookAuthor,
             String bookGenre,
             int rating,
             String reviewText,
+            int helpfulVotes,
             LocalDateTime updatedAt
     ) {}
 
@@ -1550,6 +2034,7 @@ public class StudentStaffPortalService {
             String genre,
             String reason,
             String status,
+            boolean urgent,
             String librarianComment,
             LocalDateTime createdAt,
             LocalDateTime decidedAt
@@ -1563,6 +2048,7 @@ public class StudentStaffPortalService {
             String genre,
             String reason,
             String status,
+            boolean urgent,
             String librarianComment,
             LocalDateTime createdAt,
             LocalDateTime decidedAt
@@ -1574,12 +2060,18 @@ public class StudentStaffPortalService {
             String category,
             String message,
             boolean read,
-            boolean urgent
+            boolean urgent,
+            boolean archived
     ) {
         public boolean isUrgent() {
             return urgent;
         }
     }
+
+    public record LifecycleProcessingResult(int autoReturnedCount, int reminderCount) {}
+
+    private record NotificationArchiveEntry(String username, String notificationId) {}
+    private record ProfilePictureRow(String username, String path) {}
 
     private record ReadingProgress(
             String username,
@@ -1593,5 +2085,18 @@ public class StudentStaffPortalService {
             String pdfPath,
             String bookmark,
             String highlightNotes
+    ) {}
+
+    public record ReadingHistoryInsights(
+            Map<String, Integer> genreReadCounts,
+            double averageReadingDurationDays,
+            int totalRecords
+    ) {}
+
+    private record ReviewHelpfulVote(
+            String voterUsername,
+            String bookId,
+            String reviewOwnerUsername,
+            LocalDateTime votedAt
     ) {}
 }
