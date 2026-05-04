@@ -295,8 +295,8 @@ public class AuthorDashboardFX extends Application {
         Button crashBtn = createMenuButton("💥 Crash Test", "Simulate application crash");
         Button randomCrashBtn = createMenuButton("🎲 Random Crash: OFF", "Toggle random runtime crashes");
 
-        statsBtn.getStyleClass().addAll("button", "primary-btn");
-        reviewsBtn.getStyleClass().addAll("button", "primary-btn");
+        statsBtn.getStyleClass().addAll("button", "white-btn");
+        reviewsBtn.getStyleClass().addAll("button", "white-btn");
         crashBtn.getStyleClass().addAll("button", "danger-btn");
 
         publishBtn.setOnAction(e -> {

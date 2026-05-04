@@ -211,3 +211,47 @@
     -fx-font-size: 13px;
     -fx-text-fill: #64748b;
 }
+
+/* Password Change Panel - Explicit label colors */
+.password-panel .label {
+    -fx-text-fill: #1e293b !important;
+    -fx-font-weight: 600;
+    -fx-font-size: 13px;
+}
+
+.password-panel .muted-label {
+    -fx-text-fill: #64748b !important;
+    -fx-font-weight: normal;
+}
+
+/* Force all labels in VBox to be visible */
+VBox .label {
+    -fx-text-fill: #1e293b;
+}
+
+/* Progress bar for password strength */
+.progress-bar {
+    -fx-accent: #ef4444;
+}
+.progress-bar .bar {
+    -fx-background-color: #ef4444;
+    -fx-background-radius: 10px;
+}
+.progress-bar .track {
+    -fx-background-color: #e2e8f0;
+    -fx-background-radius: 10px;
+}
+
+/* White button style - matching other buttons */
+.white-btn {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #1e293b;
+    -fx-font-weight: 600;
+    -fx-border-color: #e2e8f0;
+    -fx-border-radius: 10px;
+}
+
+.white-btn:hover {
+    -fx-background-color: #f8fafc;
+    -fx-border-color: #cbd5e1;
+}
