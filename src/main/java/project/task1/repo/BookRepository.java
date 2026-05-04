@@ -19,6 +19,14 @@ public interface BookRepository {
 
     boolean deleteBook(String bookId);
 
+    boolean modifyBook(String bookId,
+                       String newTitle,
+                       String newAuthor,
+                       String newGenre,
+                       String newDescription,
+                       String newFilePath,
+                       String newCoverPath);
+
     // Integration hook for Task 2/3:
     // Task 2 submits books, Task 3 approves them, then approved books are added here.
     void addApprovedBook(String title, String author, LocalDate publishDate, String summary, String genre);

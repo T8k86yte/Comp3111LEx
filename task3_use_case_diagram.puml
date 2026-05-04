@@ -11,25 +11,47 @@ rectangle "Task 3: Librarian Portal" {
     usecase "Logout" as UC_Logout
     usecase "Validate Registration" as UC_ValidateRegister
     usecase "Validate Login" as UC_ValidateLogin
+    usecase "Edit Personal Profile" as UC_EditProfile
   }
 
   package "Book Submission Management" {
-    usecase "View Filtered Book Submission List" as UC_ViewSubmissions
+    usecase "Browse Book Submissions" as UC_ViewSubmissions
     usecase "Approve Book Submission" as UC_Approve
     usecase "Reject Book Submission" as UC_Reject
-    usecase "Update Submission Data" as UC_Update
+    usecase "Notify Authors" as UC_NotifyAuthors
+  }
+
+  package "Book Management" {
+    usecase "Get Borrowed Book Records" as UC_GetBorrowedBooksRecords
+  }
+
+  package "User Management" {
+    usecase "Edit User Accounts" as UC_EditAccounts
+    usecase "Disable or Activate User Accounts" as UC_DisableActivateAccounts
+    usecase "Notify Other Users" as UC_NotifyUsers
+  }
+
+  package "Notifications" {
+    usecase "Browse Notifications" as UC_BrowseNotifications
   }
 }
 
 User --> UC_Register
 User --> UC_Login
 User --> UC_Logout
+User --> UC_EditProfile
 User --> UC_ViewSubmissions
 User --> UC_Approve
 User --> UC_Reject
+User --> UC_GetBorrowedBooksRecords
+User --> UC_EditAccounts
+User --> UC_DisableActivateAccounts
+User --> UC_BrowseNotifications
 
 UC_Register .> UC_ValidateRegister : include
 UC_Login .> UC_ValidateLogin : include
-UC_Approve .> UC_Update : include
-UC_Reject .> UC_Update : include
+UC_Approve .> UC_NotifyAuthors : include
+UC_Reject .> UC_NotifyAuthors : include
+UC_EditAccounts .> UC_NotifyUsers : include
+UC_DisableActivateAccounts .> UC_NotifyUsers : include
 @enduml

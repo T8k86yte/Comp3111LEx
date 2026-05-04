@@ -112,6 +112,33 @@ public class InMemoryBookRepository implements BookRepository {
     }
 
     @Override
+    public boolean modifyBook(String bookId,
+                       String newTitle,
+                       String newAuthor,
+                       String newGenre,
+                       String newDescription,
+                       String newFilePath,
+                       String newCoverPath) {
+        Book b = booksById.get(bookId);
+        if (b == null) return false;
+
+        //If the field is empty then keep the old value
+        String mTitle = newTitle == null || newTitle.isEmpty() ? b.getTitle() : newTitle;
+        String mAuthor = newAuthor == null || newAuthor.isEmpty() ? b.getAuthor() : newAuthor;
+        String mGenre = newGenre == null || newGenre.isEmpty() ? b.getGenre() : newGenre;
+        String mDescription = newDescription == null || newDescription.isEmpty() ? b.getSummary() : newDescription;
+        String mFilePath = newFilePath == null || newFilePath.isEmpty() ? "" : newFilePath;//TO DO: implement this
+        String mCoverPath = newCoverPath == null || newCoverPath.isEmpty() ? "" : newCoverPath;
+
+        booksById.put(bookId, new Book(bookId, mTitle, mAuthor, mGenre, b.getPublishDate(), mDescription, b.isAvailable(), b.getBorrowedByUsername(), b.getBorrowCount()));
+        //TO DO: Add filePath and coverPath to the modified book data
+
+        saveBooks();//Save the changes
+
+        return true;
+    }
+
+    @Override
     public void addApprovedBook(String title, String author, LocalDate publishDate, String summary, String genre) {
         addApprovedBook(title, author, publishDate, summary, genre, "", "");
     }

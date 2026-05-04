@@ -463,6 +463,36 @@ public class LibrarianPortalService {
         }
     }
 
+    public List<Book> getPublishedBooksScreenData() {
+        return bookRepository.findAll();
+    }
+
+
+    public OperationResult modifyBook(String bookId,
+                                      String newTitle,
+                                      String newAuthor,
+                                      String newGenre,
+                                      String newDescription,
+                                      String newFilePath,
+                                      String newCoverPath) {
+        if (bookId.isEmpty()) return OperationResult.failure("Modification failed: Id should not be empty.");
+        if (bookRepository.findById(bookId).isEmpty()) return OperationResult.failure("Modification failed: Invalid book Id.");
+
+        boolean success = bookRepository.modifyBook(bookId, newTitle, newAuthor, newGenre, newDescription, newFilePath, newCoverPath);
+        return success ? OperationResult.success("Modification successful: Modified book with Id \"" + bookId + "\".") :
+                OperationResult.failure("Modification failed: Invalid parameters.");
+    }
+    public OperationResult createBook(String title,
+                                      String author,
+                                      String genre,
+                                      String description,
+                                      String filePath,
+                                      String coverPath) {
+        bookRepository.addApprovedBook(title, author, LocalDate.now(), description, genre, filePath, coverPath);
+        return OperationResult.success("Creation successful: Created the book + \"" + title + "\".");
+    }
+
+
     private static String csv(String value) {
         String v = value == null ? "" : value;
         return "\"" + v.replace("\"", "\"\"") + "\"";
@@ -1101,6 +1131,7 @@ public class LibrarianPortalService {
                 && password.matches(".*[A-Z].*");
     }
 
+
     private static boolean filterNotification(NotificationView notification,
                                               String categoryFilter,
                                               LocalDateTime timeMin,
@@ -1304,5 +1335,13 @@ public class LibrarianPortalService {
             String librarianComment,
             LocalDateTime createdAt,
             LocalDateTime decidedAt
-    ) {}
+    ) {
+        public String getRequestId() { return requestId; }
+        public String getUsername() { return username; }
+        public String getTitle() { return title; }
+        public String getAuthor() { return author; }
+        public String getGenre() { return genre; }
+        public String getReason() { return reason; }
+        public String getStatus() { return status; }
+    }
 }
