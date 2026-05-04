@@ -193,7 +193,7 @@ public class PublishBookFX {
         // API Status
         apiStatusLabel = new Label();
         apiStatusLabel.setStyle("-fx-text-fill: #10b981; -fx-font-weight: bold; -fx-font-size: 12px;");
-        apiStatusLabel.setText("🤖 AI Powered: Multiple Summary Styles Available");
+        apiStatusLabel.setText(project.task2.service.llm.LLMService.getAPIStatus());
         
         // Title field
         VBox titleBox = new VBox(5);
