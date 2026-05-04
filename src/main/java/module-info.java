@@ -12,6 +12,14 @@ module project.library {
     requires static lombok;
     requires okhttp3;
     requires com.google.gson;
+    requires java.net.http;
+    requires org.apache.httpcomponents.httpclient;
+    requires dev.failsafe.core;
+    requires org.apache.httpcomponents.httpcore;
+    requires org.seleniumhq.selenium.api;
+    requires org.seleniumhq.selenium.chrome_driver;
+    requires org.seleniumhq.selenium.support;
+    requires org.jsoup;
 
     exports project;
     exports project.ui;

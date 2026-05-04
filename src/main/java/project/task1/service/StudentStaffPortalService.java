@@ -419,7 +419,9 @@ public class StudentStaffPortalService {
                 salt,
                 hash,
                 existing.getRole(),
-                existing.isDisabled()
+                existing.isDisabled(),
+                existing.getLastLogin(),
+                existing.getProfilePicturePath()
         );
         studentstaffRepository.save(updated);
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
@@ -493,7 +495,9 @@ public class StudentStaffPortalService {
                 salt,
                 hash,
                 existing.getRole(),
-                existing.isDisabled()//Preserve the disabled state
+                existing.isDisabled(),//Preserve the disabled state
+                existing.getLastLogin(),
+                existing.getProfilePicturePath()
         );
         studentstaffRepository.save(updated);
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");

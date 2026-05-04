@@ -376,6 +376,8 @@ public class ProfileManagementFX {
                     currentAuthor.getPasswordSalt(),
                     currentAuthor.getPasswordHash(),
                     currentAuthor.isDisabled(),
+                    currentAuthor.getLastLogin(),
+                    currentAuthor.getProfilePicturePath(),
                     newBio
                 );
                 
@@ -597,6 +599,8 @@ public class ProfileManagementFX {
                     salt,
                     hash,
                     currentAuthor.isDisabled(),
+                    currentAuthor.getLastLogin(),
+                    currentAuthor.getProfilePicturePath(),
                     currentBio
                 );
                 

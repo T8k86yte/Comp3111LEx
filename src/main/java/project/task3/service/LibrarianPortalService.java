@@ -17,6 +17,7 @@ import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
 import project.task3.model.SummaryGenerator;
 import project.task3.repo.LibrarianRepository;
+import project.task3.repo.BookChangeLogRepository;
 import project.shared.notification.UnifiedNotification;
 import project.shared.notification.UnifiedNotificationStore;
 
@@ -47,6 +48,7 @@ public class LibrarianPortalService {
     private final AuthorRepository authorRepository;
     private final SharedAuthFacade sharedAuthFacade;
     private final BookRepository bookRepository;
+    private final BookChangeLogRepository bookChangeLogRepository;
     private final SubmissionRepository bookSubmissionRepository;
     private final UnifiedNotificationStore notificationStore;
 
@@ -64,6 +66,7 @@ public class LibrarianPortalService {
         this.authorRepository = authorRepository;
         this.sharedAuthFacade = new SharedAuthFacade(studentStaffRepository, authorRepository, librarianRepository);
         this.bookRepository = bookRepository;
+        this.bookChangeLogRepository = new BookChangeLogRepository();
         this.bookSubmissionRepository = bookSubmissionRepository;
         this.notificationStore = new UnifiedNotificationStore();
         migrateLegacyTask3Notifications();
@@ -271,6 +274,13 @@ public class LibrarianPortalService {
                 .sorted(Comparator.comparing(BookRequestView::createdAt).reversed())
                 .collect(Collectors.toList());
     }
+    public String getBookRequestTitle(String requestId) {
+        List<BookRequestView> requests = loadBookRequests();
+        for (BookRequestView view : requests) {
+            if (view.requestId.equals(requestId)) return view.title;
+        }
+        return "";
+    }
 
     public OperationResult approveBookRequest(String requestId, String librarianUsername, String comment) {
         String normalizedRequestId = safeTrim(requestId);
@@ -362,6 +372,8 @@ public class LibrarianPortalService {
         }
         return OperationResult.failure("Reject failed: request not found.");
     }
+
+
     public OperationResult exportBorrowedBooksData(File file,
                                                    String titleFilter,
                                                    String borrowedByFilter,
@@ -427,7 +439,10 @@ public class LibrarianPortalService {
         return bookRepository.findAll();
     }
 
-
+    public OperationResult validateBookId(String bookId) {
+        if (bookRepository.findById(bookId).isEmpty()) return OperationResult.failure("Invalid book Id: " + bookId);
+        else return OperationResult.success("");
+    }
     public OperationResult modifyBook(String bookId,
                                       String newTitle,
                                       String newAuthor,
@@ -437,6 +452,8 @@ public class LibrarianPortalService {
                                       String newCoverPath) {
         if (bookId.isEmpty()) return OperationResult.failure("Modification failed: Id should not be empty.");
         if (bookRepository.findById(bookId).isEmpty()) return OperationResult.failure("Modification failed: Invalid book Id.");
+
+        bookChangeLogRepository.logChange(bookRepository.findById(bookId).get());//Log changes
 
         boolean success = bookRepository.modifyBook(bookId, newTitle, newAuthor, newGenre, newDescription, newFilePath, newCoverPath);
         return success ? OperationResult.success("Modification successful: Modified book with Id \"" + bookId + "\".") :
@@ -450,6 +467,9 @@ public class LibrarianPortalService {
                                       String coverPath) {
         bookRepository.addApprovedBook(title, author, LocalDate.now(), description, genre, filePath, coverPath);
         return OperationResult.success("Creation successful: Created the book + \"" + title + "\".");
+    }
+    public String getBookChangeLog(String bookId) {
+        return bookChangeLogRepository.getChangeLogs(bookId);
     }
 
 
@@ -532,7 +552,7 @@ public class LibrarianPortalService {
         return OperationResult.success("Successfully opened file: " + path);
     }
 
-    public OperationResult updateProfile(String username, String newFullName, String oldPassword, String newPassword, String confirmNewPassword, String newEmployeeID) {
+    public OperationResult updateProfile(String username, String newFullName, String oldPassword, String newPassword, String confirmNewPassword, String newEmployeeID, String newProfilePicturePath) {
         String normalizedUsername = safeTrim(username);
         String normalizedFullName = safeTrim(newFullName);
         String pwd = newPassword == null ? "" : newPassword;
@@ -578,6 +598,8 @@ public class LibrarianPortalService {
                 salt,
                 hash,
                 existing.isDisabled(),
+                existing.getLastLogin(),
+                newProfilePicturePath,
                 eID
         ));
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
@@ -696,7 +718,9 @@ public class LibrarianPortalService {
                         salt,
                         hash,
                         userStudentStaff.get().getRole(),
-                        user.isDisabled()//Preserve the disabled state
+                        user.isDisabled(),//Preserve the disabled state
+                        user.getLastLogin(),
+                        user.getProfilePicturePath()
                 ));
                 break;
             case AUTHOR:
@@ -706,6 +730,8 @@ public class LibrarianPortalService {
                         salt,
                         hash,
                         user.isDisabled(),
+                        user.getLastLogin(),
+                        user.getProfilePicturePath(),
                         userAuthor.get().getBio()
                 ));
                 break;
@@ -716,6 +742,8 @@ public class LibrarianPortalService {
                         salt,
                         hash,
                         user.isDisabled(),
+                        user.getLastLogin(),
+                        user.getProfilePicturePath(),
                         userLibrarian.get().getEmployeeID()
                 ));
                 break;

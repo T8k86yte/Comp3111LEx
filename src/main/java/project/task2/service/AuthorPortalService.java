@@ -83,6 +83,8 @@ public class AuthorPortalService {
                 salt,
                 hash,
                 false,
+                null,
+                "",
                 bio != null ? bio.trim() : ""
             );
 

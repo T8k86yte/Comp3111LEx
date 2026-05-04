@@ -2,15 +2,23 @@ package project.task3.ui;
 
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.beans.InvalidationListener;
+import javafx.beans.property.ReadOnlyStringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -18,6 +26,7 @@ import javafx.stage.WindowEvent;
 import project.shared.SharedAuthFacade;
 import project.shared.CrashSimulationManager;
 import project.task1.model.Book;
+import project.task3.model.BookDownloadHelper;
 import project.task3.model.SummaryGenerator;
 import project.task1.repo.StudentStaffRepository;
 import project.task1.model.UserAccount;
@@ -30,6 +39,9 @@ import project.task1.repo.InMemoryBookRepository;
 import project.task3.repo.LibrarianRepository;
 import project.task3.service.LibrarianPortalService;
 
+import java.awt.*;
+import java.net.URI;
+import java.net.URL;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -39,8 +51,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static javafx.application.Platform.exit;
 
@@ -91,6 +105,8 @@ public class LibrarianPortalApp extends Application {
     private TextField profilePasswordField;
     private TextField profileConfirmPasswordField;
     private TextField profileEmployeeIDField;
+    private TextField profilePicturePathField;
+    private ImageView profilePicture;
     private TextField profileOldPasswordField;
     private Label profilePasswordHintLabel;
     private Label profileStatusLabel;
@@ -101,6 +117,7 @@ public class LibrarianPortalApp extends Application {
     private PasswordField manageUsersNewPassword;
     private PasswordField manageUsersNewPasswordConfirm;
     private TableView<UserAccount> allUsersTable;
+    private HashMap<String, AtomicInteger> manageUsersBorrowCounts;
     private Label manageUsersStatusLabel;
 
     private ComboBox<String> createUsersType;
@@ -127,6 +144,7 @@ public class LibrarianPortalApp extends Application {
     private TextField requestActionIdField;
     private ComboBox<String> requestActionTypeBox;
     private TextField requestActionCommentField;
+    private TextField requestFilePathField;
     private Label bookTableStatusLabel;
 
     private TableView<Book> publishedBooksTable;
@@ -141,50 +159,6 @@ public class LibrarianPortalApp extends Application {
     private Label publishedBookStatusLabel;
 
     private Timer autoSaveTimer;
-    private static final String TASK3_PROGRESS_FILE = "data/task3/progress.txt";
-    private static final String[] progressData = new String[] {
-            "currentUser",
-            "currentScene",
-            "tableTitleFilter",
-            "tableAuthorUsernameFilter",
-            "tableGenreFilter",
-            "tableSubmissionMin",
-            "tableSubmissionMax",
-            "tableStatusFilter",
-            "approveSubmissionIdField",
-            "actionBox",
-            "rejectReasonField",
-            "registerUsernameField",
-            "registerFullNameField",
-            "registerPasswordField",
-            "registerConfirmPasswordField",
-            "registerStaffIDField",
-            "loginUsernameField",
-            "loginPasswordField",
-            "profileFullNameField",
-            "profilePasswordField",
-            "profileConfirmPasswordField",
-            "profileEmployeeIDField",
-            "profileOldPasswordField",
-            "manageUsersType",
-            "manageUsersSelectedName",
-            "manageUsersNewFullName",
-            "manageUsersNewPassword",
-            "manageUsersNewPasswordConfirm",
-            "createUsersType",
-            "createUsersUsername",
-            "createUsersFullName",
-            "createUsersPassword",
-            "createUsersPasswordConfirm",
-            "createUsersBioOrEmployeeId",
-            "notificationCategoryFilter",
-            "notificationDateMin",
-            "notificationDateMax",
-            "notificationUrgencyFilter",
-            "bookTableTitleFilter",
-            "bookTableBorrowedByFilter",
-            "bookTableStatusFilter"
-    };
 
 
     public LibrarianPortalApp() {
@@ -221,27 +195,7 @@ public class LibrarianPortalApp extends Application {
         stage.show();
         this.stage = stage;
 
-        stage.setOnCloseRequest(event -> {
-            try {
-                stopAutoSave();
-                if (event.getEventType().getName().equals("WINDOW_CLOSE_REQUEST")) Files.deleteIfExists(Paths.get(TASK3_PROGRESS_FILE));
-            } catch (Exception e) {
-                setStatus("Unable to delete the progress data file: " + e.getMessage());
-            }});
-
-        //Save progress regularly
-        startAutoSave();
-
         setStatus("Ready.");
-
-        //Load progress data if there are any, then delete the progress data file
-        if (loadProgress()) {
-            try {
-                Files.deleteIfExists(Paths.get(TASK3_PROGRESS_FILE));
-            } catch (Exception e) {
-                setStatus("Unable to delete the progress data file: " + e.getMessage());
-            }
-        }
     }
 
 
@@ -415,6 +369,22 @@ public class LibrarianPortalApp extends Application {
         profilePasswordField = new PasswordField();
         profileConfirmPasswordField = new PasswordField();
         profileEmployeeIDField = new TextField();
+        profilePicturePathField = new TextField();
+        Button selectPictureBtn = new Button("Select Profile Picture");
+        selectPictureBtn.getStyleClass().add("primary-btn");
+        selectPictureBtn.setOnAction((e) -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Select Profile Image");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("jpg or png files (*.jpg, *.png)","*.jpg", "*.png"));
+            File selectedFile = chooser.showOpenDialog(stage);
+            if (selectedFile != null) {
+                String filePath = selectedFile.getAbsolutePath();
+                profilePicturePathField.setText(filePath);
+            }
+            else profilePicturePathField.setText("");
+            handleProfilePictureUpdate();
+        });
+        profilePicture = new ImageView();
         profileOldPasswordField = new PasswordField();
         profilePasswordHintLabel = new Label();
         profilePasswordHintLabel.getStyleClass().add("muted");
@@ -431,6 +401,9 @@ public class LibrarianPortalApp extends Application {
         grid.add(profileConfirmPasswordField, 1, 3);
         grid.add(new Label("New Employee ID"), 0, 4);
         grid.add(profileEmployeeIDField, 1, 4);
+        grid.add(new Label("New Profile Picture Path"), 0, 5);
+        grid.add(profilePicturePathField, 1, 5);
+        grid.add(selectPictureBtn, 2, 5);
 
         if (currentUser != null) {
             profileFullNameField.setText(currentUser.fullName());
@@ -440,7 +413,7 @@ public class LibrarianPortalApp extends Application {
         Button updateBtn = new Button("Update Profile");
         updateBtn.getStyleClass().add("primary-btn");
         updateBtn.setOnAction(e -> handleProfileUpdate());
-        card.getChildren().addAll(heading, hint, grid, profilePasswordHintLabel, updateBtn);
+        card.getChildren().addAll(heading, hint, grid, profilePicture, profilePasswordHintLabel, updateBtn);
         return card;
     }
 
@@ -739,9 +712,9 @@ public class LibrarianPortalApp extends Application {
 
         bookSubmissionTable.getColumns().addAll(idCol, titleCol, authorUsernameCol, authorFullNameCol, genreCol, dateCol, summaryCol, statusCol);
         bookSubmissionTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);//Allow the users to select multiple items by holding ctrl
-        bookSubmissionTable.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<BookSubmission>() {
+        bookSubmissionTable.getSelectionModel().getSelectedItems().addListener(new ListChangeListener<BookSubmission>() {
             @Override
-            public void changed(ObservableValue<? extends BookSubmission> obs, BookSubmission oldSubmission, BookSubmission newSubmission) {
+            public void onChanged(Change<? extends BookSubmission> s) {
                 approveSubmissionIdField.setText(String.join(", ",
                         bookSubmissionTable.getSelectionModel().getSelectedItems().stream()
                                 .map(sub -> sub.getSubmissionId()).toList()));
@@ -787,6 +760,7 @@ public class LibrarianPortalApp extends Application {
 
         allUsersTable = new TableView<>();
         allUsersTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        manageUsersBorrowCounts = new HashMap<String, AtomicInteger>();
 
         TableColumn<UserAccount, String> usernameCol = new TableColumn<>("Username");
         usernameCol.setCellValueFactory(new PropertyValueFactory<>("username"));
@@ -800,11 +774,45 @@ public class LibrarianPortalApp extends Application {
         TableColumn<UserAccount, String> disabledCol = new TableColumn<>("is Disabled");
         disabledCol.setCellValueFactory(new PropertyValueFactory<>("disabled"));
 
-        allUsersTable.getColumns().addAll(usernameCol, fullNameCol, roleCol, disabledCol);
+        TableColumn<UserAccount, String> lastLoginCol = new TableColumn<>("Last Login Time");
+        lastLoginCol.setCellValueFactory(new PropertyValueFactory<>("LastLoginString"));
+
+        TableColumn<UserAccount, String> borrowCountCol = new TableColumn<>("Borrow Book Count");
+        borrowCountCol.setCellValueFactory((val) -> {
+            return new ReadOnlyStringProperty() {
+                @Override
+                public Object getBean() {
+                    return null;
+                }
+
+                @Override
+                public String getName() {
+                    return "Borrow Book Count";
+                }
+
+                @Override
+                public String get() {
+                    AtomicInteger v = manageUsersBorrowCounts.get(val.getValue().getUsername());
+                    return v == null ? "" : v.toString();
+                }
+
+                @Override
+                public void addListener(ChangeListener<? super String> changeListener) {}
+                @Override
+                public void removeListener(ChangeListener<? super String> changeListener) {}
+                @Override
+                public void addListener(InvalidationListener invalidationListener) {}
+                @Override
+                public void removeListener(InvalidationListener invalidationListener) {}
+            };
+        });
+
+
+        allUsersTable.getColumns().addAll(usernameCol, fullNameCol, roleCol, disabledCol, lastLoginCol, borrowCountCol);
         allUsersTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        allUsersTable.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<UserAccount>() {
+        allUsersTable.getSelectionModel().getSelectedItems().addListener(new ListChangeListener<UserAccount>() {
             @Override
-            public void changed(ObservableValue<? extends UserAccount> obs, UserAccount oldSubmission, UserAccount newSubmission) {
+            public void onChanged(Change<? extends UserAccount> c) {
                 manageUsersSelectedName.setText(String.join(", ",
                         allUsersTable.getSelectionModel().getSelectedItems().stream()
                                 .map(user -> user.getUsername()).toList()));
@@ -1080,10 +1088,27 @@ public class LibrarianPortalApp extends Application {
         requestActionTypeBox.setValue("APPROVE");
         requestActionCommentField = new TextField();
         requestActionCommentField.setPromptText("Optional comment");
+        requestFilePathField = new TextField();
+        requestFilePathField.setPromptText("Book PDF file path:");
+        Button selectFileBtn = new Button("Select Book PDF File");
+        selectFileBtn.getStyleClass().add("primary-btn");
+        selectFileBtn.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Select Book File");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files (*.pdf)","*.pdf"));
+            File selectedFile = chooser.showOpenDialog(stage);
+            if (selectedFile != null) {
+                String filePath = selectedFile.getAbsolutePath();
+                requestFilePathField.setText(filePath);
+            }
+        });
         Button applyRequestActionBtn = new Button("Apply");
         applyRequestActionBtn.getStyleClass().add("primary-btn");
         applyRequestActionBtn.setOnAction(e -> handleBookRequestAction());
-        requestActionRow.getChildren().addAll(requestActionIdField, requestActionTypeBox, requestActionCommentField, applyRequestActionBtn);
+        Button downloadBookBtn = new Button("Download Book File");
+        downloadBookBtn.getStyleClass().add("primary-btn");
+        downloadBookBtn.setOnAction(e -> handleDownloadBook());
+        requestActionRow.getChildren().addAll(requestActionIdField, requestActionTypeBox, requestActionCommentField, selectFileBtn, applyRequestActionBtn, downloadBookBtn);
 
         requestCard.getChildren().addAll(requestHeading, requestHint, requestFilters, bookRequestTable, requestActionRow);
 
@@ -1120,12 +1145,15 @@ public class LibrarianPortalApp extends Application {
         availableCol.setCellValueFactory(new PropertyValueFactory<>("Available"));
 
         publishedBooksTable.getColumns().addAll(IdCol, titleCol, authorNameCol, genreCol, descriptionCol, availableCol);
-        publishedBooksTable.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<Book>() {
+        publishedBooksTable.getSelectionModel().getSelectedItems().addListener(new ListChangeListener<Book>() {
             @Override
-            public void changed(ObservableValue<? extends Book> obs, Book oldBook, Book newBook) {
-                if (newBook != null) publishedBookSelectedId.setText(publishedBooksTable.getSelectionModel().getSelectedItem().getId());
+            public void onChanged(Change<? extends Book> s) {
+                publishedBookSelectedId.setText(String.join(", ",
+                        publishedBooksTable.getSelectionModel().getSelectedItems().stream()
+                                .map(book -> book.getId()).toList()));
             }
         });
+        publishedBooksTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
         VBox card = new VBox(10);
         card.getStyleClass().add("card");
@@ -1175,6 +1203,9 @@ public class LibrarianPortalApp extends Application {
                 publishedBookCoverPath.setText(filePath);
             }
         });
+        Button viewChangeLogBtn = new Button("View Change Logs");
+        viewChangeLogBtn.getStyleClass().add("primary-btn");
+        viewChangeLogBtn.setOnAction(event -> handleViewChangeLogs());
 
         //adjust the length of description text field dynamically
         publishedBookDescription.textProperty().addListener((obs, oldText, newText) -> {
@@ -1258,7 +1289,7 @@ public class LibrarianPortalApp extends Application {
         logoutBtn.getStyleClass().add("secondary-btn");
         logoutBtn.setOnAction(event -> handleLogout());
         crashBtn.getStyleClass().add("secondary-btn");
-        crashBtn.setOnAction(event -> { saveProgress(); exit(); });
+        crashBtn.setOnAction(event -> { exit(); });
 
         switch (disable) {
             case 0: acceptReject.setDisable(true);
@@ -1517,7 +1548,8 @@ public class LibrarianPortalApp extends Application {
                 profileOldPasswordField == null ? "" : profileOldPasswordField.getText(),
                 password,
                 passwordConfirm,
-                profileEmployeeIDField == null ? "" : profileEmployeeIDField.getText()
+                profileEmployeeIDField == null ? "" : profileEmployeeIDField.getText(),
+                profilePicturePathField == null ? "" : profilePicturePathField.getText()
         );
         setStatus(result.message());
         if (!result.success()) {
@@ -1537,6 +1569,27 @@ public class LibrarianPortalApp extends Application {
         //If the password is changed, logout automatically, show popup otherwise.
         if (result.message().equals("Profile updated successfully with password changed.")) handleLogout();
         else showInfoPopup("Profile Update", "Success", result.message());
+    }
+
+    private void handleProfilePictureUpdate() {
+        try {
+            String path = profilePicturePathField.getText();
+            if (Files.size(Path.of(path)) > 3 * 1024 * 1024) {
+                showErrorPopup("Set Profile Picture", "Action Failed", "The picture file should be smaller than 5MB.");
+                return;
+            }
+            String url = "file:" + path;
+            Image img = path.isEmpty() ? null : new Image(url);
+            profilePicture.setImage(img);
+            profilePicture.setFitWidth(300);
+            profilePicture.setFitHeight(200);
+            profilePicture.setPreserveRatio(true);
+
+        } catch (Exception e) {
+            showErrorPopup("Set Profile Picture", "Action Failed", "File does not exist or has invalid format.");
+            profilePicturePathField.setText("");
+            profilePicture.setImage(null);
+        }
     }
 
     private void handleUserEdit() {
@@ -1757,18 +1810,42 @@ public class LibrarianPortalApp extends Application {
             return;
         }
 
-        LibrarianPortalService.OperationResult result = portalService.modifyBook(
-                publishedBookSelectedId.getText(),
-                publishedBookTitle.getText(),
-                publishedBookAuthorName.getText(),
-                publishedBookGenre.getText(),
-                publishedBookDescription.getText(),
-                publishedBookFilePath.getText(),
-                publishedBookCoverPath.getText());
+        String[] IDRaw = publishedBookSelectedId.getText().split(",");
+        String[] IDs = new String[IDRaw.length];
+        for (int i = 0; i < IDRaw.length; i++)  IDs[i] = IDRaw[i].trim();
 
-        if (!result.success()) showErrorPopup("Modify Book", "Action failed", result.message());
-        setStatus(result.message());
+        for (String bookId : IDs) {
+            LibrarianPortalService.OperationResult result = portalService.validateBookId(bookId);
+            if (!result.success()) {
+                showErrorPopup("Modify Book", "Action failed", result.message());
+                return;
+            }
+        }
+
+        //If at least one operation fails, show all the error messages in the popup
+        StringBuilder failInfo = new StringBuilder();
+        for (String subId : IDs) {
+            LibrarianPortalService.OperationResult result = portalService.modifyBook(
+                    subId,
+                    publishedBookTitle.getText(),
+                    publishedBookAuthorName.getText(),
+                    publishedBookGenre.getText(),
+                    publishedBookDescription.getText(),
+                    publishedBookFilePath.getText(),
+                    publishedBookCoverPath.getText());
+            if (!result.success()) {
+                failInfo.append(result.message());
+                failInfo.append("\n\n");
+            }
+        }
+        if (failInfo.isEmpty()) setStatus("Modification successful: The selected books are all modified.");
+        else {
+            failInfo.delete(failInfo.length() - 2, failInfo.length());
+            showErrorPopup("Modify Book", "At least one action failed", failInfo.toString());
+            setStatus("Modification failed: At least one of the selected books cannot be modified.");
+        }
         refreshPublishedBooks();
+        approveSubmissionIdField.clear();
     }
 
     private void handleCreateBook() {
@@ -1825,6 +1902,49 @@ public class LibrarianPortalApp extends Application {
         new generateThread(path, publishedBookDescription, publishedBookGenerateButton, recoverText).start();
     }
 
+    private void handleDownloadBook() {
+        String requestId = requestActionIdField == null ? "" : requestActionIdField.getText().trim();
+        if (requestId.isEmpty()) {
+            showErrorPopup("Download Requested Book", "Request ID required.", "Select a request or type a request ID.");
+            return;
+        }
+
+        Desktop desktop = Desktop.getDesktop();
+        String link;
+        try {
+            link = BookDownloadHelper.getDownloadURL(portalService.getBookRequestTitle(requestId));
+            if (!link.isEmpty()) desktop.browse(new URI(link));
+        } catch (Exception e) {
+            showErrorPopup("Download Book", "Action Failed", "Could not access target webpage.");
+            setStatus("Download failed: Unable to access webpage.");
+            return;
+        }
+        if (link.isEmpty()) {
+            showErrorPopup("Download Book", "Action Failed", "Could not find available books.");
+            setStatus("Download failed: No available books found.");
+        }
+        else setStatus("Download successful.");
+    }
+
+    private void handleViewChangeLogs() {
+        String[] vals = publishedBookSelectedId.getText().split(",");
+        if (vals.length > 1) {
+            showErrorPopup("View Change Logs", "Action failed", "You can only view one book's change log at once.");
+            return;
+        }
+        String id = vals[0];
+        if (id.isEmpty()) {
+            showErrorPopup("View Change Logs", "Action failed", "Please select a book to view.");
+            return;
+        }
+        String logs = portalService.getBookChangeLog(id);
+        if (logs == null) {
+            showErrorPopup("View Change Logs", "Action failed", "Invalid Book Id, or the book was not changed.");
+            return;
+        }
+        showInfoPopup("Change Logs", "Change Log for book with id " + id, logs);
+    }
+
 
     private void refreshBorrowedBooks() {
         borrowedBooksTable.setItems(FXCollections.observableArrayList(
@@ -1879,6 +1999,11 @@ public class LibrarianPortalApp extends Application {
     }
 
     private void refreshEditUsers() {
+        for (LibrarianPortalService.BorrowedBookRecordView b : portalService.getBorrowedBookRecords("", "", "")) {
+            AtomicInteger v = manageUsersBorrowCounts.get(b.borrowerUsername());
+            if (v == null) manageUsersBorrowCounts.put(b.borrowerUsername(), new AtomicInteger(1));
+            else v.set(v.intValue() + 1);
+        }
         allUsersTable.setItems(FXCollections.observableArrayList(portalService.getUsersScreenData(manageUsersType.getValue())));
         allUsersTable.refresh();
     }
@@ -2195,61 +2320,6 @@ public class LibrarianPortalApp extends Application {
             return false;
         }
         return true;
-    }
-
-    private void saveProgress() {//Save the current page and the contents in all the pages to a file
-        try {
-            Files.createDirectories(Paths.get("data/task3"));
-        } catch (IOException e) {
-            System.err.println("Error creating data directory: " + e.getMessage());
-        }
-
-        try {//Save values in each field to the file
-            Path path = Paths.get(TASK3_PROGRESS_FILE);
-            List<String> lines = new ArrayList<>();
-            for (String f : progressData) lines.add(f + ":" + getFieldValue(f));
-            Files.write(path, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            System.out.println("Saved progress data to file.");
-        } catch (IOException e) {
-            System.err.println("Error saving progress data: " + e.getMessage());
-        }
-    }
-    private boolean loadProgress() {
-        int separateInd;
-        try {
-            Path path = Paths.get(TASK3_PROGRESS_FILE);
-            if (Files.exists(path)) {
-                List<String> lines = Files.readAllLines(path);
-                for (String line : lines) {
-                    if (!line.isEmpty()) {
-                        separateInd = line.indexOf(':');
-                        if (separateInd == -1) {
-                            showErrorPopup("Restore Progress", "Action failed", "Invalid progress data: " + line);
-                            return false;
-                        }
-                        if (!setFieldValue(line.substring(0, separateInd), line.substring(separateInd + 1))) {
-                            showErrorPopup("Restore Progress", "Action failed", "Invalid progress data: " + line);
-                            return false;
-                        }
-                    }
-                }
-                System.out.println("Loaded progress data from file.");
-            } else System.out.println("No existing progress files were found.");
-        } catch (IOException e) {
-            System.err.println("Error loading progress: " + e.getMessage());
-        }
-        return true;
-    }
-
-    private void startAutoSave() {
-        stopAutoSave();
-        autoSaveTimer = new Timer(true);
-        autoSaveTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                Platform.runLater(() -> saveProgress());
-            }
-        }, 1000, 1000);
     }
 
     private void stopAutoSave() {
