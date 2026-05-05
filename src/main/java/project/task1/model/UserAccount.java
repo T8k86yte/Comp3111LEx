@@ -1,5 +1,8 @@
 package project.task1.model;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 
 public class UserAccount {
@@ -9,6 +12,8 @@ public class UserAccount {
     private final String passwordHashBase64;
     private final UserRole role;
     private boolean disabled;
+    private LocalDate lastLogin;
+    private String profilePicturePath;
 
     public UserAccount(
             String username,
@@ -16,7 +21,9 @@ public class UserAccount {
             String passwordSaltBase64,
             String passwordHashBase64,
             UserRole role,
-            boolean disabled
+            boolean disabled,
+            LocalDate lastLogin,
+            String profilePicturePath
     ) {
         this.username = Objects.requireNonNull(username, "username must not be null");
         this.fullName = Objects.requireNonNull(fullName, "fullName must not be null");
@@ -24,6 +31,8 @@ public class UserAccount {
         this.passwordHashBase64 = Objects.requireNonNull(passwordHashBase64, "passwordHashBase64 must not be null");
         this.role = Objects.requireNonNull(role, "role must not be null");
         this.disabled = disabled;
+        this.lastLogin = lastLogin;
+        this.profilePicturePath = profilePicturePath;
     }
 
     public String getUsername() {
@@ -50,4 +59,11 @@ public class UserAccount {
     public String getDisabledString() { return disabled ? "Yes" : "No"; }
 
     public void setDisabled(boolean d) { disabled = d; }
+
+    public LocalDate getLastLogin() { return lastLogin; }
+    public String getLastLoginString() { return lastLogin == null ? "" : lastLogin.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")); }
+    public void updateLastLogin() { lastLogin = LocalDate.now(); }
+
+    public String getProfilePicturePath() { return profilePicturePath == null ? "" : profilePicturePath; }
+    public void setProfilePicturePath(String p) { profilePicturePath = p; }
 }

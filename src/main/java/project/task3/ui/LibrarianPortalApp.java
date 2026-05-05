@@ -2,21 +2,33 @@ package project.task3.ui;
 
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.beans.InvalidationListener;
+import javafx.beans.property.ReadOnlyStringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import project.shared.SharedAuthFacade;
 import project.shared.CrashSimulationManager;
+import project.task1.model.Book;
+import project.task3.model.BookDownloadHelper;
+import project.task3.model.SummaryGenerator;
 import project.task1.repo.StudentStaffRepository;
 import project.task1.model.UserAccount;
 import project.task2.model.BookSubmission;
@@ -28,6 +40,9 @@ import project.task1.repo.InMemoryBookRepository;
 import project.task3.repo.LibrarianRepository;
 import project.task3.service.LibrarianPortalService;
 
+import java.awt.*;
+import java.net.URI;
+import java.net.URL;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -37,8 +52,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static javafx.application.Platform.exit;
 
@@ -56,6 +73,7 @@ public class LibrarianPortalApp extends Application {
     private Scene notificationScene;
     private Scene manageUsersScene;
     private Scene borrowedBooksScene;
+    private Scene publishedBooksScene;
 
     private Label currentUserLabel;
     private TableView<BookSubmission> bookSubmissionTable;
@@ -88,6 +106,8 @@ public class LibrarianPortalApp extends Application {
     private TextField profilePasswordField;
     private TextField profileConfirmPasswordField;
     private TextField profileEmployeeIDField;
+    private TextField profilePicturePathField;
+    private ImageView profilePicture;
     private TextField profileOldPasswordField;
     private Label profilePasswordHintLabel;
     private Label profileStatusLabel;
@@ -98,6 +118,7 @@ public class LibrarianPortalApp extends Application {
     private PasswordField manageUsersNewPassword;
     private PasswordField manageUsersNewPasswordConfirm;
     private TableView<UserAccount> allUsersTable;
+    private HashMap<String, AtomicInteger> manageUsersBorrowCounts;
     private Label manageUsersStatusLabel;
 
     private ComboBox<String> createUsersType;
@@ -124,54 +145,28 @@ public class LibrarianPortalApp extends Application {
     private TextField requestActionIdField;
     private ComboBox<String> requestActionTypeBox;
     private TextField requestActionCommentField;
+    private TextField requestFilePathField;
+    private ProgressBar requestDownloadBar;
+    private Label requestStatistic;
+    private Label requestAlternate;
     private CheckBox requestActionUrgentCheckBox;
     private TableView<BookRequestView> requestHistoryTable;
     private TextField requestHistoryUserFilter;
     private TextField requestHistoryKeywordFilter;
     private Label bookTableStatusLabel;
 
+    private TableView<Book> publishedBooksTable;
+    private TextField publishedBookSelectedId;
+    private TextField publishedBookTitle;
+    private TextField publishedBookAuthorName;
+    private TextField publishedBookGenre;
+    private TextField publishedBookDescription;
+    private Button publishedBookGenerateButton;
+    private TextField publishedBookFilePath;
+    private TextField publishedBookCoverPath;
+    private Label publishedBookStatusLabel;
+
     private Timer autoSaveTimer;
-    private static final String TASK3_PROGRESS_FILE = "data/task3/progress.txt";
-    private static final String[] progressData = new String[] {
-            "currentUser",
-            "currentScene",
-            "tableTitleFilter",
-            "tableAuthorUsernameFilter",
-            "tableGenreFilter",
-            "tableSubmissionMin",
-            "tableSubmissionMax",
-            "tableStatusFilter",
-            "approveSubmissionIdField",
-            "actionBox",
-            "rejectReasonField",
-            "registerUsernameField",
-            "registerFullNameField",
-            "registerPasswordField",
-            "registerConfirmPasswordField",
-            "registerStaffIDField",
-            "loginUsernameField",
-            "loginPasswordField",
-            "profileFullNameField",
-            "profilePasswordField",
-            "profileConfirmPasswordField",
-            "profileEmployeeIDField",
-            "profileOldPasswordField",
-            "manageUsersType",
-            "manageUsersSelectedName",
-            "manageUsersNewFullName",
-            "manageUsersNewPassword",
-            "manageUsersNewPasswordConfirm",
-            "createUsersType",
-            "createUsersUsername",
-            "createUsersFullName",
-            "createUsersPassword",
-            "createUsersPasswordConfirm",
-            "createUsersBioOrEmployeeId",
-            "notificationCategoryFilter",
-            "notificationDateMin",
-            "notificationDateMax",
-            "notificationUrgencyFilter"
-    };
 
 
     public LibrarianPortalApp() {
@@ -201,33 +196,14 @@ public class LibrarianPortalApp extends Application {
         notificationScene = buildNotificattionScene();
         manageUsersScene = buildManageUsersScene();
         borrowedBooksScene = buildBorrowedBooksScene();
+        publishedBooksScene = buildPublishedBooksScene();
 
         stage.setTitle("Task 3 - Librarian Portal");
         stage.setScene(loginRegisterScene);
         stage.show();
         this.stage = stage;
 
-        stage.setOnCloseRequest(event -> {
-            try {
-                stopAutoSave();
-                if (event.getEventType().getName().equals("WINDOW_CLOSE_REQUEST")) Files.deleteIfExists(Paths.get(TASK3_PROGRESS_FILE));
-            } catch (Exception e) {
-                setStatus("Unable to delete the progress data file: " + e.getMessage());
-            }});
-
-        //Save progress regularly
-        startAutoSave();
-
         setStatus("Ready.");
-
-        //Load progress data if there are any, then delete the progress data file
-        if (loadProgress()) {
-            try {
-                Files.deleteIfExists(Paths.get(TASK3_PROGRESS_FILE));
-            } catch (Exception e) {
-                setStatus("Unable to delete the progress data file: " + e.getMessage());
-            }
-        }
     }
 
 
@@ -343,6 +319,22 @@ public class LibrarianPortalApp extends Application {
         return scene;
     }
 
+    private Scene buildPublishedBooksScene() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setTop(new HBox(18, buildSceneSelector(5)));
+        root.setCenter(buildPublishedBooksView());
+        publishedBookStatusLabel = new Label();
+        root.setBottom(buildStatusBar(publishedBookStatusLabel));
+
+        Scene scene = new Scene(root, 1060, 700);
+        scene.getStylesheets().add(
+                getClass().getResource("/project/task1/ui/light-theme.css").toExternalForm()
+        );
+
+        return scene;
+    }
+
 
     private VBox buildLoginHeader() {
         VBox wrapper = new VBox(20);
@@ -385,6 +377,22 @@ public class LibrarianPortalApp extends Application {
         profilePasswordField = new PasswordField();
         profileConfirmPasswordField = new PasswordField();
         profileEmployeeIDField = new TextField();
+        profilePicturePathField = new TextField();
+        Button selectPictureBtn = new Button("Select Profile Picture");
+        selectPictureBtn.getStyleClass().add("primary-btn");
+        selectPictureBtn.setOnAction((e) -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Select Profile Image");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("jpg or png files (*.jpg, *.png)","*.jpg", "*.png"));
+            File selectedFile = chooser.showOpenDialog(stage);
+            if (selectedFile != null) {
+                String filePath = selectedFile.getAbsolutePath();
+                profilePicturePathField.setText(filePath);
+            }
+            else profilePicturePathField.setText("");
+            handleProfilePictureUpdate();
+        });
+        profilePicture = new ImageView();
         profileOldPasswordField = new PasswordField();
         profilePasswordHintLabel = new Label();
         profilePasswordHintLabel.getStyleClass().add("muted");
@@ -401,6 +409,9 @@ public class LibrarianPortalApp extends Application {
         grid.add(profileConfirmPasswordField, 1, 3);
         grid.add(new Label("New Employee ID"), 0, 4);
         grid.add(profileEmployeeIDField, 1, 4);
+        grid.add(new Label("New Profile Picture Path"), 0, 5);
+        grid.add(profilePicturePathField, 1, 5);
+        grid.add(selectPictureBtn, 2, 5);
 
         if (currentUser != null) {
             profileFullNameField.setText(currentUser.fullName());
@@ -410,7 +421,7 @@ public class LibrarianPortalApp extends Application {
         Button updateBtn = new Button("Update Profile");
         updateBtn.getStyleClass().add("primary-btn");
         updateBtn.setOnAction(e -> handleProfileUpdate());
-        card.getChildren().addAll(heading, hint, grid, profilePasswordHintLabel, updateBtn);
+        card.getChildren().addAll(heading, hint, grid, profilePicture, profilePasswordHintLabel, updateBtn);
         return card;
     }
 
@@ -709,9 +720,9 @@ public class LibrarianPortalApp extends Application {
 
         bookSubmissionTable.getColumns().addAll(idCol, titleCol, authorUsernameCol, authorFullNameCol, genreCol, dateCol, summaryCol, statusCol);
         bookSubmissionTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);//Allow the users to select multiple items by holding ctrl
-        bookSubmissionTable.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<BookSubmission>() {
+        bookSubmissionTable.getSelectionModel().getSelectedItems().addListener(new ListChangeListener<BookSubmission>() {
             @Override
-            public void changed(ObservableValue<? extends BookSubmission> obs, BookSubmission oldSubmission, BookSubmission newSubmission) {
+            public void onChanged(Change<? extends BookSubmission> s) {
                 approveSubmissionIdField.setText(String.join(", ",
                         bookSubmissionTable.getSelectionModel().getSelectedItems().stream()
                                 .map(sub -> sub.getSubmissionId()).toList()));
@@ -757,6 +768,7 @@ public class LibrarianPortalApp extends Application {
 
         allUsersTable = new TableView<>();
         allUsersTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        manageUsersBorrowCounts = new HashMap<String, AtomicInteger>();
 
         TableColumn<UserAccount, String> usernameCol = new TableColumn<>("Username");
         usernameCol.setCellValueFactory(new PropertyValueFactory<>("username"));
@@ -770,11 +782,45 @@ public class LibrarianPortalApp extends Application {
         TableColumn<UserAccount, String> disabledCol = new TableColumn<>("is Disabled");
         disabledCol.setCellValueFactory(new PropertyValueFactory<>("disabled"));
 
-        allUsersTable.getColumns().addAll(usernameCol, fullNameCol, roleCol, disabledCol);
+        TableColumn<UserAccount, String> lastLoginCol = new TableColumn<>("Last Login Time");
+        lastLoginCol.setCellValueFactory(new PropertyValueFactory<>("LastLoginString"));
+
+        TableColumn<UserAccount, String> borrowCountCol = new TableColumn<>("Borrow Book Count");
+        borrowCountCol.setCellValueFactory((val) -> {
+            return new ReadOnlyStringProperty() {
+                @Override
+                public Object getBean() {
+                    return null;
+                }
+
+                @Override
+                public String getName() {
+                    return "Borrow Book Count";
+                }
+
+                @Override
+                public String get() {
+                    AtomicInteger v = manageUsersBorrowCounts.get(val.getValue().getUsername());
+                    return v == null ? "" : v.toString();
+                }
+
+                @Override
+                public void addListener(ChangeListener<? super String> changeListener) {}
+                @Override
+                public void removeListener(ChangeListener<? super String> changeListener) {}
+                @Override
+                public void addListener(InvalidationListener invalidationListener) {}
+                @Override
+                public void removeListener(InvalidationListener invalidationListener) {}
+            };
+        });
+
+
+        allUsersTable.getColumns().addAll(usernameCol, fullNameCol, roleCol, disabledCol, lastLoginCol, borrowCountCol);
         allUsersTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        allUsersTable.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<UserAccount>() {
+        allUsersTable.getSelectionModel().getSelectedItems().addListener(new ListChangeListener<UserAccount>() {
             @Override
-            public void changed(ObservableValue<? extends UserAccount> obs, UserAccount oldSubmission, UserAccount newSubmission) {
+            public void onChanged(Change<? extends UserAccount> c) {
                 manageUsersSelectedName.setText(String.join(", ",
                         allUsersTable.getSelectionModel().getSelectedItems().stream()
                                 .map(user -> user.getUsername()).toList()));
@@ -903,9 +949,92 @@ public class LibrarianPortalApp extends Application {
     private VBox buildBorrowedBooksView() {
         VBox wrapper = new VBox(10);
         wrapper.setPadding(new Insets(8, 18, 18, 18));
-        Label heading = new Label("Request Approval");
+        Label heading = new Label("Borrowed Books");
         heading.getStyleClass().add("section-title");
 
+        borrowedBooksTable = new TableView<>();
+        borrowedBooksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+
+        TableColumn<BorrowedBookRecordView, String> IdCol = new TableColumn<>("Id");
+        IdCol.setCellValueFactory(new PropertyValueFactory<>("bookId"));
+
+        TableColumn<BorrowedBookRecordView, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("bookTitle"));
+
+        TableColumn<BorrowedBookRecordView, String> borrowedByCol = new TableColumn<>("Borrowed By");
+        borrowedByCol.setCellValueFactory(new PropertyValueFactory<>("borrowerUsername"));
+
+        TableColumn<BorrowedBookRecordView, Object> borrowDateCol = new TableColumn<>("Borrowed Date");
+        borrowDateCol.setCellValueFactory(new PropertyValueFactory<>("borrowDate"));
+
+        TableColumn<BorrowedBookRecordView, Object> returnDateCol = new TableColumn<>("Returning Date");
+        returnDateCol.setCellValueFactory(new PropertyValueFactory<>("returnDate"));
+
+        TableColumn<BorrowedBookRecordView, String> stateCol = new TableColumn<>("State");
+        stateCol.setCellValueFactory(new PropertyValueFactory<>("statusAlt"));
+
+        TableColumn<BorrowedBookRecordView, String> overdueCol = new TableColumn<>("Overdue");
+        overdueCol.setCellValueFactory(new PropertyValueFactory<>("overdue"));
+
+        titleCol.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                    return;
+                }
+                BorrowedBookRecordView rowBook = getTableRow() == null ? null : getTableRow().getItem();
+
+                setText(item);
+                if (rowBook != null && rowBook.overdue()) {
+                    setStyle("-fx-text-fill: #dc2626; -fx-font-weight: 600;");
+                } else {
+                    setStyle("-fx-text-fill: #111827;");
+                }
+            }
+        });
+
+        borrowedBooksTable.getColumns().addAll(IdCol, titleCol, borrowedByCol, borrowDateCol, returnDateCol, stateCol, overdueCol);
+
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        card.setPrefWidth(320);
+
+        Label cardHeading = new Label("Borrowed Books");
+        cardHeading.getStyleClass().add("card-title");
+        Label hint = new Label("Use filters to search for borrowed books.");
+        hint.getStyleClass().add("muted");
+
+
+
+        bookTableTitleFilter = new TextField();
+        bookTableBorrowedByFilter = new TextField();
+        bookTableStatusFilter = new ComboBox<>(FXCollections.observableArrayList("ALL", "BORROWED", "RETURNED", "OVERDUE"));
+        bookTableStatusFilter.setValue("ALL");
+
+        Button refreshBtn = new Button("Refresh Table");
+        refreshBtn.getStyleClass().add("primary-btn");
+        refreshBtn.setOnAction(event -> refreshBorrowedBooks());
+        Button exportBtn = new Button("Export Record");
+        exportBtn.getStyleClass().add("primary-btn");
+        exportBtn.setOnAction(event -> handleExportBorrowedBooks());
+
+        HBox filters = new HBox(5);
+        HBox actions = new HBox(5);
+        filters.getChildren().add(new Label("Title: "));
+        filters.getChildren().add(bookTableTitleFilter);
+        filters.getChildren().add(new Label("Borrowed By: "));
+        filters.getChildren().add(bookTableBorrowedByFilter);
+        filters.getChildren().add(new Label("Status: "));
+        filters.getChildren().add(bookTableStatusFilter);
+        actions.getChildren().add(refreshBtn);
+        actions.getChildren().add(exportBtn);
+
+        card.getChildren().addAll(heading, hint, filters, actions);
+
+        VBox.setVgrow(borrowedBooksTable, Priority.ALWAYS);
         VBox requestCard = new VBox(10);
         requestCard.getStyleClass().add("card");
         Label requestHeading = new Label("Student/Staff Book Requests");
@@ -921,20 +1050,21 @@ public class LibrarianPortalApp extends Application {
         Button refreshRequestsBtn = new Button("Refresh Requests");
         refreshRequestsBtn.getStyleClass().add("secondary-btn");
         refreshRequestsBtn.setOnAction(e -> refreshBookRequests());
-        requestFilters.getChildren().addAll(new Label("Filter:"), bookRequestKeywordFilter, bookRequestStatusFilter, refreshRequestsBtn);
+        requestStatistic = new Label();
+        requestFilters.getChildren().addAll(new Label("Filter:"), bookRequestKeywordFilter, bookRequestStatusFilter, refreshRequestsBtn, requestStatistic);
 
         bookRequestTable = new TableView<>();
         bookRequestTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         TableColumn<BookRequestView, String> requestIdCol = new TableColumn<>("Request ID");
-        requestIdCol.setCellValueFactory(new PropertyValueFactory<>("requestId"));
+        requestIdCol.setCellValueFactory(new PropertyValueFactory<>("RequestId"));
         TableColumn<BookRequestView, String> requestUserCol = new TableColumn<>("Requester");
-        requestUserCol.setCellValueFactory(new PropertyValueFactory<>("username"));
+        requestUserCol.setCellValueFactory(new PropertyValueFactory<>("Username"));
         TableColumn<BookRequestView, String> requestTitleCol = new TableColumn<>("Title");
-        requestTitleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+        requestTitleCol.setCellValueFactory(new PropertyValueFactory<>("Title"));
         TableColumn<BookRequestView, String> requestAuthorCol = new TableColumn<>("Author");
-        requestAuthorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
+        requestAuthorCol.setCellValueFactory(new PropertyValueFactory<>("Author"));
         TableColumn<BookRequestView, String> requestGenreCol = new TableColumn<>("Genre");
-        requestGenreCol.setCellValueFactory(new PropertyValueFactory<>("genre"));
+        requestGenreCol.setCellValueFactory(new PropertyValueFactory<>("Genre"));
         TableColumn<BookRequestView, String> requestStatusCol = new TableColumn<>("Status");
         requestStatusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
         TableColumn<BookRequestView, String> requestPriorityCol = new TableColumn<>("Priority");
@@ -942,7 +1072,7 @@ public class LibrarianPortalApp extends Application {
                 cell.getValue().urgent() ? "URGENT" : "NORMAL"
         ));
         TableColumn<BookRequestView, String> requestReasonCol = new TableColumn<>("Reason");
-        requestReasonCol.setCellValueFactory(new PropertyValueFactory<>("reason"));
+        requestReasonCol.setCellValueFactory(new PropertyValueFactory<>("Reason"));
         requestReasonCol.setCellFactory(column -> new TableCell<>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -957,7 +1087,29 @@ public class LibrarianPortalApp extends Application {
                 setTooltip(new Tooltip(item));
             }
         });
-        bookRequestTable.getColumns().addAll(requestIdCol, requestUserCol, requestTitleCol, requestAuthorCol, requestGenreCol, requestStatusCol, requestPriorityCol, requestReasonCol);
+        TableColumn<BookRequestView, String> requestUrgencyCol = new TableColumn<>("Request ID");
+        requestUrgencyCol.setCellValueFactory(new PropertyValueFactory<>("Urgency"));
+
+        requestTitleCol.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                    return;
+                }
+                BookRequestView rowRequest = getTableRow() == null ? null : getTableRow().getItem();
+
+                setText(item);
+                if (rowRequest != null && rowRequest.urgency().equals("URGENT")) {
+                    setStyle("-fx-text-fill: #dc2626; -fx-font-weight: 600;");
+                } else {
+                    setStyle("-fx-text-fill: #111827;");
+                }
+            }
+        });
+        bookRequestTable.getColumns().addAll(requestIdCol, requestUserCol, requestTitleCol, requestAuthorCol, requestGenreCol, requestStatusCol, requestReasonCol, requestUrgencyCol);
         bookRequestTable.getSelectionModel().selectedItemProperty().addListener((obs, old, val) -> {
             if (val != null && requestActionIdField != null) {
                 requestActionIdField.setText(val.requestId());
@@ -967,7 +1119,8 @@ public class LibrarianPortalApp extends Application {
             }
         });
 
-        HBox requestActionRow = new HBox(8);
+        HBox requestActionRow1 = new HBox(8);
+        HBox requestActionRow2 = new HBox(8);
         requestActionIdField = new TextField();
         requestActionIdField.setPromptText("Request ID");
         requestActionTypeBox = new ComboBox<>(FXCollections.observableArrayList("PRIORITY_ONLY", "APPROVE", "REJECT"));
@@ -975,11 +1128,33 @@ public class LibrarianPortalApp extends Application {
         requestActionUrgentCheckBox = new CheckBox("Mark as URGENT");
         requestActionCommentField = new TextField();
         requestActionCommentField.setPromptText("Optional comment");
+        requestFilePathField = new TextField();
+        requestFilePathField.setPromptText("Book PDF file path:");
+        requestDownloadBar = new ProgressBar();
+        requestDownloadBar.setProgress(0.0);
+        requestAlternate = new Label();
+        Button selectFileBtn = new Button("Select Book PDF File");
+        selectFileBtn.getStyleClass().add("primary-btn");
+        selectFileBtn.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Select Book File");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files (*.pdf)","*.pdf"));
+            File selectedFile = chooser.showOpenDialog(stage);
+            if (selectedFile != null) {
+                String filePath = selectedFile.getAbsolutePath();
+                requestFilePathField.setText(filePath);
+            }
+        });
         Button applyRequestActionBtn = new Button("Apply");
         applyRequestActionBtn.getStyleClass().add("primary-btn");
         applyRequestActionBtn.setOnAction(e -> handleBookRequestAction());
-        requestActionRow.getChildren().addAll(requestActionIdField, requestActionTypeBox, requestActionUrgentCheckBox, requestActionCommentField, applyRequestActionBtn);
+        Button downloadBookBtn = new Button("Download Book File");
+        downloadBookBtn.getStyleClass().add("primary-btn");
+        downloadBookBtn.setOnAction(e -> handleDownloadBook());
+        requestActionRow1.getChildren().addAll(requestActionIdField, requestActionTypeBox, requestActionCommentField, requestFilePathField);
+        requestActionRow2.getChildren().addAll(selectFileBtn, applyRequestActionBtn, downloadBookBtn, requestDownloadBar, requestAlternate);
 
+        requestCard.getChildren().addAll(requestHeading, requestHint, requestFilters, bookRequestTable, requestActionRow1, requestActionRow2);
         requestCard.getChildren().addAll(requestHeading, requestHint, requestFilters, bookRequestTable, requestActionRow);
         VBox.setVgrow(bookRequestTable, Priority.ALWAYS);
 
@@ -999,6 +1174,142 @@ public class LibrarianPortalApp extends Application {
         refreshHistoryBtn.setOnAction(e -> refreshRequestHistory());
         historyFilters.getChildren().addAll(new Label("Filter:"), requestHistoryUserFilter, requestHistoryKeywordFilter, refreshHistoryBtn);
 
+        wrapper.getChildren().addAll(card, heading, borrowedBooksTable, requestCard);
+
+        return wrapper;
+    }
+
+    private VBox buildPublishedBooksView() {
+        VBox wrapper = new VBox(10);
+        wrapper.setPadding(new Insets(8, 18, 18, 18));
+        Label heading = new Label("Published Books");
+        heading.getStyleClass().add("section-title");
+
+        publishedBooksTable = new TableView<>();
+        publishedBooksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+
+        TableColumn<Book, String> IdCol = new TableColumn<>("Id");
+        IdCol.setCellValueFactory(new PropertyValueFactory<>("Id"));
+
+        TableColumn<Book, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("Title"));
+
+        TableColumn<Book, String> authorNameCol = new TableColumn<>("Author");
+        authorNameCol.setCellValueFactory(new PropertyValueFactory<>("Author"));
+
+        TableColumn<Book, String> genreCol = new TableColumn<>("Genre");
+        genreCol.setCellValueFactory(new PropertyValueFactory<>("Genre"));
+
+        TableColumn<Book, String> descriptionCol = new TableColumn<>("Description");
+        descriptionCol.setCellValueFactory(new PropertyValueFactory<>("Summary"));
+
+        TableColumn<Book, String> availableCol = new TableColumn<>("Available");
+        availableCol.setCellValueFactory(new PropertyValueFactory<>("Available"));
+
+        publishedBooksTable.getColumns().addAll(IdCol, titleCol, authorNameCol, genreCol, descriptionCol, availableCol);
+        publishedBooksTable.getSelectionModel().getSelectedItems().addListener(new ListChangeListener<Book>() {
+            @Override
+            public void onChanged(Change<? extends Book> s) {
+                publishedBookSelectedId.setText(String.join(", ",
+                        publishedBooksTable.getSelectionModel().getSelectedItems().stream()
+                                .map(book -> book.getId()).toList()));
+            }
+        });
+        publishedBooksTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+
+        VBox card = new VBox(10);
+        card.getStyleClass().add("card");
+        card.setPrefWidth(320);
+
+        Label cardHeading = new Label("Published Books");
+        cardHeading.getStyleClass().add("card-title");
+        Label hint = new Label("Modify book details or create new books.");
+        hint.getStyleClass().add("muted");
+
+
+        publishedBookSelectedId = new TextField();
+        publishedBookSelectedId.setPromptText("Book Id: ");
+        publishedBookTitle = new TextField();
+        publishedBookTitle.setPromptText("Title: ");
+        publishedBookAuthorName = new TextField();
+        publishedBookAuthorName.setPromptText("Author Username: ");
+        publishedBookGenre = new TextField();
+        publishedBookGenre.setPromptText("Genre: ");
+        publishedBookDescription = new TextField();
+        publishedBookDescription.setPromptText("Description: ");
+        publishedBookFilePath = new TextField();
+        publishedBookFilePath.setPromptText("Book File");
+        Button selectBookFileBtn = new Button("Select Book PDF");
+        selectBookFileBtn.getStyleClass().add("primary-btn");
+        selectBookFileBtn.setOnAction(event -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Select Book File");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files (*.pdf)","*.pdf"));
+            File selectedFile = chooser.showOpenDialog(stage);
+            if (selectedFile != null) {
+                String filePath = selectedFile.getAbsolutePath();
+                publishedBookFilePath.setText(filePath);
+            }
+        });
+        publishedBookCoverPath = new TextField();
+        publishedBookCoverPath.setPromptText("Book Cover File");
+        Button selectBookCoverBtn = new Button("Select Book Cover Image");
+        selectBookCoverBtn.getStyleClass().add("primary-btn");
+        selectBookCoverBtn.setOnAction(event -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Select Book Cover File");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("image files (*.png, *.jpg)", "*.png", "*.jpg"));
+            File selectedFile = chooser.showOpenDialog(stage);
+            if (selectedFile != null) {
+                String filePath = selectedFile.getAbsolutePath();
+                publishedBookCoverPath.setText(filePath);
+            }
+        });
+        Button viewChangeLogBtn = new Button("View Change Logs");
+        viewChangeLogBtn.getStyleClass().add("primary-btn");
+        viewChangeLogBtn.setOnAction(event -> handleViewChangeLogs());
+
+        //adjust the length of description text field dynamically
+        publishedBookDescription.textProperty().addListener((obs, oldText, newText) -> {
+            double width = Math.clamp((long)newText.length() * 8 + 20, 100, 500);
+            publishedBookDescription.setPrefWidth(width);
+        });
+
+        Button modifyBtn = new Button("Modify Book");
+        modifyBtn.getStyleClass().add("primary-btn");
+        modifyBtn.setOnAction(event -> handleModifyBook());
+        Button createBtn = new Button("Create Book");
+        createBtn.getStyleClass().add("primary-btn");
+        createBtn.setOnAction(event -> handleCreateBook());
+        publishedBookGenerateButton = new Button("Generate Description");
+        publishedBookGenerateButton.getStyleClass().add("primary-btn");
+        publishedBookGenerateButton.setOnAction(event -> handleGenerateDescription());
+        Button viewDownloadedBookStatBtn = new Button("View Downloaded Book Statistics");
+        viewDownloadedBookStatBtn.getStyleClass().add("primary-btn");
+        viewDownloadedBookStatBtn.setOnAction(e -> handleViewDownloadStats());
+
+        HBox fields1 = new HBox(5);
+        HBox fields2 = new HBox(5);
+        HBox actions = new HBox(5);
+        fields1.getChildren().add(publishedBookSelectedId);
+        fields1.getChildren().add(publishedBookTitle);
+        fields1.getChildren().add(publishedBookAuthorName);
+        fields1.getChildren().add(publishedBookGenre);
+        fields2.getChildren().add(publishedBookDescription);
+        fields2.getChildren().add(publishedBookFilePath);
+        fields2.getChildren().add(selectBookFileBtn);
+        fields2.getChildren().add(publishedBookCoverPath);
+        fields2.getChildren().add(selectBookCoverBtn);
+        fields2.getChildren().add(viewDownloadedBookStatBtn);
+        actions.getChildren().add(modifyBtn);
+        actions.getChildren().add(createBtn);
+        actions.getChildren().add(publishedBookGenerateButton);
+        actions.getChildren().add(viewChangeLogBtn);
+
+        card.getChildren().addAll(heading, hint, fields1, fields2, actions);
+
+        VBox.setVgrow(publishedBooksTable, Priority.ALWAYS);
+        wrapper.getChildren().addAll(card, heading, publishedBooksTable);
         requestHistoryTable = new TableView<>();
         requestHistoryTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         TableColumn<BookRequestView, String> hUserCol = new TableColumn<>("Requester");
@@ -1068,7 +1379,7 @@ public class LibrarianPortalApp extends Application {
         logoutBtn.getStyleClass().add("secondary-btn");
         logoutBtn.setOnAction(event -> handleLogout());
         crashBtn.getStyleClass().add("secondary-btn");
-        crashBtn.setOnAction(event -> { saveProgress(); exit(); });
+        crashBtn.setOnAction(event -> { exit(); });
 
         switch (disable) {
             case 0: acceptReject.setDisable(true);
@@ -1324,7 +1635,8 @@ public class LibrarianPortalApp extends Application {
                 profileOldPasswordField == null ? "" : profileOldPasswordField.getText(),
                 password,
                 passwordConfirm,
-                profileEmployeeIDField == null ? "" : profileEmployeeIDField.getText()
+                profileEmployeeIDField == null ? "" : profileEmployeeIDField.getText(),
+                profilePicturePathField == null ? "" : profilePicturePathField.getText()
         );
         setStatus(result.message());
         if (!result.success()) {
@@ -1344,6 +1656,27 @@ public class LibrarianPortalApp extends Application {
         //If the password is changed, logout automatically, show popup otherwise.
         if (result.message().equals("Profile updated successfully with password changed.")) handleLogout();
         else showInfoPopup("Profile Update", "Success", result.message());
+    }
+
+    private void handleProfilePictureUpdate() {
+        try {
+            String path = profilePicturePathField.getText();
+            if (Files.size(Path.of(path)) > 3 * 1024 * 1024) {
+                showErrorPopup("Set Profile Picture", "Action Failed", "The picture file should be smaller than 5MB.");
+                return;
+            }
+            String url = "file:" + path;
+            Image img = path.isEmpty() ? null : new Image(url);
+            profilePicture.setImage(img);
+            profilePicture.setFitWidth(300);
+            profilePicture.setFitHeight(200);
+            profilePicture.setPreserveRatio(true);
+
+        } catch (Exception e) {
+            showErrorPopup("Set Profile Picture", "Action Failed", "File does not exist or has invalid format.");
+            profilePicturePathField.setText("");
+            profilePicture.setImage(null);
+        }
     }
 
     private void handleUserEdit() {
@@ -1558,11 +1891,178 @@ public class LibrarianPortalApp extends Application {
         setStatus(result.message());
     }
 
-
-    private void refreshBorrowedBooks() {
-        if (borrowedBooksTable == null || bookTableTitleFilter == null || bookTableBorrowedByFilter == null || bookTableStatusFilter == null) {
+    private void handleModifyBook() {
+        if (currentUser == null) {
+            showErrorPopup("Modify Book", "User not logged in", "Please log in first.");
             return;
         }
+
+        String[] IDRaw = publishedBookSelectedId.getText().split(",");
+        String[] IDs = new String[IDRaw.length];
+        for (int i = 0; i < IDRaw.length; i++)  IDs[i] = IDRaw[i].trim();
+
+        for (String bookId : IDs) {
+            LibrarianPortalService.OperationResult result = portalService.validateBookId(bookId);
+            if (!result.success()) {
+                showErrorPopup("Modify Book", "Action failed", result.message());
+                return;
+            }
+        }
+
+        //If at least one operation fails, show all the error messages in the popup
+        StringBuilder failInfo = new StringBuilder();
+        for (String subId : IDs) {
+            LibrarianPortalService.OperationResult result = portalService.modifyBook(
+                    subId,
+                    publishedBookTitle.getText(),
+                    publishedBookAuthorName.getText(),
+                    publishedBookGenre.getText(),
+                    publishedBookDescription.getText(),
+                    publishedBookFilePath.getText(),
+                    publishedBookCoverPath.getText());
+            if (!result.success()) {
+                failInfo.append(result.message());
+                failInfo.append("\n\n");
+            }
+        }
+        if (failInfo.isEmpty()) setStatus("Modification successful: The selected books are all modified.");
+        else {
+            failInfo.delete(failInfo.length() - 2, failInfo.length());
+            showErrorPopup("Modify Book", "At least one action failed", failInfo.toString());
+            setStatus("Modification failed: At least one of the selected books cannot be modified.");
+        }
+        refreshPublishedBooks();
+        approveSubmissionIdField.clear();
+    }
+
+    private void handleCreateBook() {
+        LibrarianPortalService.OperationResult result = portalService.createBook(publishedBookTitle.getText(),
+                publishedBookAuthorName.getText(),
+                publishedBookGenre.getText(),
+                publishedBookDescription.getText(),
+                publishedBookFilePath.getText(),
+                publishedBookCoverPath.getText());
+
+        setStatus(result.message());
+    }
+
+    private class generateThread extends Thread {
+        public generateThread(String filePath, TextField resultField, Button generateButton, String recoverText) {
+            this.filePath = filePath;
+            this.resultField = resultField;
+            this.generateButton = generateButton;
+            this.recoverText = recoverText;
+        }
+
+        @Override
+        public void run() {
+            try {
+                String result = new SummaryGenerator().generate(filePath);
+
+                Platform.runLater(() -> {
+                    resultField.setText(result);
+                    generateButton.setText(recoverText);
+                    generateButton.setDisable(false);
+                    setStatus("Successfully generated description for the book file.");
+                });
+            }
+            catch (Exception e) {
+                Platform.runLater(() -> {
+                    setStatus(e.getMessage());
+                    showErrorPopup("Generate Description", "Action Failed", "The file is invalid, or internet issues.");
+                });
+            }
+        }
+
+        private final String filePath;
+        private final TextField resultField;
+        private final Button generateButton;
+        private final String recoverText;
+    }
+    private void handleGenerateDescription() {
+        String path = publishedBookFilePath.getText();
+        if (path.isEmpty()) showErrorPopup("Generate Description", "Action Failed", "Please select a file to generate first.");
+
+        String recoverText = publishedBookGenerateButton.getText();
+        publishedBookGenerateButton.setText("Generating...");
+        publishedBookGenerateButton.setDisable(true);
+        new generateThread(path, publishedBookDescription, publishedBookGenerateButton, recoverText).start();
+    }
+
+    private void handleDownloadBook() {
+        String requestId = requestActionIdField == null ? "" : requestActionIdField.getText().trim();
+        if (requestId.isEmpty()) {
+            showErrorPopup("Download Requested Book", "Request ID required.", "Select a request or type a request ID.");
+            return;
+        }
+
+        try {
+            new Thread(() -> BookDownloadHelper.crawl(portalService.getBookRequestTitle(requestId), requestDownloadBar, requestAlternate)).start();
+        } catch (Exception e) {
+            showErrorPopup("Download Book", "Action Failed", "Could not access target webpage.");
+            setStatus("Download failed: Unable to access webpage.");
+            return;
+        }
+    }
+
+    private void handleViewDownloadStats() {
+        TableView<Book> tableView = new TableView<>();
+
+        TableColumn<Book, String> idCol = new TableColumn<>("Id");
+        idCol.setCellValueFactory(new PropertyValueFactory<>("Id"));
+
+        TableColumn<Book, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("Title"));
+
+        TableColumn<Book, Integer> authorCol = new TableColumn<>("Author");
+        authorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
+
+        TableColumn<Book, Integer> genreCol = new TableColumn<>("Genre");
+        genreCol.setCellValueFactory(new PropertyValueFactory<>("Genre"));
+
+        TableColumn<Book, Integer> borrowCountCol = new TableColumn<>("Borrow Count");
+        borrowCountCol.setCellValueFactory(new PropertyValueFactory<>("BorrowCount"));
+
+
+        tableView.getColumns().addAll(idCol, titleCol, authorCol, genreCol, borrowCountCol);
+
+        tableView.setItems(FXCollections.observableArrayList(portalService.getDownloadedBooksData()));
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Downloaded Books Data");
+        dialog.setHeaderText("");
+
+        DialogPane dialogPane = dialog.getDialogPane();
+        dialogPane.setContent(tableView);
+        dialogPane.getButtonTypes().addAll(ButtonType.CLOSE);
+
+        tableView.setPrefWidth(400);
+        tableView.setPrefHeight(300);
+
+        dialog.showAndWait();
+    }
+
+    private void handleViewChangeLogs() {
+        String[] vals = publishedBookSelectedId.getText().split(",");
+        if (vals.length > 1) {
+            showErrorPopup("View Change Logs", "Action failed", "You can only view one book's change log at once.");
+            return;
+        }
+        String id = vals[0];
+        if (id.isEmpty()) {
+            showErrorPopup("View Change Logs", "Action failed", "Please select a book to view.");
+            return;
+        }
+        String logs = portalService.getBookChangeLog(id);
+        if (logs == null) {
+            showErrorPopup("View Change Logs", "Action failed", "Invalid Book Id, or the book was not changed.");
+            return;
+        }
+        showInfoPopup("Change Logs", "Change Log for book with id " + id, logs);
+    }
+
+
+    private void refreshBorrowedBooks() {
         borrowedBooksTable.setItems(FXCollections.observableArrayList(
                 portalService.getBorrowedBookRecords(
                         bookTableTitleFilter.getText(),
@@ -1571,14 +2071,46 @@ public class LibrarianPortalApp extends Application {
     }
 
     private void refreshBookRequests() {
-        if (bookRequestTable == null) {
-            return;
-        }
+        if (bookRequestTable == null) return;
         String status = bookRequestStatusFilter == null ? "ALL" : bookRequestStatusFilter.getValue();
         String keyword = bookRequestKeywordFilter == null ? "" : bookRequestKeywordFilter.getText();
-        bookRequestTable.setItems(FXCollections.observableArrayList(
-                portalService.getBookRequests(status, keyword)
-        ));
+        List<LibrarianPortalService.BookRequestView> list = portalService.getBookRequests(status, keyword);
+        bookRequestTable.setItems(FXCollections.observableArrayList(list));
+
+
+        HashMap<String, AtomicInteger> authorFreq = new HashMap<>();
+        HashMap<String, AtomicInteger> genreFreq = new HashMap<>();
+        for (LibrarianPortalService.BookRequestView req : list) {
+            if (authorFreq.containsKey(req.getAuthor())) {
+                AtomicInteger i = authorFreq.get(req.getAuthor());
+                i.set(i.get() + 1);
+            }
+            else authorFreq.put(req.getAuthor(), new AtomicInteger(1));
+
+            if (genreFreq.containsKey(req.getGenre())) {
+                AtomicInteger i = genreFreq.get(req.getGenre());
+                i.set(i.get() + 1);
+            }
+            else genreFreq.put(req.getGenre(), new AtomicInteger(1));
+        }
+
+        int maxAuthorCount = -1;
+        String maxAuthor = "";
+        int maxGenreCount = -1;
+        String maxGenre = "";
+        for (String a : authorFreq.keySet()) {
+            if (authorFreq.get(a).get() > maxAuthorCount) {
+                maxAuthorCount = authorFreq.get(a).get();
+                maxAuthor = a;
+            }
+        }
+        for (String g : genreFreq.keySet()) {
+            if (genreFreq.get(g).get() > maxGenreCount) {
+                maxGenreCount = genreFreq.get(g).get();
+                maxGenre = g;
+            }
+        }
+        requestStatistic.setText("Most Requested Author: " + maxAuthor + "; Most requested Genre: " + maxGenre);
     }
 
     private void refreshRequestHistory() {
@@ -1624,10 +2156,20 @@ public class LibrarianPortalApp extends Application {
         if (requestActionIdField != null) requestActionIdField.clear();
         if (requestActionUrgentCheckBox != null) requestActionUrgentCheckBox.setSelected(false);
         refreshBookRequests();
+        refreshBorrowedBooks();
         refreshRequestHistory();
     }
 
+    private void refreshPublishedBooks() {
+        publishedBooksTable.setItems(FXCollections.observableArrayList(portalService.getPublishedBooksScreenData()));
+    }
+
     private void refreshEditUsers() {
+        for (LibrarianPortalService.BorrowedBookRecordView b : portalService.getBorrowedBookRecords("", "", "")) {
+            AtomicInteger v = manageUsersBorrowCounts.get(b.borrowerUsername());
+            if (v == null) manageUsersBorrowCounts.put(b.borrowerUsername(), new AtomicInteger(1));
+            else v.set(v.intValue() + 1);
+        }
         allUsersTable.setItems(FXCollections.observableArrayList(portalService.getUsersScreenData(manageUsersType.getValue())));
         allUsersTable.refresh();
     }
@@ -1655,6 +2197,7 @@ public class LibrarianPortalApp extends Application {
         }
         notificationList.setItems(FXCollections.observableArrayList(rows));
     }
+
 
     private String formatNotificationRow(LocalDateTime timestamp, String category, String message) {
         String c = category == null ? "" : category.toUpperCase();
@@ -1937,61 +2480,6 @@ public class LibrarianPortalApp extends Application {
             return false;
         }
         return true;
-    }
-
-    private void saveProgress() {//Save the current page and the contents in all the pages to a file
-        try {
-            Files.createDirectories(Paths.get("data/task3"));
-        } catch (IOException e) {
-            System.err.println("Error creating data directory: " + e.getMessage());
-        }
-
-        try {//Save values in each field to the file
-            Path path = Paths.get(TASK3_PROGRESS_FILE);
-            List<String> lines = new ArrayList<>();
-            for (String f : progressData) lines.add(f + ":" + getFieldValue(f));
-            Files.write(path, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            System.out.println("Saved progress data to file.");
-        } catch (IOException e) {
-            System.err.println("Error saving progress data: " + e.getMessage());
-        }
-    }
-    private boolean loadProgress() {
-        int separateInd;
-        try {
-            Path path = Paths.get(TASK3_PROGRESS_FILE);
-            if (Files.exists(path)) {
-                List<String> lines = Files.readAllLines(path);
-                for (String line : lines) {
-                    if (!line.isEmpty()) {
-                        separateInd = line.indexOf(':');
-                        if (separateInd == -1) {
-                            showErrorPopup("Restore Progress", "Action failed", "Invalid progress data: " + line);
-                            return false;
-                        }
-                        if (!setFieldValue(line.substring(0, separateInd), line.substring(separateInd + 1))) {
-                            showErrorPopup("Restore Progress", "Action failed", "Invalid progress data: " + line);
-                            return false;
-                        }
-                    }
-                }
-                System.out.println("Loaded progress data from file.");
-            } else System.out.println("No existing progress files were found.");
-        } catch (IOException e) {
-            System.err.println("Error loading progress: " + e.getMessage());
-        }
-        return true;
-    }
-
-    private void startAutoSave() {
-        stopAutoSave();
-        autoSaveTimer = new Timer(true);
-        autoSaveTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                Platform.runLater(() -> saveProgress());
-            }
-        }, 1000, 1000);
     }
 
     private void stopAutoSave() {

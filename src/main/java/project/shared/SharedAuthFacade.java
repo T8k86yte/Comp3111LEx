@@ -81,7 +81,9 @@ public class SharedAuthFacade {
                         salt,
                         hash,
                         role,
-                        false
+                        false,
+                        null,//Newly created accounts will have the lastLogin field being null
+                        ""//Profile picture will be empty as well
                 );
                 studentStaffRepository.save(account);
                 return AuthResult.success("Registration successful for " + normalizedUsername + ".", new UserPrincipal(
@@ -97,6 +99,8 @@ public class SharedAuthFacade {
                         salt,
                         hash,
                         false,
+                        null,
+                        "",
                         bio == null ? "" : bio.trim()
                 );
                 authorRepository.save(account);
@@ -121,6 +125,8 @@ public class SharedAuthFacade {
                         salt,
                         hash,
                         false,
+                        null,
+                        "",
                         employeeId
                 );
                 librarianRepository.save(account);
@@ -176,6 +182,10 @@ public class SharedAuthFacade {
                 if (!ok) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }
+
+                account.get().updateLastLogin();//Update the time of last login
+                studentStaffRepository.save(account.get());//Save
+
                 return AuthResult.success(
                         "Login successful. Welcome, " + account.get().getFullName() + ".",
                         new UserPrincipal(account.get().getUsername(), account.get().getFullName(), account.get().getRole().name())
@@ -195,6 +205,10 @@ public class SharedAuthFacade {
                 if (!ok) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }
+
+                account.get().updateLastLogin();
+                authorRepository.save(account.get());
+
                 return AuthResult.success(
                         "Login successful. Welcome, " + account.get().getFullName() + ".",
                         new UserPrincipal(account.get().getUsername(), account.get().getFullName(), "AUTHOR")
@@ -222,6 +236,10 @@ public class SharedAuthFacade {
                 if (!ok) {
                     return AuthResult.failure("Login failed: invalid username or password.");
                 }
+
+                account.get().updateLastLogin();
+                librarianRepository.save(account.get());
+
                 return AuthResult.success(
                         "Login successful. Welcome, " + account.get().getFullName() + ".",
                         new UserPrincipal(account.get().getUsername(), account.get().getFullName(), "LIBRARIAN")
