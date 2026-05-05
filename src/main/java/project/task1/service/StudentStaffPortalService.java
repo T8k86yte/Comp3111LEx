@@ -322,13 +322,61 @@ public class StudentStaffPortalService {
             return OperationResult.failure("Return failed: unable to complete return.");
         }
         closeBorrowRecord(normalizedBorrower, normalizedBookId, LocalDate.now(), "SELF_RETURN");
-        clearReadingProgressForUserBook(normalizedBorrower, normalizedBookId);
         appendNotification(
                 normalizedBorrower,
                 "BOOK_RETURN",
                 "You returned \"" + book.getTitle() + "\" successfully."
         );
         return OperationResult.success("Return successful: \"" + book.getTitle() + "\" has been returned.");
+    }
+
+    public OperationResult autoReturnForTesting(String borrowerUsername, String bookId) {
+        String normalizedBorrower = safeTrim(borrowerUsername);
+        String normalizedBookId = safeTrim(bookId).toUpperCase();
+        if (normalizedBorrower.isEmpty()) {
+            return OperationResult.failure("Auto-return test failed: user must be logged in.");
+        }
+        if (normalizedBookId.isEmpty()) {
+            return OperationResult.failure("Auto-return test failed: book id is required.");
+        }
+
+        Optional<Book> bookOpt = bookRepository.findById(normalizedBookId);
+        if (bookOpt.isEmpty()) {
+            return OperationResult.failure("Auto-return test failed: book not found.");
+        }
+        Book book = bookOpt.get();
+        if (book.isAvailable()) {
+            return OperationResult.failure("Auto-return test failed: book is already available.");
+        }
+        if (!normalizedBorrower.equals(book.getBorrowedByUsername())) {
+            return OperationResult.failure("Auto-return test failed: this book is borrowed by another user.");
+        }
+
+        LocalDateTime clickedAt = LocalDateTime.now();
+        List<BorrowRecord> records = loadBorrowRecords();
+        boolean updated = false;
+        LocalDate forcedDueDate = clickedAt.toLocalDate().minusDays(1);
+        for (int i = 0; i < records.size(); i++) {
+            BorrowRecord r = records.get(i);
+            if (r.returnDate() != null) {
+                continue;
+            }
+            if (!normalizedBorrower.equals(r.username()) || !normalizedBookId.equalsIgnoreCase(r.bookId())) {
+                continue;
+            }
+            records.set(i, r.withDueDate(forcedDueDate));
+            updated = true;
+            break;
+        }
+        if (!updated) {
+            return OperationResult.failure("Auto-return test failed: active borrow record not found.");
+        }
+        saveBorrowRecords(records);
+        LifecycleProcessingResult lifecycle = processBorrowLifecycleEvents();
+        if (lifecycle.autoReturnedCount() <= 0) {
+            return OperationResult.failure("Auto-return test failed: auto-return flow did not return the selected book.");
+        }
+        return OperationResult.success("Auto-return test invoked via overdue due-date at " + clickedAt.format(HISTORY_TIME_FORMAT) + ".");
     }
 
     private static String safeTrim(String value) {
@@ -370,7 +418,6 @@ public class StudentStaffPortalService {
                 boolean returned = bookRepository.returnBook(record.bookId(), record.username());
                 if (returned) {
                     records.set(i, record.withReturnDate(today, "AUTO_RETURN"));
-                    clearReadingProgressForUserBook(record.username(), record.bookId());
                     appendNotification(
                             record.username(),
                             "AUTO_RETURN",
@@ -1090,11 +1137,7 @@ public class StudentStaffPortalService {
             stream.endText();
             y -= 22;
             for (ReadingHistoryView row : rows) {
-                String line = row.borrowDate() + " | " + row.bookTitle()
-                        + " | " + row.genre()
-                        + " | Duration " + row.readingDurationDays() + " day(s)"
-                        + " | Bookmark: " + (row.bookmark().isBlank() ? "-" : row.bookmark());
-                if (y < 60) {
+                if (y < 90) {
                     stream.close();
                     page = new PDPage(PDRectangle.A4);
                     document.addPage(page);
@@ -1102,11 +1145,13 @@ public class StudentStaffPortalService {
                     stream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 10);
                     y = 800;
                 }
-                stream.beginText();
-                stream.newLineAtOffset(40, y);
-                stream.showText(line.length() > 120 ? line.substring(0, 120) : line);
-                stream.endText();
-                y -= 16;
+                y = writePdfLine(stream, y, "Book: " + safeTrim(row.bookTitle()), 40);
+                y = writePdfLine(stream, y, "Borrow Date: " + (row.borrowDate() == null ? "-" : row.borrowDate()), 40);
+                y = writePdfLine(stream, y, "Return Date: " + (row.returnDate() == null ? "In Progress" : row.returnDate()), 40);
+                y = writePdfLine(stream, y, "Genre: " + safeTrim(row.genre()) + " | Duration: " + row.readingDurationDays() + " day(s)", 40);
+                y = writePdfLine(stream, y, "Bookmark: " + (safeTrim(row.bookmark()).isBlank() ? "-" : safeTrim(row.bookmark())), 40);
+                y = writePdfLine(stream, y, "Progress: " + (safeTrim(row.progressSummary()).isBlank() ? "-" : safeTrim(row.progressSummary())), 40);
+                y -= 6;
             }
             stream.close();
             document.save(outputPath.toFile());
@@ -1117,7 +1162,7 @@ public class StudentStaffPortalService {
     }
 
     public ReadingHistoryInsights getReadingHistoryInsights(String username) {
-        List<ReadingHistoryView> rows = getReadingHistory(username, "", "", "", null, null);
+        List<ReadingHistoryView> rows = getOverallReadingHistory(username);
         if (rows.isEmpty()) {
             return new ReadingHistoryInsights(Map.of(), 0.0, 0);
         }
@@ -1131,20 +1176,51 @@ public class StudentStaffPortalService {
         return new ReadingHistoryInsights(genreCounts, averageDuration, rows.size());
     }
 
+    public List<ReadingHistoryView> getOverallReadingHistory(String username) {
+        return getReadingHistory(username, "", "", "", null, null);
+    }
+
     public List<String> getReadingBadges(String username) {
+        List<BadgeProgressView> all = getAllBadgeProgress(username);
+        List<String> unlocked = all.stream()
+                .filter(BadgeProgressView::unlocked)
+                .map(BadgeProgressView::name)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (unlocked.isEmpty()) {
+            return List.of("Start reading to unlock badges");
+        }
+        return unlocked;
+    }
+
+    public List<BadgeProgressView> getAllBadgeProgress(String username) {
         List<ReadingHistoryView> rows = getReadingHistory(username, "", "", "", null, null);
-        long completed = rows.stream().filter(r -> r.returnDate() != null).count();
-        List<String> badges = new ArrayList<>();
-        if (completed >= 1) badges.add("First Book Finished");
-        if (completed >= 5) badges.add("Book Explorer: Read 5 books");
-        if (completed >= 10) badges.add("Semester Milestone: Read 10 books");
-        if (rows.stream().map(ReadingHistoryView::genre).filter(g -> g != null && !g.isBlank()).distinct().count() >= 3) {
-            badges.add("Genre Hopper: 3+ genres explored");
-        }
-        if (badges.isEmpty()) {
-            badges.add("Start reading to unlock badges");
-        }
+        long completedBooks = rows.stream().filter(r -> r.returnDate() != null).count();
+        long uniqueGenres = rows.stream()
+                .map(ReadingHistoryView::genre)
+                .filter(g -> g != null && !g.isBlank())
+                .map(String::toLowerCase)
+                .distinct()
+                .count();
+        long totalBorrowed = rows.size();
+        long withBookmarks = rows.stream()
+                .filter(r -> r.bookmark() != null && !r.bookmark().isBlank())
+                .count();
+
+        List<BadgeProgressView> badges = new ArrayList<>();
+        badges.add(toBadge("First Book Finished", "Complete your first borrowed book.", completedBooks, 1));
+        badges.add(toBadge("Book Explorer", "Complete 5 books.", completedBooks, 5));
+        badges.add(toBadge("Semester Milestone", "Complete 10 books this semester.", completedBooks, 10));
+        badges.add(toBadge("Genre Hopper", "Read across 3 different genres.", uniqueGenres, 3));
+        badges.add(toBadge("Bookmark Keeper", "Save bookmarks for 5 borrowed books.", withBookmarks, 5));
+        badges.add(toBadge("Consistent Reader", "Borrow 10 books in total.", totalBorrowed, 10));
         return badges;
+    }
+
+    private BadgeProgressView toBadge(String name, String description, long current, long target) {
+        long safeTarget = Math.max(1, target);
+        int percent = (int) Math.max(0, Math.min(100, Math.round((current * 100.0) / safeTarget)));
+        boolean unlocked = current >= safeTarget;
+        return new BadgeProgressView(name, description, current, safeTarget, percent, unlocked);
     }
 
     public OperationResult submitBookReview(String username, String bookId, int rating, String reviewText) {
@@ -1916,6 +1992,15 @@ public class StudentStaffPortalService {
         return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
+    private float writePdfLine(PDPageContentStream stream, float y, String text, float x) throws IOException {
+        stream.beginText();
+        stream.newLineAtOffset(x, y);
+        String safe = safeTrim(text);
+        stream.showText(safe.length() > 140 ? safe.substring(0, 140) : safe);
+        stream.endText();
+        return y - 14;
+    }
+
     private static String csv(String value) {
         String v = value == null ? "" : value;
         if (v.contains(",") || v.contains("\"") || v.contains("\n")) {
@@ -1976,6 +2061,10 @@ public class StudentStaffPortalService {
     ) {
         private BorrowRecord withReturnDate(LocalDate date, String mode) {
             return new BorrowRecord(username, bookId, bookTitle, bookAuthor, bookGenre, borrowDate, dueDate, date, mode);
+        }
+
+        private BorrowRecord withDueDate(LocalDate date) {
+            return new BorrowRecord(username, bookId, bookTitle, bookAuthor, bookGenre, borrowDate, date, returnDate, returnMode);
         }
     }
 
@@ -2091,6 +2180,15 @@ public class StudentStaffPortalService {
             Map<String, Integer> genreReadCounts,
             double averageReadingDurationDays,
             int totalRecords
+    ) {}
+
+    public record BadgeProgressView(
+            String name,
+            String description,
+            long current,
+            long target,
+            int progressPercent,
+            boolean unlocked
     ) {}
 
     private record ReviewHelpfulVote(

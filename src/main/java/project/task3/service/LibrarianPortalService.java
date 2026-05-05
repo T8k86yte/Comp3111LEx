@@ -272,6 +272,22 @@ public class LibrarianPortalService {
                 .collect(Collectors.toList());
     }
 
+    public List<BookRequestView> getBookRequestHistory(String requesterUsername, String keywordFilter) {
+        String requester = safeTrim(requesterUsername).toLowerCase();
+        String keyword = safeTrim(keywordFilter).toLowerCase();
+        return loadBookRequests().stream()
+                .filter(r -> requester.isEmpty() || r.username().toLowerCase().contains(requester))
+                .filter(r -> keyword.isEmpty()
+                        || r.requestId().toLowerCase().contains(keyword)
+                        || r.title().toLowerCase().contains(keyword)
+                        || r.author().toLowerCase().contains(keyword)
+                        || r.genre().toLowerCase().contains(keyword)
+                        || r.status().toLowerCase().contains(keyword)
+                        || (r.librarianComment() != null && r.librarianComment().toLowerCase().contains(keyword)))
+                .sorted(Comparator.comparing(BookRequestView::createdAt).reversed())
+                .collect(Collectors.toList());
+    }
+
     public OperationResult approveBookRequest(String requestId, String librarianUsername, String comment) {
         String normalizedRequestId = safeTrim(requestId);
         String normalizedLibrarian = safeTrim(librarianUsername);

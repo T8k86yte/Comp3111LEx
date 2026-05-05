@@ -68,6 +68,7 @@ public class PdfReaderWindow {
     private double dragStartY;
     private String selectedHighlightKey;
     private boolean closedByBorrowExpiry;
+    private boolean autoReturnRequested;
 
     private final List<Integer> bookmarks = new ArrayList<>();
     private final List<PdfReaderStateStore.HighlightRegion> highlights = new ArrayList<>();
@@ -81,6 +82,7 @@ public class PdfReaderWindow {
 
     public ReaderSessionResult showAndWait(Window ownerWindow) {
         closedByBorrowExpiry = false;
+        autoReturnRequested = false;
         try {
             loadPdfAndState();
         } catch (Exception ex) {
@@ -173,7 +175,22 @@ public class PdfReaderWindow {
             renderCurrentPage();
         });
 
-        HBox tools = new HBox(8, prevBtn, nextBtn, pageInfoLabel, pageJumpField, jumpBtn, zoomOutBtn, zoomInBtn, zoomResetBtn);
+        Button autoReturnBtn = new Button("Auto-return (test)");
+        autoReturnBtn.setOnAction(e -> {
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Auto-return Test");
+            confirm.setHeaderText("Force return current borrowed book?");
+            confirm.setContentText("This is for testing and will close this reader.");
+            if (confirm.showAndWait().orElse(null) != javafx.scene.control.ButtonType.OK) {
+                return;
+            }
+            autoReturnRequested = true;
+            persistState();
+            closeResources();
+            stage.close();
+        });
+
+        HBox tools = new HBox(8, prevBtn, nextBtn, pageInfoLabel, pageJumpField, jumpBtn, zoomOutBtn, zoomInBtn, zoomResetBtn, autoReturnBtn);
         tools.setAlignment(Pos.CENTER_LEFT);
         tools.setPadding(new Insets(6, 0, 8, 0));
         return tools;
@@ -515,7 +532,7 @@ public class PdfReaderWindow {
                     .collect(Collectors.joining(", "));
             highlightSummary = "Highlights: " + highlights.size() + " region(s) on page(s) " + pages;
         }
-        return new ReaderSessionResult(bookmarkSummary, highlightSummary);
+        return new ReaderSessionResult(bookmarkSummary, highlightSummary, autoReturnRequested);
     }
 
     private void persistState() {
@@ -568,9 +585,9 @@ public class PdfReaderWindow {
         };
     }
 
-    public record ReaderSessionResult(String bookmarkSummary, String highlightSummary) {
+    public record ReaderSessionResult(String bookmarkSummary, String highlightSummary, boolean autoReturnRequested) {
         public static ReaderSessionResult empty() {
-            return new ReaderSessionResult("", "");
+            return new ReaderSessionResult("", "", false);
         }
 
         public boolean hasData() {
