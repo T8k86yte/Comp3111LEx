@@ -460,17 +460,23 @@ public class AuthorPortalService {
                 .sum();
     }
     
+    // FIXED: Now averages individual ratings, not book averages
     public double getAverageRatingForAuthor(String authorUsername) {
         List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
-        double sum = 0.0;
-        int count = 0;
+        long totalRatingSum = 0;
+        int totalReviewCount = 0;
+        
         for (BookSubmission sub : submissions) {
             if (sub.isApproved()) {
-                sum += reviewRepo.getAverageRatingForBook(sub.getSubmissionId());
-                count++;
+                List<Review> reviews = reviewRepo.findByBookId(sub.getSubmissionId());
+                for (Review review : reviews) {
+                    totalRatingSum += review.getRating();
+                    totalReviewCount++;
+                }
             }
         }
-        return count > 0 ? sum / count : 0.0;
+        
+        return totalReviewCount > 0 ? (double) totalRatingSum / totalReviewCount : 0.0;
     }
     
     public int getTotalReviewsForAuthor(String authorUsername) {

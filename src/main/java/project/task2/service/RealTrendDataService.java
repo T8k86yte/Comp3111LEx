@@ -7,35 +7,31 @@ import project.task2.repo.SubmissionRepository;
 import java.io.*;
 import java.nio.file.*;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Service that reads real borrow records from Task 1's data files
- */
 public class RealTrendDataService {
     
     private static final String BORROW_RECORDS_FILE = "data/task1/borrow_records.txt";
     private final SubmissionRepository submissionRepository;
     
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    
     public RealTrendDataService() {
         this.submissionRepository = new SubmissionRepository();
     }
     
-    /**
-     * Get real borrow trend data for an author's books
-     */
     public Map<LocalDate, Integer> getRealBorrowTrends(String authorUsername, int days) {
         Map<LocalDate, Integer> borrowCounts = new HashMap<>();
         
-        // Initialize all dates in range with 0
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusDays(days);
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
             borrowCounts.put(date, 0);
         }
         
-        // Get all approved books by this author
+        // Get author's approved books
         List<BookSubmission> authorBooks = submissionRepository.findByAuthor(authorUsername);
         Set<String> authorBookTitles = authorBooks.stream()
                 .filter(BookSubmission::isApproved)
@@ -43,12 +39,13 @@ public class RealTrendDataService {
                 .map(String::toLowerCase)
                 .collect(Collectors.toSet());
         
+        System.out.println("Author's approved books: " + authorBookTitles);
+        
         if (authorBookTitles.isEmpty()) {
             System.out.println("No approved books found for author: " + authorUsername);
             return borrowCounts;
         }
         
-        // Read real borrow records from Task 1's file
         Path path = Paths.get(BORROW_RECORDS_FILE);
         if (!Files.exists(path)) {
             System.out.println("Borrow records file not found: " + BORROW_RECORDS_FILE);
@@ -57,7 +54,7 @@ public class RealTrendDataService {
         
         try {
             List<String> lines = Files.readAllLines(path);
-            System.out.println("📖 Reading " + lines.size() + " borrow records from Task 1");
+            System.out.println("Reading " + lines.size() + " borrow records");
             
             for (String line : lines) {
                 if (line == null || line.trim().isEmpty()) continue;
@@ -65,25 +62,33 @@ public class RealTrendDataService {
                 String[] parts = line.split("\\|", -1);
                 if (parts.length < 7) continue;
                 
-                // Decode the fields
-                String username = decode(parts[0]);
-                String bookId = decode(parts[1]);
-                String bookTitle = decode(parts[2]);
-                LocalDate borrowDate = LocalDate.parse(parts[3]);
-                
-                // Check if this borrow is within our date range
-                if (borrowDate.isBefore(startDate) || borrowDate.isAfter(endDate)) {
-                    continue;
-                }
-                
-                // Check if this book belongs to our author
-                if (authorBookTitles.contains(bookTitle.toLowerCase())) {
-                    borrowCounts.put(borrowDate, borrowCounts.getOrDefault(borrowDate, 0) + 1);
+                try {
+                    // Decode all fields
+                    String username = decode(parts[0]);
+                    String bookId = decode(parts[1]);
+                    String bookTitle = decode(parts[2]);
+                    String bookAuthor = decode(parts[3]);
+                    String borrowDateStr = parts[5];  // Date is at index 5
+                    LocalDate borrowDate = LocalDate.parse(borrowDateStr, DATE_FORMATTER);
+                    
+                    System.out.println("Borrow record: title='" + bookTitle + "', author='" + bookAuthor + "', date=" + borrowDate);
+                    
+                    if (borrowDate.isBefore(startDate) || borrowDate.isAfter(endDate)) {
+                        continue;
+                    }
+                    
+                    // Match by book title (case-insensitive)
+                    if (authorBookTitles.contains(bookTitle.toLowerCase())) {
+                        borrowCounts.put(borrowDate, borrowCounts.getOrDefault(borrowDate, 0) + 1);
+                        System.out.println("  ✅ Matched: " + bookTitle);
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error parsing line: " + e.getMessage());
                 }
             }
             
             int totalBorrows = borrowCounts.values().stream().mapToInt(Integer::intValue).sum();
-            System.out.println("✅ Found " + totalBorrows + " real borrows for author's books in the last " + days + " days");
+            System.out.println("Found " + totalBorrows + " borrows for author's books");
             
         } catch (IOException e) {
             System.err.println("Error reading borrow records: " + e.getMessage());
@@ -92,21 +97,16 @@ public class RealTrendDataService {
         return borrowCounts;
     }
     
-    /**
-     * Get top books by real borrow count
-     */
     public List<BookStats> getTopBooksByRealBorrows(String authorUsername, int limit) {
         List<BookSubmission> submissions = submissionRepository.findByAuthor(authorUsername);
         Map<String, Integer> borrowCounts = new HashMap<>();
         
-        // Initialize borrow counts for each book
         for (BookSubmission sub : submissions) {
             if (sub.isApproved()) {
                 borrowCounts.put(sub.getTitle(), 0);
             }
         }
         
-        // Read real borrow records
         Path path = Paths.get(BORROW_RECORDS_FILE);
         if (Files.exists(path)) {
             try {
@@ -126,7 +126,6 @@ public class RealTrendDataService {
             }
         }
         
-        // Convert to BookStats list and sort
         List<BookStats> result = new ArrayList<>();
         for (BookSubmission sub : submissions) {
             if (sub.isApproved()) {
@@ -144,6 +143,7 @@ public class RealTrendDataService {
     }
     
     private String decode(String value) {
+        if (value == null || value.isEmpty()) return "";
         try {
             return new String(Base64.getDecoder().decode(value), java.nio.charset.StandardCharsets.UTF_8);
         } catch (Exception e) {
