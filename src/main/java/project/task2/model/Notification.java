@@ -12,9 +12,9 @@ public class Notification {
     private boolean isRead;
     private final LocalDateTime createdAt;
     private final String relatedSubmissionId;
-    private final boolean isPriority;  // NEW: priority flag for urgent notifications
+    private final boolean isPriority;
+    private boolean isArchived;
 
-    // Constructor for new notifications (default priority = false)
     public Notification(String authorUsername, String title, String message, String type, String relatedSubmissionId) {
         this.notificationId = "NOTIF_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 10000);
         this.authorUsername = authorUsername;
@@ -25,12 +25,12 @@ public class Notification {
         this.createdAt = LocalDateTime.now();
         this.relatedSubmissionId = relatedSubmissionId;
         this.isPriority = isPriorityType(type);
+        this.isArchived = false;
     }
 
-    // Constructor for loading from file
     public Notification(String notificationId, String authorUsername, String title, String message, 
                         String type, boolean isRead, LocalDateTime createdAt, 
-                        String relatedSubmissionId, boolean isPriority) {
+                        String relatedSubmissionId, boolean isPriority, boolean isArchived) {
         this.notificationId = notificationId;
         this.authorUsername = authorUsername;
         this.title = title;
@@ -40,9 +40,9 @@ public class Notification {
         this.createdAt = createdAt;
         this.relatedSubmissionId = relatedSubmissionId;
         this.isPriority = isPriority;
+        this.isArchived = isArchived;
     }
 
-    // Determine if a notification type should be priority
     private boolean isPriorityType(String type) {
         return type.equals("BOOK_DELETED") || 
                type.equals("BOOK_REJECTED") ||
@@ -58,8 +58,11 @@ public class Notification {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public String getRelatedSubmissionId() { return relatedSubmissionId; }
     public boolean isPriority() { return isPriority; }
+    public boolean isArchived() { return isArchived; }
 
     public void markAsRead() { this.isRead = true; }
+    public void archive() { this.isArchived = true; }
+    public void unarchive() { this.isArchived = false; }
 
     public String getFormattedDate() {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -89,13 +92,14 @@ public class Notification {
             String.valueOf(isRead),
             createdAt.toString(),
             relatedSubmissionId != null ? relatedSubmissionId : "",
-            String.valueOf(isPriority)
+            String.valueOf(isPriority),
+            String.valueOf(isArchived)
         );
     }
 
     public static Notification fromString(String data) {
-        String[] parts = data.split("\\|");
-        if (parts.length >= 9) {
+        String[] parts = data.split("\\|", -1);
+        if (parts.length >= 10) {
             return new Notification(
                 parts[0],
                 parts[1],
@@ -105,7 +109,8 @@ public class Notification {
                 Boolean.parseBoolean(parts[5]),
                 LocalDateTime.parse(parts[6]),
                 parts[7].isEmpty() ? null : parts[7],
-                Boolean.parseBoolean(parts[8])
+                Boolean.parseBoolean(parts[8]),
+                Boolean.parseBoolean(parts[9])
             );
         }
         return null;
