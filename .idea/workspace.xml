@@ -4,23 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Updated Task1 Nice to have features">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/books.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/books.txt" afterDir="false" />
+    <list default="true" id="ffeebfca-7e8a-4b4c-b284-ddad5d255417" name="Changes" comment="Updated Librarian page , added request approval function">
       <change beforePath="$PROJECT_DIR$/data/session.dat" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/data/session_recovery.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/session_recovery.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/data/studentstaffs.txt" beforeDir="false" afterPath="$PROJECT_DIR$/data/studentstaffs.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/service/StudentStaffPortalService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/ui/PdfReaderWindow.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/ui/PdfReaderWindow.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task1/ui/StudentStaffPortalApp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task1/ui/StudentStaffPortalApp.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/service/LibrarianPortalService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/project/task3/ui/LibrarianPortalApp.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/module-info.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/module-info.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$LoginResult.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$LoginResult.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$OperationResult.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService$OperationResult.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/service/LibrarianPortalService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/project/task3/ui/LibrarianPortalApp.class" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -413,7 +403,15 @@
       <option name="project" value="LOCAL" />
       <updated>1777877261458</updated>
     </task>
-    <option name="localTasksCounter" value="37" />
+    <task id="LOCAL-00037" summary="Updated Librarian page , added request approval function">
+      <option name="closed" value="true" />
+      <created>1777951447778</created>
+      <option name="number" value="00037" />
+      <option name="presentableId" value="LOCAL-00037" />
+      <option name="project" value="LOCAL" />
+      <updated>1777951447778</updated>
+    </task>
+    <option name="localTasksCounter" value="38" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -453,7 +451,8 @@
     <MESSAGE value="Restored book deletion logic" />
     <MESSAGE value="Updated all phase 3 task1 functions. Added independent pdf viewer. Changed book pdf management to Book" />
     <MESSAGE value="Updated Task1 Nice to have features" />
-    <option name="LAST_COMMIT_MESSAGE" value="Updated Task1 Nice to have features" />
+    <MESSAGE value="Updated Librarian page , added request approval function" />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated Librarian page , added request approval function" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
