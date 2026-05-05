@@ -6,6 +6,8 @@ import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
 
+import javafx.application.Platform;
+import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import org.openqa.selenium.*;
 import org.openqa.selenium.NoSuchElementException;
@@ -38,10 +40,10 @@ import java.nio.charset.StandardCharsets;
 public class BookDownloadHelper {
     private static final String DOWNLOAD_DIR = System.getenv("user.dir") + "/data/bookFiles";
 
-    public static void crawl(String bookTitle, ProgressBar bar) throws IOException {
+    public static void crawl(String bookTitle, ProgressBar bar, Label prompt) {
         System.setProperty("webdriver.chrome.driver", "chromedriver.exe");
+        Platform.runLater(() -> prompt.setText("Preparing for download..."));
 
-        // 2. 设置 Chrome 选项：自动下载到指定目录，不弹出下载对话框
         ChromeOptions options = new ChromeOptions();
         Map<String, Object> prefs = new HashMap<>();
         prefs.put("download.default_directory", DOWNLOAD_DIR);
@@ -95,6 +97,10 @@ public class BookDownloadHelper {
             WebElement pdfDownloadLink = wait.until(ExpectedConditions.elementToBeClickable(
                     By.xpath("//a[@class='btn btn-default addDownloadedBook']//span[@class='book-property__extension' and text()='pdf']/ancestor::a")
             ));
+            WebElement pdfLinkElement = wait.until(ExpectedConditions.presenceOfElementLocated(
+                    By.xpath("//a[contains(@class, 'addDownloadedBook') and .//span[@class='book-property__extension' and text()='pdf']]")
+            ));
+            String DownloadUrl = pdfLinkElement.getAttribute("href");
             ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", pdfDownloadLink);
             Thread.sleep(1000);
 
@@ -105,17 +111,13 @@ public class BookDownloadHelper {
             }
             pdfDownloadLink.click();
 
-            DownloadMonitor monitor = new DownloadMonitor(mirrorUrl + pdfDownloadLink.getAttribute("href"), new File(DOWNLOAD_DIR), bar, cookieHeader.toString());
-            new Thread(monitor).start();
-
-
-            Thread.sleep(30000);
-            System.out.println("Download complete.");
-
+            Platform.runLater(() -> prompt.setText("Download started."));
+            DownloadMonitor monitor = new DownloadMonitor(DownloadUrl, new File(DOWNLOAD_DIR), bar, cookieHeader.toString());
+            monitor.call();
+            Platform.runLater(() -> prompt.setText("Download complete, the file is at " + DOWNLOAD_DIR));
         } catch (Exception e) {
             System.err.println(e.getMessage());
         } finally {
-            // 9. 关闭浏览器
             driver.quit();
         }
     }

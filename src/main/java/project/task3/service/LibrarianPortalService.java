@@ -440,6 +440,13 @@ public class LibrarianPortalService {
     public List<Book> getPublishedBooksScreenData() {
         return bookRepository.findAll();
     }
+    public List<Book> getDownloadedBooksData() {
+        List<Book> list = new ArrayList<>();
+        for (Book b : bookRepository.findAll()) {
+            if (!authorRepository.existsByUsername(b.getAuthor())) list.add(b);
+        }
+        return list;
+    }
 
     public OperationResult validateBookId(String bookId) {
         if (bookRepository.findById(bookId).isEmpty()) return OperationResult.failure("Invalid book Id: " + bookId);

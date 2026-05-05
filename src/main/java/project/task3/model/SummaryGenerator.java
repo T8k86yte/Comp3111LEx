@@ -72,8 +72,4 @@ public class SummaryGenerator {
             return "Error：" + e.getMessage();
         }
     }
-
-    public static void main(String[] v) {
-        System.out.println(new SummaryGenerator().generate("C:\\Users\\jeff_\\Downloads\\低效无限 最终版.pdf"));
-    }
 }

@@ -14,6 +14,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.Button;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -147,6 +148,7 @@ public class LibrarianPortalApp extends Application {
     private TextField requestFilePathField;
     private ProgressBar requestDownloadBar;
     private Label requestStatistic;
+    private Label requestAlternate;
     private Label bookTableStatusLabel;
 
     private TableView<Book> publishedBooksTable;
@@ -1118,6 +1120,7 @@ public class LibrarianPortalApp extends Application {
         requestFilePathField.setPromptText("Book PDF file path:");
         requestDownloadBar = new ProgressBar();
         requestDownloadBar.setProgress(0.0);
+        requestAlternate = new Label();
         Button selectFileBtn = new Button("Select Book PDF File");
         selectFileBtn.getStyleClass().add("primary-btn");
         selectFileBtn.setOnAction(e -> {
@@ -1137,7 +1140,7 @@ public class LibrarianPortalApp extends Application {
         downloadBookBtn.getStyleClass().add("primary-btn");
         downloadBookBtn.setOnAction(e -> handleDownloadBook());
         requestActionRow1.getChildren().addAll(requestActionIdField, requestActionTypeBox, requestActionCommentField, requestFilePathField);
-        requestActionRow2.getChildren().addAll(selectFileBtn, applyRequestActionBtn, downloadBookBtn, requestDownloadBar);
+        requestActionRow2.getChildren().addAll(selectFileBtn, applyRequestActionBtn, downloadBookBtn, requestDownloadBar, requestAlternate);
 
         requestCard.getChildren().addAll(requestHeading, requestHint, requestFilters, bookRequestTable, requestActionRow1, requestActionRow2);
 
@@ -1251,6 +1254,9 @@ public class LibrarianPortalApp extends Application {
         publishedBookGenerateButton = new Button("Generate Description");
         publishedBookGenerateButton.getStyleClass().add("primary-btn");
         publishedBookGenerateButton.setOnAction(event -> handleGenerateDescription());
+        Button viewDownloadedBookStatBtn = new Button("View Downloaded Book Statistics");
+        viewDownloadedBookStatBtn.getStyleClass().add("primary-btn");
+        viewDownloadedBookStatBtn.setOnAction(e -> handleViewDownloadStats());
 
         HBox fields1 = new HBox(5);
         HBox fields2 = new HBox(5);
@@ -1264,6 +1270,7 @@ public class LibrarianPortalApp extends Application {
         fields2.getChildren().add(selectBookFileBtn);
         fields2.getChildren().add(publishedBookCoverPath);
         fields2.getChildren().add(selectBookCoverBtn);
+        fields2.getChildren().add(viewDownloadedBookStatBtn);
         actions.getChildren().add(modifyBtn);
         actions.getChildren().add(createBtn);
         actions.getChildren().add(publishedBookGenerateButton);
@@ -1940,12 +1947,49 @@ public class LibrarianPortalApp extends Application {
         }
 
         try {
-            BookDownloadHelper.crawl(portalService.getBookRequestTitle(requestId), requestDownloadBar);
+            new Thread(() -> BookDownloadHelper.crawl(portalService.getBookRequestTitle(requestId), requestDownloadBar, requestAlternate)).start();
         } catch (Exception e) {
             showErrorPopup("Download Book", "Action Failed", "Could not access target webpage.");
             setStatus("Download failed: Unable to access webpage.");
             return;
         }
+    }
+
+    private void handleViewDownloadStats() {
+        TableView<Book> tableView = new TableView<>();
+
+        TableColumn<Book, String> idCol = new TableColumn<>("Id");
+        idCol.setCellValueFactory(new PropertyValueFactory<>("Id"));
+
+        TableColumn<Book, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("Title"));
+
+        TableColumn<Book, Integer> authorCol = new TableColumn<>("Author");
+        authorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
+
+        TableColumn<Book, Integer> genreCol = new TableColumn<>("Genre");
+        genreCol.setCellValueFactory(new PropertyValueFactory<>("Genre"));
+
+        TableColumn<Book, Integer> borrowCountCol = new TableColumn<>("Borrow Count");
+        borrowCountCol.setCellValueFactory(new PropertyValueFactory<>("BorrowCount"));
+
+
+        tableView.getColumns().addAll(idCol, titleCol, authorCol, genreCol, borrowCountCol);
+
+        tableView.setItems(FXCollections.observableArrayList(portalService.getDownloadedBooksData()));
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Downloaded Books Data");
+        dialog.setHeaderText("");
+
+        DialogPane dialogPane = dialog.getDialogPane();
+        dialogPane.setContent(tableView);
+        dialogPane.getButtonTypes().addAll(ButtonType.CLOSE);
+
+        tableView.setPrefWidth(400);
+        tableView.setPrefHeight(300);
+
+        dialog.showAndWait();
     }
 
     private void handleViewChangeLogs() {
