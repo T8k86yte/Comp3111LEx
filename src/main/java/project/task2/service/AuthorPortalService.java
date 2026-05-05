@@ -4,26 +4,47 @@ import project.task2.model.AuthorAccount;
 import project.task2.repo.AuthorRepository;
 import project.task2.utils.PasswordUtils;
 import project.task2.model.BookSubmission;
+import project.task2.model.Review;
+import project.task2.model.BookStats;
+import project.task2.model.ArchivedNotification;
 import project.task2.repo.SubmissionRepository;
 import project.task2.repo.DraftRepository;
 import project.task2.repo.NotificationRepository;
+import project.task2.repo.ArchivedNotificationRepository;
 import project.task2.model.Notification;
 import project.task2.utils.FileHandler;
+import project.task1.repo.InMemoryBookRepository;
+import project.task1.model.Book;
+import project.task1.repo.StudentStaffRepository;
+import project.task1.service.StudentStaffPortalService;
+import project.task3.repo.LibrarianRepository;
+import project.shared.notification.UnifiedNotificationStore;
 
 import java.util.List;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
 
 public class AuthorPortalService {
     private final AuthorRepository authorRepository;
     private final SubmissionRepository submissionRepository;
     private final DraftRepository draftRepository;
     private final NotificationRepository notificationRepository;
+    private final ArchivedNotificationRepository archivedNotificationRepository;
+    private final LibrarianRepository librarianRepository;
+    private final UnifiedNotificationStore notificationStore;
+    private final project.task2.repo.ReviewRepository reviewRepo;
 
     public AuthorPortalService() {
         this.authorRepository = new AuthorRepository();
         this.submissionRepository = new SubmissionRepository();
         this.draftRepository = new DraftRepository();
         this.notificationRepository = new NotificationRepository();
+        this.archivedNotificationRepository = new ArchivedNotificationRepository();
+        this.librarianRepository = new LibrarianRepository();
+        this.notificationStore = new UnifiedNotificationStore();
+        this.reviewRepo = new project.task2.repo.ReviewRepository();
     }
 
     // ========== REGISTRATION ==========
@@ -70,6 +91,7 @@ public class AuthorPortalService {
                 fullName.trim(),
                 salt,
                 hash,
+                false,
                 bio != null ? bio.trim() : ""
             );
 
@@ -113,16 +135,18 @@ public class AuthorPortalService {
 
     // ========== DRAFT METHODS ==========
     public void saveDraft(String authorUsername, String title, List<String> genres, 
-                          String description, String filePath) {
+                          String description, String filePath, String coverImagePath) {
         String genresStr = genres != null ? String.join(",", genres) : "";
         String draftData = String.join("|",
             title != null ? title : "",
             genresStr,
             description != null ? description : "",
-            filePath != null ? filePath : ""
+            filePath != null ? filePath : "",
+            coverImagePath != null ? coverImagePath : ""
         );
         
-        if (!title.isEmpty() || !genresStr.isEmpty() || !description.isEmpty() || !filePath.isEmpty()) {
+        if (!title.isEmpty() || !genresStr.isEmpty() || !description.isEmpty() || 
+            !filePath.isEmpty() || !coverImagePath.isEmpty()) {
             draftRepository.saveDraft(authorUsername, draftData);
         } else {
             draftRepository.deleteDraft(authorUsername);
@@ -135,8 +159,8 @@ public class AuthorPortalService {
             return null;
         }
         
-        String[] parts = draftData.split("\\|", 4);
-        if (parts.length == 4) {
+        String[] parts = draftData.split("\\|", 5);
+        if (parts.length >= 4) {
             return parts;
         }
         return null;
@@ -149,7 +173,8 @@ public class AuthorPortalService {
     // ========== BOOK SUBMISSION ==========
     public SubmissionResult submitBookForApproval(String authorUsername, String authorFullName,
                                               String title, String genresStr, 
-                                              String description, String filePath) {
+                                              String description, String filePath,
+                                              String coverImagePath) {
     
         if (isBlank(title)) {
             return SubmissionResult.failure("Book title is required.");
@@ -169,23 +194,29 @@ public class AuthorPortalService {
                 FileHandler.getAllowedFileTypes());
         }
 
+        if (coverImagePath != null && !coverImagePath.isEmpty()) {
+            if (!isValidCoverImage(coverImagePath)) {
+                return SubmissionResult.failure("Invalid cover image. Allowed: JPG, PNG (max 5MB)");
+            }
+        }
+
         try {
             List<String> genres = Arrays.asList(genresStr.split(","));
             
             BookSubmission submission = new BookSubmission(
                 title, authorUsername, authorFullName, 
-                genres, description, filePath
+                genres, description, filePath, coverImagePath
             );
 
             submissionRepository.save(submission);
             clearDraft(authorUsername);
-
-            // Send notification about pending submission
+            
             sendNotification(authorUsername, 
-                "Book Submitted: " + title,
-                "Your book '" + title + "' has been submitted and is pending review.",
-                "BOOK_PENDING",
+                "📝 Book Submitted: " + title,
+                "Your book '" + title + "' has been submitted and is pending review by a librarian.",
+                "BOOK_SUBMITTED",
                 submission.getSubmissionId());
+            notifyLibrariansOfNewSubmission(submission);
 
             return SubmissionResult.success(
                 "Book '" + title + "' submitted successfully!\n" +
@@ -197,8 +228,104 @@ public class AuthorPortalService {
         }
     }
 
+    private boolean isValidCoverImage(String filePath) {
+        String lower = filePath.toLowerCase();
+        if (!lower.endsWith(".jpg") && !lower.endsWith(".jpeg") && !lower.endsWith(".png")) {
+            return false;
+        }
+        try {
+            java.io.File file = new java.io.File(filePath);
+            if (file.exists() && file.length() > 5 * 1024 * 1024) {
+                return false;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        return true;
+    }
+
     public List<BookSubmission> getAuthorSubmissions(String authorUsername) {
-        return submissionRepository.findByAuthor(authorUsername);
+        submissionRepository.refreshFromFile();
+        List<BookSubmission> submissions = submissionRepository.findByAuthor(authorUsername);
+        syncBorrowTrackingFromLibraryBooks(submissions);
+        return submissions;
+    }
+
+    private void syncBorrowTrackingFromLibraryBooks(List<BookSubmission> submissions) {
+        if (submissions == null || submissions.isEmpty()) {
+            return;
+        }
+
+        InMemoryBookRepository bookRepository = new InMemoryBookRepository();
+        List<Book> libraryBooks = bookRepository.findAll();
+        Map<String, Book> byTitleAuthor = new HashMap<>();
+        for (Book book : libraryBooks) {
+            String key = buildTitleAuthorKey(book.getTitle(), book.getAuthor());
+            byTitleAuthor.putIfAbsent(key, book);
+        }
+
+        boolean changed = false;
+        for (BookSubmission sub : submissions) {
+            if (sub == null || !sub.isApproved()) {
+                continue;
+            }
+            String key = buildTitleAuthorKey(sub.getTitle(), sub.getAuthorFullName());
+            Book matchedBook = byTitleAuthor.get(key);
+            if (matchedBook == null) {
+                continue;
+            }
+            int latestTotal = Math.max(0, matchedBook.getBorrowCount());
+            int latestCurrent = matchedBook.isAvailable() ? 0 : 1;
+            if (sub.getTotalBorrowedCount() != latestTotal || sub.getCurrentlyBorrowedCount() != latestCurrent) {
+                sub.setBorrowTrackingCounts(latestTotal, latestCurrent);
+                submissionRepository.update(sub);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            submissionRepository.refreshFromFile();
+        }
+    }
+
+    private String buildTitleAuthorKey(String title, String author) {
+        return normalizeMatchValue(title) + "|" + normalizeMatchValue(author);
+    }
+
+    private String normalizeMatchValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().toLowerCase();
+    }
+
+    private void notifyLibrariansOfNewSubmission(BookSubmission submission) {
+        if (submission == null) {
+            return;
+        }
+        for (var librarian : librarianRepository.getAllUsers()) {
+            notificationStore.create(
+                    "TASK3",
+                    librarian.getUsername(),
+                    "🆕 New Book Submission",
+                    "New submission received: '" + submission.getTitle() + "' by " + submission.getAuthorFullName() + ".",
+                    "NEW_BOOK_SUBMISSION",
+                    "NEW_BOOK_SUBMISSION",
+                    true,
+                    submission.getSubmissionId()
+            );
+        }
+    }
+
+    // ========== PROFILE MANAGEMENT ==========
+    public boolean updateProfile(AuthorAccount author) {
+        try {
+            authorRepository.update(author);
+            return true;
+        } catch (Exception e) {
+            System.err.println("❌ Task2: Error updating profile: " + e.getMessage());
+            return false;
+        }
     }
 
     // ========== BOOK EDITING & DELETION ==========
@@ -214,7 +341,24 @@ public class AuthorPortalService {
 
     public boolean deleteSubmission(String submissionId) {
         try {
+            var existing = submissionRepository.findById(submissionId);
+            if (existing.isEmpty()) {
+                return false;
+            }
+            if (!existing.get().canBeDeleted()) {
+                return false;
+            }
             submissionRepository.delete(submissionId);
+            existing.ifPresent(sub -> {
+                removeApprovedLibraryCopies(sub);
+                sendNotification(
+                        sub.getAuthorUsername(),
+                        "🗑️ Book Deleted: " + sub.getTitle(),
+                        "Your submission '" + sub.getTitle() + "' was deleted.",
+                        "BOOK_DELETED",
+                        sub.getSubmissionId()
+                );
+            });
             return true;
         } catch (Exception e) {
             System.err.println("❌ Task2: Error deleting submission: " + e.getMessage());
@@ -222,14 +366,24 @@ public class AuthorPortalService {
         }
     }
 
-    // ========== PROFILE MANAGEMENT ==========
-    public AuthorAccount updateProfile(AuthorAccount author) {
-        try {
-            authorRepository.update(author);
-            return authorRepository.findByUsername(author.getUsername()).orElse(author);
-        } catch (Exception e) {
-            System.err.println("❌ Task2: Error updating profile: " + e.getMessage());
-            return null;
+    private void removeApprovedLibraryCopies(BookSubmission submission) {
+        if (submission == null || !submission.isApproved()) {
+            return;
+        }
+        InMemoryBookRepository bookRepository = new InMemoryBookRepository();
+        StudentStaffPortalService studentService = new StudentStaffPortalService(
+                new StudentStaffRepository(),
+                bookRepository,
+                authorRepository,
+                librarianRepository
+        );
+        String key = buildTitleAuthorKey(submission.getTitle(), submission.getAuthorFullName());
+        List<Book> matches = bookRepository.findAll().stream()
+                .filter(book -> buildTitleAuthorKey(book.getTitle(), book.getAuthor()).equals(key))
+                .toList();
+        for (Book book : matches) {
+            studentService.handleBookDeleted(book.getId(), book.getTitle());
+            bookRepository.deleteBook(book.getId());
         }
     }
 
@@ -258,6 +412,180 @@ public class AuthorPortalService {
 
     public void markAllNotificationsAsRead(String authorUsername) {
         notificationRepository.markAllAsRead(authorUsername);
+    }
+
+    public void deleteNotification(String notificationId) {
+        notificationRepository.delete(notificationId);
+    }
+    
+    public void deleteAllNotifications(String authorUsername) {
+        notificationRepository.deleteAllByAuthor(authorUsername);
+    }
+    
+    public void deleteReadNotifications(String authorUsername) {
+        notificationRepository.deleteReadByAuthor(authorUsername);
+    }
+
+    // ========== STATS METHODS (Task 2.8) ==========
+    
+    public List<BookStats> getAuthorBookStats(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        List<BookStats> statsList = new ArrayList<>();
+        
+        for (BookSubmission sub : submissions) {
+            if (sub.isApproved()) {
+                double avgRating = reviewRepo.getAverageRatingForBook(sub.getSubmissionId());
+                int reviewCount = reviewRepo.getReviewCountForBook(sub.getSubmissionId());
+                
+                statsList.add(new BookStats(
+                    sub.getSubmissionId(),
+                    sub.getTitle(),
+                    sub.getTotalBorrowedCount(),
+                    avgRating,
+                    reviewCount,
+                    sub.getTotalBorrowedCount(),
+                    sub.getStatus()
+                ));
+            }
+        }
+        return statsList;
+    }
+    
+    public int getTotalBorrowsForAuthor(String authorUsername) {
+        return getAuthorSubmissions(authorUsername).stream()
+                .filter(BookSubmission::isApproved)
+                .mapToInt(BookSubmission::getTotalBorrowedCount)
+                .sum();
+    }
+    
+    public double getAverageRatingForAuthor(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        double sum = 0.0;
+        int count = 0;
+        for (BookSubmission sub : submissions) {
+            if (sub.isApproved()) {
+                sum += reviewRepo.getAverageRatingForBook(sub.getSubmissionId());
+                count++;
+            }
+        }
+        return count > 0 ? sum / count : 0.0;
+    }
+    
+    public int getTotalReviewsForAuthor(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        int total = 0;
+        for (BookSubmission sub : submissions) {
+            if (sub.isApproved()) {
+                total += reviewRepo.getReviewCountForBook(sub.getSubmissionId());
+            }
+        }
+        return total;
+    }
+
+    // ========== REVIEW METHODS (Task 2.9) ==========
+    
+    public List<Review> getReviewsForAuthorBooks(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        List<String> bookIds = submissions.stream()
+                .map(BookSubmission::getSubmissionId)
+                .collect(java.util.stream.Collectors.toList());
+        return reviewRepo.findByAuthorBooks(bookIds);
+    }
+    
+    public boolean replyToReview(String reviewId, String replyMessage) {
+        var reviewOpt = reviewRepo.findById(reviewId);
+        if (reviewOpt.isEmpty()) {
+            return false;
+        }
+        Review review = reviewOpt.get();
+        review.setAuthorReply(replyMessage);
+        reviewRepo.update(review);
+        
+        sendNotificationToReviewer(review, replyMessage);
+        return true;
+    }
+    
+    public boolean flagReview(String reviewId, String reason) {
+        var reviewOpt = reviewRepo.findById(reviewId);
+        if (reviewOpt.isEmpty()) {
+            return false;
+        }
+        Review review = reviewOpt.get();
+        review.setFlagged(true, reason);
+        reviewRepo.update(review);
+        return true;
+    }
+    
+    private void sendNotificationToReviewer(Review review, String replyMessage) {
+        String title = "📝 Author replied to your review";
+        String message = "Author replied to your review on '" + review.getBookTitle() + "':\n\"" + replyMessage + "\"";
+        
+        notificationStore.create(
+            "TASK1",
+            review.getReviewerUsername(),
+            title,
+            message,
+            "AUTHOR_REPLY",
+            "AUTHOR_REPLY",
+            false,
+            review.getReviewId()
+        );
+    }
+
+    // ========== ARCHIVE METHODS (Task 2.6) ==========
+    
+    public void archiveNotification(String notificationId) {
+        List<Notification> notifications = notificationRepository.findByAuthor("");
+        for (Notification notification : notifications) {
+            if (notification.getNotificationId().equals(notificationId)) {
+                archivedNotificationRepository.archive(notification);
+                notificationRepository.delete(notificationId);
+                break;
+            }
+        }
+    }
+    
+    public void archiveAllNotifications(String authorUsername) {
+        List<Notification> notifications = notificationRepository.findByAuthor(authorUsername);
+        for (Notification notification : notifications) {
+            if (notification.isRead()) {
+                archivedNotificationRepository.archive(notification);
+                notificationRepository.delete(notification.getNotificationId());
+            }
+        }
+    }
+    
+    public List<ArchivedNotification> getArchivedNotifications(String authorUsername) {
+        return archivedNotificationRepository.findByAuthor(authorUsername);
+    }
+    
+    public void unarchiveNotification(String originalId) {
+        var archivedOpt = archivedNotificationRepository.findById(originalId);
+        if (archivedOpt.isPresent()) {
+            ArchivedNotification archived = archivedOpt.get();
+            Notification restored = new Notification(
+                archived.getOriginalId(),
+                archived.getAuthorUsername(),
+                archived.getTitle(),
+                archived.getMessage(),
+                archived.getType(),
+                true,
+                archived.getCreatedAt(),
+                archived.getRelatedSubmissionId(),
+                false,
+                false
+            );
+            notificationRepository.save(restored);
+            archivedNotificationRepository.unarchive(originalId);
+        }
+    }
+    
+    public void deleteArchivedNotification(String originalId) {
+        archivedNotificationRepository.deleteArchived(originalId);
+    }
+    
+    public void deleteAllArchivedNotifications(String authorUsername) {
+        archivedNotificationRepository.deleteAllByAuthor(authorUsername);
     }
 
     // ========== VALIDATION HELPER METHODS ==========

@@ -1,7 +1,5 @@
-zyangcw|Yang Zixuan|NaS/4qkuJ/RiPIq71Ht1Tw==|/JdHeln42hnqE9nfcMqutVcwIVCu6bD8AVnF21xFNxQ=|STUDENT
-zyang|Yang Zixuan|gUC48Mt++URsc+PFCZSb/g==|BECjopTZreDV9osUspVafjKP3jnxQEYckNPwbTo69P0=|STUDENT
-peter|Peter Parker|wfg1xWc08W5lNIaGH1LsQQ==|hkV4BnREM8TeXohJ4X8fzcQDzIu+81XoHlEXsYtftpo=|STUDENT
-Ben|Ben Parker|ZT31M27loVWQ7wXVk/SdNA==|GEwgsDVvoBqKW7QlggHPXqgJAX+Ht4xYlz8pPwxlmJo=|STAFF
-Jerry|Yang|IzXtWr9zVYJXtElBwxQPRg==|Nj05KiE+FCJbI6fLjkJCVegTnKhapdtu/xeixpZdmsM=|STAFF
-Heisenburg|Walter White|WoZ6V4l5T+Do6gEB6JvxQw==|MA7bSdtwuYMggh9iw3oEoNKKwqsxeh7bJ6z3dMS017g=|STAFF
-Mary|Mary Ane|BXj+wuU8NgVVie2/BrKtwA==|d0a4KFu5pv8BewQSKDkGShNZyUb4jj+ypRjuf/kzWms=|STUDENT
+SSS|SSSS|wJhYq6g78+w5OCxZPSn1pQ==|6phLye9EONWRcije/71guii8RkLcW63EsRePET1NjgA=|STAFF|1
+zyang|Yang Zixuan|UxjWCC6bng4fZ7svUZoELA==|GtBup3nEuHMRKuve8UBMCsdreMuHmsONXcI5NuLLVIQ=|STUDENT|1
+adk3|dakai|Yeg/SHjhasB8oXyjdTMwSQ==|qW/DWrIXZ4Pj4VlBfqlmTZrOGlCWsEK/JhBMsqci+Fg=|STUDENT|0
+Cathy|Cathy Dweight|DghKoXPClLinTaJlnywt8w==|nsQ52Mjty5FhujWp6Pu55aq6fkDRM6ya8qCNW1QDrTk=|STUDENT|0
+jackys|yyf|vLMoG2mRPG4HOA09lsX5eg==|3iDgTZ8YC7kiuYOTRpY0pJVWU/WrwqCLYuNHAyItjVE=|STUDENT|0

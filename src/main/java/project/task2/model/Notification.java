@@ -12,6 +12,8 @@ public class Notification {
     private boolean isRead;
     private final LocalDateTime createdAt;
     private final String relatedSubmissionId;
+    private final boolean isPriority;
+    private boolean isArchived;
 
     public Notification(String authorUsername, String title, String message, String type, String relatedSubmissionId) {
         this.notificationId = "NOTIF_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 10000);
@@ -22,10 +24,13 @@ public class Notification {
         this.isRead = false;
         this.createdAt = LocalDateTime.now();
         this.relatedSubmissionId = relatedSubmissionId;
+        this.isPriority = isPriorityType(type);
+        this.isArchived = false;
     }
 
     public Notification(String notificationId, String authorUsername, String title, String message, 
-                        String type, boolean isRead, LocalDateTime createdAt, String relatedSubmissionId) {
+                        String type, boolean isRead, LocalDateTime createdAt, 
+                        String relatedSubmissionId, boolean isPriority, boolean isArchived) {
         this.notificationId = notificationId;
         this.authorUsername = authorUsername;
         this.title = title;
@@ -34,6 +39,14 @@ public class Notification {
         this.isRead = isRead;
         this.createdAt = createdAt;
         this.relatedSubmissionId = relatedSubmissionId;
+        this.isPriority = isPriority;
+        this.isArchived = isArchived;
+    }
+
+    private boolean isPriorityType(String type) {
+        return type.equals("BOOK_DELETED") || 
+               type.equals("BOOK_REJECTED") ||
+               type.equals("URGENT_ANNOUNCEMENT");
     }
 
     public String getNotificationId() { return notificationId; }
@@ -44,8 +57,12 @@ public class Notification {
     public boolean isRead() { return isRead; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public String getRelatedSubmissionId() { return relatedSubmissionId; }
+    public boolean isPriority() { return isPriority; }
+    public boolean isArchived() { return isArchived; }
 
     public void markAsRead() { this.isRead = true; }
+    public void archive() { this.isArchived = true; }
+    public void unarchive() { this.isArchived = false; }
 
     public String getFormattedDate() {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -56,17 +73,11 @@ public class Notification {
         return switch (type) {
             case "BOOK_APPROVED" -> "✅";
             case "BOOK_REJECTED" -> "❌";
+            case "BOOK_SUBMITTED" -> "📝";
             case "BOOK_PENDING" -> "⏳";
+            case "BOOK_DELETED" -> "🗑️";
+            case "URGENT_ANNOUNCEMENT" -> "⚠️";
             default -> "📌";
-        };
-    }
-
-    public String getTypeColor() {
-        return switch (type) {
-            case "BOOK_APPROVED" -> "status-approved";
-            case "BOOK_REJECTED" -> "status-rejected";
-            case "BOOK_PENDING" -> "status-pending";
-            default -> "muted";
         };
     }
 
@@ -80,13 +91,15 @@ public class Notification {
             type,
             String.valueOf(isRead),
             createdAt.toString(),
-            relatedSubmissionId != null ? relatedSubmissionId : ""
+            relatedSubmissionId != null ? relatedSubmissionId : "",
+            String.valueOf(isPriority),
+            String.valueOf(isArchived)
         );
     }
 
     public static Notification fromString(String data) {
-        String[] parts = data.split("\\|");
-        if (parts.length >= 8) {
+        String[] parts = data.split("\\|", -1);
+        if (parts.length >= 10) {
             return new Notification(
                 parts[0],
                 parts[1],
@@ -95,7 +108,9 @@ public class Notification {
                 parts[4],
                 Boolean.parseBoolean(parts[5]),
                 LocalDateTime.parse(parts[6]),
-                parts[7].isEmpty() ? null : parts[7]
+                parts[7].isEmpty() ? null : parts[7],
+                Boolean.parseBoolean(parts[8]),
+                Boolean.parseBoolean(parts[9])
             );
         }
         return null;

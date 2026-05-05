@@ -1,6 +1,7 @@
 package project.task1.repo;
 
 import project.task1.model.StudentStaffAccount;
+import project.task1.model.UserAccount;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -72,5 +73,9 @@ public class StudentStaffRepository {
 
     public Optional<StudentStaffAccount> findByUsername(String username) {
         return Optional.ofNullable(studentstaffsByUsername.get(username));
+    }
+
+    public List<StudentStaffAccount> getAllUsers() {
+        return studentstaffsByUsername.values().stream().toList();
     }
 }
