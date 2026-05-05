@@ -14,12 +14,24 @@ import java.util.concurrent.TimeUnit;
 
 public class LLMService {
     
-    private static final String DEEPSEEK_API_KEY = System.getenv("DEEPSEEK_API_KEY");
+    private static final String DEEPSEEK_API_KEY;
     private static final OkHttpClient client = new OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .build();
     private static final Gson gson = new Gson();
+    
+    // Static block to load API key from environment
+    static {
+        String key = System.getenv("DEEPSEEK_API_KEY");
+        if (key == null || key.isEmpty()) {
+            System.out.println("⚠️ DEEPSEEK_API_KEY environment variable not set");
+            DEEPSEEK_API_KEY = null;
+        } else {
+            DEEPSEEK_API_KEY = key;
+            System.out.println("✅ DeepSeek API key loaded: " + key.substring(0, Math.min(10, key.length())) + "...");
+        }
+    }
     
     public enum SummaryStyle {
         SHORT(
@@ -66,14 +78,16 @@ public class LLMService {
     public String generateSummary(String title, String genre, String contentPreview, SummaryStyle style) {
         // Try DeepSeek API first
         if (DEEPSEEK_API_KEY != null && !DEEPSEEK_API_KEY.isEmpty()) {
+            System.out.println("📡 Using DeepSeek API for summary generation...");
             String result = generateWithDeepSeek(title, genre, contentPreview, style);
             if (result != null && !result.isEmpty()) {
                 return result;
             }
+        } else {
+            System.out.println("⚠️ No DeepSeek API key found. Using mock generation.");
         }
         
         // Fallback to enhanced mock generation
-        System.out.println("⚠️ DeepSeek API not available. Using fallback mock generation.");
         return generateMockSummary(title, genre, contentPreview, style);
     }
     
@@ -90,7 +104,6 @@ public class LLMService {
             requestBody.addProperty("model", "deepseek-chat");
             requestBody.addProperty("temperature", 0.7);
             
-            // Adjust max_tokens based on style
             int maxTokens = style == SummaryStyle.SHORT ? 60 : (style == SummaryStyle.MEDIUM ? 300 : 600);
             requestBody.addProperty("max_tokens", maxTokens);
             
@@ -136,6 +149,9 @@ public class LLMService {
                     return summary;
                 } else {
                     System.err.println("DeepSeek API error: " + response.code() + " - " + responseBody);
+                    if (response.code() == 401) {
+                        System.err.println("❌ Invalid API key! Please check your DEEPSEEK_API_KEY");
+                    }
                     return null;
                 }
             }
@@ -162,49 +178,40 @@ public class LLMService {
     }
     
     private String generateMockSummary(String title, String genre, String contentPreview, SummaryStyle style) {
+        Random rand = new Random();
+        
         switch (style) {
             case SHORT:
-                return generateMockShort(title, genre);
+                String[] openers = {
+                    "A powerful exploration of", "An eye-opening journey through",
+                    "A compelling look at", "A masterful examination of"
+                };
+                String[] endings = {
+                    "that will change how you think about the genre.",
+                    "that delivers a memorable reading experience.",
+                    "that stands out in its field.",
+                    "that offers fresh perspectives."
+                };
+                return openers[rand.nextInt(openers.length)] + " \"" + title + "\" " + endings[rand.nextInt(endings.length)];
+                
             case DETAILED:
-                return generateMockDetailed(title, genre);
+                return "\"" + title + "\" is a significant contribution to the " + (genre.isEmpty() ? "literary" : genre.toLowerCase()) + 
+                       " genre. The author demonstrates strong command of the subject matter, weaving together narrative threads " +
+                       "that resonate throughout the work.\n\n" +
+                       "The book's greatest strength lies in its ability to connect thematic elements with real-world implications. " +
+                       "Key themes include personal growth, societal impact, and the universal human experience. " +
+                       "Each chapter builds naturally upon the last, creating a satisfying narrative arc.\n\n" +
+                       "Character/Subject development is handled with care and attention to detail. The author's voice remains " +
+                       "consistent and engaging throughout. This book is highly recommended for readers seeking both entertainment " +
+                       "and intellectual stimulation.";
+                       
             default:
-                return generateMockMedium(title, genre);
+                return "\"" + title + "\" offers a " + (genre.isEmpty() ? "compelling" : genre.toLowerCase()) + 
+                       " narrative that engages readers from the first page. The author skillfully develops the central themes, " +
+                       "creating a cohesive exploration of the subject matter. " +
+                       "This work successfully balances depth with accessibility, making it valuable for both newcomers and " +
+                       "experienced readers in the genre.";
         }
-    }
-    
-    private String generateMockShort(String title, String genre) {
-        String[] openers = {
-            "A powerful exploration of", "An eye-opening journey through",
-            "A compelling look at", "A masterful examination of"
-        };
-        String[] endings = {
-            "that will change how you think about the genre.",
-            "that delivers a memorable reading experience.",
-            "that stands out in its field.",
-            "that offers fresh perspectives."
-        };
-        
-        return openers[new Random().nextInt(openers.length)] + " \"" + title + "\" " + endings[new Random().nextInt(endings.length)];
-    }
-    
-    private String generateMockMedium(String title, String genre) {
-        return "\"" + title + "\" offers a " + (genre.isEmpty() ? "compelling" : genre.toLowerCase()) + 
-               " narrative that engages readers from the first page. The author skillfully develops the central themes, " +
-               "creating a cohesive exploration of the subject matter. " +
-               "This work successfully balances depth with accessibility, making it valuable for both newcomers and " +
-               "experienced readers in the genre.";
-    }
-    
-    private String generateMockDetailed(String title, String genre) {
-        return "\"" + title + "\" is a significant contribution to the " + (genre.isEmpty() ? "literary" : genre.toLowerCase()) + 
-               " genre. The author demonstrates strong command of the subject matter, weaving together narrative threads " +
-               "that resonate throughout the work.\n\n" +
-               "The book's greatest strength lies in its ability to connect thematic elements with real-world implications. " +
-               "Key themes include personal growth, societal impact, and the universal human experience. " +
-               "Each chapter builds naturally upon the last, creating a satisfying narrative arc.\n\n" +
-               "Character/Subject development is handled with care and attention to detail. The author's voice remains " +
-               "consistent and engaging throughout. This book is highly recommended for readers seeking both entertainment " +
-               "and intellectual stimulation. It will likely become a reference point for future works in this category.";
     }
     
     private String extractFilePreview(String filePath) {
@@ -238,8 +245,9 @@ public class LLMService {
     }
     
     public static String getAPIStatus() {
-        if (System.getenv("DEEPSEEK_API_KEY") != null && !System.getenv("DEEPSEEK_API_KEY").isEmpty()) {
-            return "🤖 DeepSeek API Connected - 3 Distinct Styles Available";
+        String key = System.getenv("DEEPSEEK_API_KEY");
+        if (key != null && !key.isEmpty()) {
+            return "🤖 DeepSeek API Connected - " + key.substring(0, Math.min(8, key.length())) + "...";
         } else {
             return "⚠️ Mock Mode - Set DEEPSEEK_API_KEY for real AI";
         }

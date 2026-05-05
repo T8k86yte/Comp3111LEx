@@ -100,7 +100,9 @@ public class ProfileManagementFX {
         root.setCenter(scrollPane);
 
         Scene scene = new Scene(root, 600, 850);
-        scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
+        try {
+            scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
+        } catch (Exception e) {}
         
         stage.setTitle("Profile Management - " + currentAuthor.getUsername());
         stage.setScene(scene);
@@ -443,6 +445,7 @@ public class ProfileManagementFX {
             }
             
             try {
+                // FIXED: AuthorAccount constructor with 8 parameters
                 AuthorAccount updatedAuthor = new AuthorAccount(
                     currentAuthor.getUsername(),
                     newFullName,
@@ -489,18 +492,25 @@ public class ProfileManagementFX {
         
         VBox currentBox = new VBox(6);
         Label currentLabel = new Label("Current Password");
+        currentLabel.setStyle("-fx-font-weight: 600; -fx-text-fill: #1e293b; -fx-font-size: 13px;");
         PasswordField currentPasswordField = new PasswordField();
+        currentPasswordField.setPromptText("Enter your current password");
+        currentPasswordField.setStyle("-fx-background-color: #f8fafc; -fx-border-color: #cbd5e1; -fx-border-radius: 8px; -fx-background-radius: 8px; -fx-padding: 10px;");
         currentBox.getChildren().addAll(currentLabel, currentPasswordField);
         
         VBox newBox = new VBox(6);
         Label newLabel = new Label("New Password");
+        newLabel.setStyle("-fx-font-weight: 600; -fx-text-fill: #1e293b; -fx-font-size: 13px;");
         PasswordField newPasswordField = new PasswordField();
+        newPasswordField.setPromptText("Create a new password");
+        newPasswordField.setStyle("-fx-background-color: #f8fafc; -fx-border-color: #cbd5e1; -fx-border-radius: 8px; -fx-background-radius: 8px; -fx-padding: 10px;");
         
         HBox strengthBox = new HBox(10);
         strengthBox.setAlignment(Pos.CENTER_LEFT);
         strengthMeter = new ProgressBar(0);
         strengthMeter.setPrefWidth(200);
         strengthLabel = new Label("Very Weak");
+        strengthLabel.setStyle("-fx-text-fill: #ef4444; -fx-font-size: 11px;");
         strengthBox.getChildren().addAll(strengthMeter, strengthLabel);
         
         newPasswordField.textProperty().addListener((obs, old, newVal) -> updatePasswordStrength(newVal));
@@ -508,10 +518,14 @@ public class ProfileManagementFX {
         
         VBox confirmBox = new VBox(6);
         Label confirmLabel = new Label("Confirm New Password");
+        confirmLabel.setStyle("-fx-font-weight: 600; -fx-text-fill: #1e293b; -fx-font-size: 13px;");
         PasswordField confirmPasswordField = new PasswordField();
+        confirmPasswordField.setPromptText("Re-enter your new password");
+        confirmPasswordField.setStyle("-fx-background-color: #f8fafc; -fx-border-color: #cbd5e1; -fx-border-radius: 8px; -fx-background-radius: 8px; -fx-padding: 10px;");
         
         Label matchLabel = new Label();
         matchLabel.setVisible(false);
+        matchLabel.setStyle("-fx-font-size: 11px;");
         confirmPasswordField.textProperty().addListener((obs, old, newVal) -> {
             String newPass = newPasswordField.getText();
             if (!newVal.isEmpty()) {
@@ -598,6 +612,7 @@ public class ProfileManagementFX {
                 String salt = PasswordUtils.generateSalt();
                 String hash = PasswordUtils.hashPassword(newPassword, salt);
                 
+                // FIXED: AuthorAccount constructor with 8 parameters
                 AuthorAccount updatedAuthor = new AuthorAccount(
                     currentAuthor.getUsername(),
                     currentFullName,
