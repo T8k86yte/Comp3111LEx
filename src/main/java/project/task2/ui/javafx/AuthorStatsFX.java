@@ -17,6 +17,7 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import project.task2.model.AuthorAccount;
 import project.task2.model.BookStats;
 import project.task2.service.AuthorPortalService;
@@ -520,8 +521,8 @@ public class AuthorStatsFX {
             PDPageContentStream contentStream = new PDPageContentStream(document, page);
             
             // Use PDType1Font with Standard PDF fonts - these are static methods now
-            PDType1Font boldFont = PDType1Font.HELVETICA_BOLD;
-            PDType1Font normalFont = PDType1Font.HELVETICA;
+            PDType1Font boldFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+            PDType1Font normalFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
             
             float margin = 50;
             float yStart = page.getMediaBox().getHeight() - margin;

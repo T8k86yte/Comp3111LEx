@@ -1,5 +1,6 @@
 package project.task1.service;
 
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import project.task1.model.Book;
 import project.task1.model.StudentStaffAccount;
 import project.task1.model.UserAccount;
@@ -16,7 +17,7 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts.*;
 
 import java.io.File;
 import java.io.IOException;
