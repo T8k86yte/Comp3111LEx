@@ -1,8 +1,20 @@
 package project.task3.model;
 
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.URL;
 import java.net.URLEncoder;
+
+import javafx.scene.control.ProgressBar;
+import org.openqa.selenium.*;
+import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
+import java.time.Duration;
+import java.util.*;
 
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -17,143 +29,94 @@ import org.jsoup.select.Elements;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.support.ui.ExpectedConditions;
-import org.openqa.selenium.support.ui.WebDriverWait;
 
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.List;
 
 public class BookDownloadHelper {
-    private static final String ZLIB_URL = "https://z-lib.fm";
-    private static final String DOWNLOAD_DIR = "data/bookFiles/";
+    private static final String DOWNLOAD_DIR = System.getenv("user.dir") + "/data/bookFiles";
 
-    public static String getDownloadURL(String title) {
+    public static void crawl(String bookTitle, ProgressBar bar) throws IOException {
+        System.setProperty("webdriver.chrome.driver", "chromedriver.exe");
+
+        // 2. 设置 Chrome 选项：自动下载到指定目录，不弹出下载对话框
+        ChromeOptions options = new ChromeOptions();
+        Map<String, Object> prefs = new HashMap<>();
+        prefs.put("download.default_directory", DOWNLOAD_DIR);
+        prefs.put("download.prompt_for_download", false);
+        prefs.put("profile.default_content_setting_values.automatic_downloads", 1);
+        options.setExperimentalOption("prefs", prefs);
+        options.addArguments("--disable-blink-features=AutomationControlled");
+        options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        options.setExperimentalOption("excludeSwitches", new String[]{"enable-automation"});
+
+        WebDriver driver = new ChromeDriver(options);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        Random random = new Random();
+
         try {
-            String searched = URLEncoder.encode(title, StandardCharsets.UTF_8);
-            searched = searched.replaceAll("\\+", "%20");
-            Document document = Jsoup.connect("https://zh.z-lib.fm/s/" + searched).get();
-            Elements elems = document.body().getElementsByClass("book-item resItemBoxBooks ");
-            String downloadURL = "";
+            String mirrorUrl = "https://1lib.sk/";
+            driver.get(mirrorUrl);
+            Thread.sleep(3000 + random.nextInt(3000));
 
-            for (Element elem : elems) {
-                Element card = elem.getElementsByTag("z-bookcard").first();
-                if (card == null) continue;
+            wait.until(ExpectedConditions.presenceOfElementLocated(By.name("q")));
 
-                Attributes attrs = card.attributes();
-                Attribute extension = attrs.attribute("extension");
-                if (extension == null || !extension.getValue().equals("pdf")) continue;
-                Attribute download = attrs.attribute("download");
-                if (download == null) continue;
+            WebElement searchBox = driver.findElement(By.name("q"));
+            searchBox.clear();
+            searchBox.sendKeys(bookTitle);
+            Thread.sleep(500 + random.nextInt(1000));
+            searchBox.submit();
+            Thread.sleep(5000 + random.nextInt(3000));
 
-                downloadURL = "https://zh.z-lib.fm" + download.getValue();
-
-                Element cover = elem.getElementsByClass("image cover").first();
-                if (cover == null) continue;
-                Attribute coverPath = cover.attribute("src");
-                break;
+            WebElement resultContainer = wait.until(ExpectedConditions.presenceOfElementLocated(By.id("searchResultBox")));
+            List<WebElement> allBookCards = resultContainer.findElements(By.cssSelector("z-bookcard"));
+            WebElement targetBookCard = null;
+            for (WebElement card : allBookCards) {
+                String ext = card.getAttribute("extension");
+                if (ext != null && ext.trim().equalsIgnoreCase("pdf")) {
+                    targetBookCard = card;
+                    break;
+                }
+            }
+            if (targetBookCard == null) {
+                throw new RuntimeException("No books with PDF files found.");
             }
 
-            return downloadURL;
-        } catch (Exception e) {
-            return "";
-        }
-    }
-    /*
-
-    public static void download(String title) {
-        try (HttpClient client = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .connectTimeout(Duration.ofSeconds(10))
-                .build()) {
-            String fileUrl = getDownloadURL(title);
-            Path destPath = Paths.get("data/bookFiles/" + title + ".pdf");
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(fileUrl))
-                    .header("User-Agent", "Mozilla/5.0")
-                    .timeout(Duration.ofSeconds(30))
-                    .GET()
-                    .build();
-
-            HttpResponse<Path> response = client.send(request,
-                    HttpResponse.BodyHandlers.ofFile(destPath));
-
-            if (response.statusCode() == 200) {
-                System.out.println("下载成功：" + destPath);
-            } else {
-                System.err.println("下载失败，状态码：" + response.statusCode());
+            String bookRelativeUrl = targetBookCard.getAttribute("href");
+            if (bookRelativeUrl == null) {
+                throw new NoSuchElementException("no href attribute");
             }
+            String fullBookUrl = mirrorUrl.replaceAll("/$", "") + bookRelativeUrl;
+            driver.get(fullBookUrl);
+            Thread.sleep(3000 + random.nextInt(2000));
+
+            WebElement pdfDownloadLink = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.xpath("//a[@class='btn btn-default addDownloadedBook']//span[@class='book-property__extension' and text()='pdf']/ancestor::a")
+            ));
+            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", pdfDownloadLink);
+            Thread.sleep(1000);
+
+            Set<Cookie> cookies = driver.manage().getCookies();
+            StringBuilder cookieHeader = new StringBuilder();
+            for (Cookie ck : cookies) {
+                cookieHeader.append(ck.getName()).append("=").append(ck.getValue()).append("; ");
+            }
+            pdfDownloadLink.click();
+
+            DownloadMonitor monitor = new DownloadMonitor(mirrorUrl + pdfDownloadLink.getAttribute("href"), new File(DOWNLOAD_DIR), bar, cookieHeader.toString());
+            new Thread(monitor).start();
+
+
+            Thread.sleep(30000);
+            System.out.println("Download complete.");
+
         } catch (Exception e) {
             System.err.println(e.getMessage());
-        }
-    }
-    */
-
-    public static boolean download(String title) {
-        //Launch ChromeDriver
-        System.setProperty("webdriver.chrome.driver", "chromedriver.exe");
-        ChromeOptions options = new ChromeOptions();
-        options.addArguments("--disable-blink-features=AutomationControlled");
-        options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ...");
-        WebDriver driver = new ChromeDriver(options);
-
-        try {
-            driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
-            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
-
-            driver.get(ZLIB_URL);
-            Thread.sleep(5000); //Cloudflare
-
-            //Search
-            WebElement searchBox = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("input[type='text']")));
-            searchBox.sendKeys(title);
-            searchBox.submit();
-
-            //Click search result
-            List<WebElement> searchResults = wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(
-                    By.cssSelector("div[itemtype='http://schema.org/Book'] h3 a")));
-
-            if (searchResults.isEmpty()) return false;
-            searchResults.getFirst().click();
-
-            //Click download button, get temporary link
-            WebElement downloadBtn = wait.until(ExpectedConditions.elementToBeClickable(
-                    By.xpath("//span[contains(text(), 'Download')]/..")));
-            String dynamicDownloadUrl = downloadBtn.getAttribute("href");
-
-            //Download
-            if (dynamicDownloadUrl != null && !dynamicDownloadUrl.isEmpty()) {
-                String fileName = title.replaceAll("\\s+", "_") + ".pdf";
-                downloadFileWithHttpClient(dynamicDownloadUrl, DOWNLOAD_DIR + fileName);
-            } else return false;
-        } catch (Exception e) {
-            return false;
         } finally {
+            // 9. 关闭浏览器
             driver.quit();
         }
-        return true;
-    }
-
-    private static void downloadFileWithHttpClient(String fileURL, String savePath) throws Exception {
-        try (CloseableHttpClient httpClient = HttpClients.createDefault();
-             CloseableHttpResponse response = httpClient.execute(new HttpGet(fileURL));
-             InputStream inputStream = response.getEntity().getContent();
-             FileOutputStream outputStream = new FileOutputStream(savePath)) {
-
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
-            }
-        }
-    }
-
-    public static void main(String[] args) {
-        BookDownloadHelper.download("Jane Eyre");
     }
 }

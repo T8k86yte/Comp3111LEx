@@ -317,7 +317,8 @@ public class LibrarianPortalService {
                     "APPROVED",
                     safeTrim(comment).isEmpty() ? "Approved by " + normalizedLibrarian : comment.trim(),
                     request.createdAt(),
-                    LocalDateTime.now()
+                    LocalDateTime.now(),
+                    request.urgency()
             );
             rows.set(i, decided);
             saveBookRequests(rows);
@@ -357,7 +358,8 @@ public class LibrarianPortalService {
                     "REJECTED",
                     safeTrim(comment).isEmpty() ? "Rejected by " + normalizedLibrarian : comment.trim(),
                     request.createdAt(),
-                    LocalDateTime.now()
+                    LocalDateTime.now(),
+                    request.urgency()
             );
             rows.set(i, decided);
             saveBookRequests(rows);
@@ -1029,10 +1031,23 @@ public class LibrarianPortalService {
                     continue;
                 }
                 String[] parts = line.split("\\|", -1);
-                if (parts.length < 10) {
-                    continue;
+                if (parts.length < 10) continue;
+                else if (parts.length == 10) {
+                    list.add(new BookRequestView(
+                            decode(parts[0]),
+                            decode(parts[1]),
+                            decode(parts[2]),
+                            decode(parts[3]),
+                            decode(parts[4]),
+                            decode(parts[5]),
+                            decode(parts[6]),
+                            decode(parts[7]),
+                            LocalDateTime.parse(parts[8], HISTORY_TIME_FORMAT),
+                            parts[9].isBlank() ? null : LocalDateTime.parse(parts[9], HISTORY_TIME_FORMAT),
+                            "NORMAL"
+                    ));
                 }
-                list.add(new BookRequestView(
+                else list.add(new BookRequestView(
                         decode(parts[0]),
                         decode(parts[1]),
                         decode(parts[2]),
@@ -1042,7 +1057,8 @@ public class LibrarianPortalService {
                         decode(parts[6]),
                         decode(parts[7]),
                         LocalDateTime.parse(parts[8], HISTORY_TIME_FORMAT),
-                        parts[9].isBlank() ? null : LocalDateTime.parse(parts[9], HISTORY_TIME_FORMAT)
+                        parts[9].isBlank() ? null : LocalDateTime.parse(parts[9], HISTORY_TIME_FORMAT),
+                        decode(parts[10])
                 ));
             }
             return list;
@@ -1066,7 +1082,8 @@ public class LibrarianPortalService {
                         encode(r.status()),
                         encode(r.librarianComment() == null ? "" : r.librarianComment()),
                         r.createdAt().format(HISTORY_TIME_FORMAT),
-                        r.decidedAt() == null ? "" : r.decidedAt().format(HISTORY_TIME_FORMAT)
+                        r.decidedAt() == null ? "" : r.decidedAt().format(HISTORY_TIME_FORMAT),
+                        encode(r.urgency())
                 ));
             }
             Files.write(Paths.get(TASK1_BOOK_REQUESTS_FILE), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
@@ -1318,7 +1335,8 @@ public class LibrarianPortalService {
             String status,
             String librarianComment,
             LocalDateTime createdAt,
-            LocalDateTime decidedAt
+            LocalDateTime decidedAt,
+            String urgency
     ) {
         public String getRequestId() { return requestId; }
         public String getUsername() { return username; }
@@ -1327,5 +1345,6 @@ public class LibrarianPortalService {
         public String getGenre() { return genre; }
         public String getReason() { return reason; }
         public String getStatus() { return status; }
+        public String getUrgency() { return urgency; }
     }
 }

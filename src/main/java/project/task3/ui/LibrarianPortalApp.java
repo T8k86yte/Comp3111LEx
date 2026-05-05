@@ -145,6 +145,8 @@ public class LibrarianPortalApp extends Application {
     private ComboBox<String> requestActionTypeBox;
     private TextField requestActionCommentField;
     private TextField requestFilePathField;
+    private ProgressBar requestDownloadBar;
+    private Label requestStatistic;
     private Label bookTableStatusLabel;
 
     private TableView<Book> publishedBooksTable;
@@ -1042,7 +1044,8 @@ public class LibrarianPortalApp extends Application {
         Button refreshRequestsBtn = new Button("Refresh Requests");
         refreshRequestsBtn.getStyleClass().add("secondary-btn");
         refreshRequestsBtn.setOnAction(e -> refreshBookRequests());
-        requestFilters.getChildren().addAll(new Label("Filter:"), bookRequestKeywordFilter, bookRequestStatusFilter, refreshRequestsBtn);
+        requestStatistic = new Label();
+        requestFilters.getChildren().addAll(new Label("Filter:"), bookRequestKeywordFilter, bookRequestStatusFilter, refreshRequestsBtn, requestStatistic);
 
         bookRequestTable = new TableView<>();
         bookRequestTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
@@ -1074,14 +1077,37 @@ public class LibrarianPortalApp extends Application {
                 setTooltip(new Tooltip(item));
             }
         });
-        bookRequestTable.getColumns().addAll(requestIdCol, requestUserCol, requestTitleCol, requestAuthorCol, requestGenreCol, requestStatusCol, requestReasonCol);
+        TableColumn<BookRequestView, String> requestUrgencyCol = new TableColumn<>("Request ID");
+        requestUrgencyCol.setCellValueFactory(new PropertyValueFactory<>("Urgency"));
+
+        requestTitleCol.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                    return;
+                }
+                BookRequestView rowRequest = getTableRow() == null ? null : getTableRow().getItem();
+
+                setText(item);
+                if (rowRequest != null && rowRequest.urgency().equals("URGENT")) {
+                    setStyle("-fx-text-fill: #dc2626; -fx-font-weight: 600;");
+                } else {
+                    setStyle("-fx-text-fill: #111827;");
+                }
+            }
+        });
+        bookRequestTable.getColumns().addAll(requestIdCol, requestUserCol, requestTitleCol, requestAuthorCol, requestGenreCol, requestStatusCol, requestReasonCol, requestUrgencyCol);
         bookRequestTable.getSelectionModel().selectedItemProperty().addListener((obs, old, val) -> {
             if (val != null && requestActionIdField != null) {
                 requestActionIdField.setText(val.requestId());
             }
         });
 
-        HBox requestActionRow = new HBox(8);
+        HBox requestActionRow1 = new HBox(8);
+        HBox requestActionRow2 = new HBox(8);
         requestActionIdField = new TextField();
         requestActionIdField.setPromptText("Request ID");
         requestActionTypeBox = new ComboBox<>(FXCollections.observableArrayList("APPROVE", "REJECT"));
@@ -1090,6 +1116,8 @@ public class LibrarianPortalApp extends Application {
         requestActionCommentField.setPromptText("Optional comment");
         requestFilePathField = new TextField();
         requestFilePathField.setPromptText("Book PDF file path:");
+        requestDownloadBar = new ProgressBar();
+        requestDownloadBar.setProgress(0.0);
         Button selectFileBtn = new Button("Select Book PDF File");
         selectFileBtn.getStyleClass().add("primary-btn");
         selectFileBtn.setOnAction(e -> {
@@ -1108,9 +1136,10 @@ public class LibrarianPortalApp extends Application {
         Button downloadBookBtn = new Button("Download Book File");
         downloadBookBtn.getStyleClass().add("primary-btn");
         downloadBookBtn.setOnAction(e -> handleDownloadBook());
-        requestActionRow.getChildren().addAll(requestActionIdField, requestActionTypeBox, requestActionCommentField, selectFileBtn, applyRequestActionBtn, downloadBookBtn);
+        requestActionRow1.getChildren().addAll(requestActionIdField, requestActionTypeBox, requestActionCommentField, requestFilePathField);
+        requestActionRow2.getChildren().addAll(selectFileBtn, applyRequestActionBtn, downloadBookBtn, requestDownloadBar);
 
-        requestCard.getChildren().addAll(requestHeading, requestHint, requestFilters, bookRequestTable, requestActionRow);
+        requestCard.getChildren().addAll(requestHeading, requestHint, requestFilters, bookRequestTable, requestActionRow1, requestActionRow2);
 
         wrapper.getChildren().addAll(card, heading, borrowedBooksTable, requestCard);
 
@@ -1238,6 +1267,7 @@ public class LibrarianPortalApp extends Application {
         actions.getChildren().add(modifyBtn);
         actions.getChildren().add(createBtn);
         actions.getChildren().add(publishedBookGenerateButton);
+        actions.getChildren().add(viewChangeLogBtn);
 
         card.getChildren().addAll(heading, hint, fields1, fields2, actions);
 
@@ -1909,21 +1939,13 @@ public class LibrarianPortalApp extends Application {
             return;
         }
 
-        Desktop desktop = Desktop.getDesktop();
-        String link;
         try {
-            link = BookDownloadHelper.getDownloadURL(portalService.getBookRequestTitle(requestId));
-            if (!link.isEmpty()) desktop.browse(new URI(link));
+            BookDownloadHelper.crawl(portalService.getBookRequestTitle(requestId), requestDownloadBar);
         } catch (Exception e) {
             showErrorPopup("Download Book", "Action Failed", "Could not access target webpage.");
             setStatus("Download failed: Unable to access webpage.");
             return;
         }
-        if (link.isEmpty()) {
-            showErrorPopup("Download Book", "Action Failed", "Could not find available books.");
-            setStatus("Download failed: No available books found.");
-        }
-        else setStatus("Download successful.");
     }
 
     private void handleViewChangeLogs() {
@@ -1955,14 +1977,46 @@ public class LibrarianPortalApp extends Application {
     }
 
     private void refreshBookRequests() {
-        if (bookRequestTable == null) {
-            return;
-        }
+        if (bookRequestTable == null) return;
         String status = bookRequestStatusFilter == null ? "ALL" : bookRequestStatusFilter.getValue();
         String keyword = bookRequestKeywordFilter == null ? "" : bookRequestKeywordFilter.getText();
-        bookRequestTable.setItems(FXCollections.observableArrayList(
-                portalService.getBookRequests(status, keyword)
-        ));
+        List<LibrarianPortalService.BookRequestView> list = portalService.getBookRequests(status, keyword);
+        bookRequestTable.setItems(FXCollections.observableArrayList(list));
+
+
+        HashMap<String, AtomicInteger> authorFreq = new HashMap<>();
+        HashMap<String, AtomicInteger> genreFreq = new HashMap<>();
+        for (LibrarianPortalService.BookRequestView req : list) {
+            if (authorFreq.containsKey(req.getAuthor())) {
+                AtomicInteger i = authorFreq.get(req.getAuthor());
+                i.set(i.get() + 1);
+            }
+            else authorFreq.put(req.getAuthor(), new AtomicInteger(1));
+
+            if (genreFreq.containsKey(req.getGenre())) {
+                AtomicInteger i = genreFreq.get(req.getGenre());
+                i.set(i.get() + 1);
+            }
+            else genreFreq.put(req.getGenre(), new AtomicInteger(1));
+        }
+
+        int maxAuthorCount = -1;
+        String maxAuthor = "";
+        int maxGenreCount = -1;
+        String maxGenre = "";
+        for (String a : authorFreq.keySet()) {
+            if (authorFreq.get(a).get() > maxAuthorCount) {
+                maxAuthorCount = authorFreq.get(a).get();
+                maxAuthor = a;
+            }
+        }
+        for (String g : genreFreq.keySet()) {
+            if (genreFreq.get(g).get() > maxGenreCount) {
+                maxGenreCount = genreFreq.get(g).get();
+                maxGenre = g;
+            }
+        }
+        requestStatistic.setText("Most Requested Author: " + maxAuthor + "; Most requested Genre: " + maxGenre);
     }
 
     private void handleBookRequestAction() {
@@ -2030,10 +2084,6 @@ public class LibrarianPortalApp extends Application {
             return;
         }
         notificationList.setItems(FXCollections.observableArrayList(rows));
-    }
-
-    private void refreshNewBookRequests() {
-        //TO DO: implement this
     }
 
 
