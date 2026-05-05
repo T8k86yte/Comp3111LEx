@@ -1087,8 +1087,6 @@ public class LibrarianPortalApp extends Application {
                 setTooltip(new Tooltip(item));
             }
         });
-        TableColumn<BookRequestView, String> requestUrgencyCol = new TableColumn<>("Request ID");
-        requestUrgencyCol.setCellValueFactory(new PropertyValueFactory<>("Urgency"));
 
         requestTitleCol.setCellFactory(column -> new TableCell<>() {
             @Override
@@ -1102,14 +1100,14 @@ public class LibrarianPortalApp extends Application {
                 BookRequestView rowRequest = getTableRow() == null ? null : getTableRow().getItem();
 
                 setText(item);
-                if (rowRequest != null && rowRequest.urgency().equals("URGENT")) {
+                if (rowRequest != null && rowRequest.urgent()) {
                     setStyle("-fx-text-fill: #dc2626; -fx-font-weight: 600;");
                 } else {
                     setStyle("-fx-text-fill: #111827;");
                 }
             }
         });
-        bookRequestTable.getColumns().addAll(requestIdCol, requestUserCol, requestTitleCol, requestAuthorCol, requestGenreCol, requestStatusCol, requestReasonCol, requestUrgencyCol);
+        bookRequestTable.getColumns().addAll(requestIdCol, requestUserCol, requestTitleCol, requestAuthorCol, requestGenreCol, requestStatusCol, requestReasonCol);
         bookRequestTable.getSelectionModel().selectedItemProperty().addListener((obs, old, val) -> {
             if (val != null && requestActionIdField != null) {
                 requestActionIdField.setText(val.requestId());
@@ -1155,9 +1153,9 @@ public class LibrarianPortalApp extends Application {
         requestActionRow2.getChildren().addAll(selectFileBtn, applyRequestActionBtn, downloadBookBtn, requestDownloadBar, requestAlternate);
 
         requestCard.getChildren().addAll(requestHeading, requestHint, requestFilters, bookRequestTable, requestActionRow1, requestActionRow2);
-        requestCard.getChildren().addAll(requestHeading, requestHint, requestFilters, bookRequestTable, requestActionRow);
         VBox.setVgrow(bookRequestTable, Priority.ALWAYS);
 
+        /*
         VBox historyCard = new VBox(10);
         historyCard.getStyleClass().add("card");
         Label historyHeading = new Label("Request History (By User)");
@@ -1174,6 +1172,35 @@ public class LibrarianPortalApp extends Application {
         refreshHistoryBtn.setOnAction(e -> refreshRequestHistory());
         historyFilters.getChildren().addAll(new Label("Filter:"), requestHistoryUserFilter, requestHistoryKeywordFilter, refreshHistoryBtn);
 
+
+        requestHistoryTable = new TableView<>();
+        requestHistoryTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        TableColumn<BookRequestView, String> hUserCol = new TableColumn<>("Requester");
+        hUserCol.setCellValueFactory(new PropertyValueFactory<>("username"));
+        TableColumn<BookRequestView, String> hIdCol = new TableColumn<>("Request ID");
+        hIdCol.setCellValueFactory(new PropertyValueFactory<>("requestId"));
+        TableColumn<BookRequestView, String> hTitleCol = new TableColumn<>("Title");
+        hTitleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+        TableColumn<BookRequestView, String> hStatusCol = new TableColumn<>("Status");
+        hStatusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
+        TableColumn<BookRequestView, String> hPriorityCol = new TableColumn<>("Priority");
+        hPriorityCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
+                cell.getValue().urgent() ? "URGENT" : "NORMAL"
+        ));
+        TableColumn<BookRequestView, String> hCreatedCol = new TableColumn<>("Submitted");
+        hCreatedCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
+                cell.getValue().createdAt() == null ? "" : cell.getValue().createdAt().toLocalDate().toString()
+        ));
+        TableColumn<BookRequestView, String> hDecidedCol = new TableColumn<>("Decided");
+        hDecidedCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
+                cell.getValue().decidedAt() == null ? "-" : cell.getValue().decidedAt().toLocalDate().toString()
+        ));
+        requestHistoryTable.getColumns().addAll(hUserCol, hIdCol, hTitleCol, hStatusCol, hPriorityCol, hCreatedCol, hDecidedCol);
+        VBox.setVgrow(requestHistoryTable, Priority.ALWAYS);
+        historyCard.getChildren().addAll(historyHeading, historyHint, historyFilters, requestHistoryTable);
+
+        wrapper.getChildren().add(historyCard);
+        */
         wrapper.getChildren().addAll(card, heading, borrowedBooksTable, requestCard);
 
         return wrapper;
@@ -1310,33 +1337,6 @@ public class LibrarianPortalApp extends Application {
 
         VBox.setVgrow(publishedBooksTable, Priority.ALWAYS);
         wrapper.getChildren().addAll(card, heading, publishedBooksTable);
-        requestHistoryTable = new TableView<>();
-        requestHistoryTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
-        TableColumn<BookRequestView, String> hUserCol = new TableColumn<>("Requester");
-        hUserCol.setCellValueFactory(new PropertyValueFactory<>("username"));
-        TableColumn<BookRequestView, String> hIdCol = new TableColumn<>("Request ID");
-        hIdCol.setCellValueFactory(new PropertyValueFactory<>("requestId"));
-        TableColumn<BookRequestView, String> hTitleCol = new TableColumn<>("Title");
-        hTitleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
-        TableColumn<BookRequestView, String> hStatusCol = new TableColumn<>("Status");
-        hStatusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
-        TableColumn<BookRequestView, String> hPriorityCol = new TableColumn<>("Priority");
-        hPriorityCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
-                cell.getValue().urgent() ? "URGENT" : "NORMAL"
-        ));
-        TableColumn<BookRequestView, String> hCreatedCol = new TableColumn<>("Submitted");
-        hCreatedCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
-                cell.getValue().createdAt() == null ? "" : cell.getValue().createdAt().toLocalDate().toString()
-        ));
-        TableColumn<BookRequestView, String> hDecidedCol = new TableColumn<>("Decided");
-        hDecidedCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
-                cell.getValue().decidedAt() == null ? "-" : cell.getValue().decidedAt().toLocalDate().toString()
-        ));
-        requestHistoryTable.getColumns().addAll(hUserCol, hIdCol, hTitleCol, hStatusCol, hPriorityCol, hCreatedCol, hDecidedCol);
-        VBox.setVgrow(requestHistoryTable, Priority.ALWAYS);
-        historyCard.getChildren().addAll(historyHeading, historyHint, historyFilters, requestHistoryTable);
-
-        wrapper.getChildren().addAll(heading, requestCard, historyCard);
 
         return wrapper;
     }
@@ -1357,7 +1357,8 @@ public class LibrarianPortalApp extends Application {
         Button profile = new Button("Manage Personal Profile");
         Button notification = new Button("Notifications");
         Button manageUsers = new Button("Manage Users");
-        Button borrowedBooks = new Button("Request Approval");
+        Button borrowedBooks = new Button("Borrowed Books, Requests");
+        Button publishedBooks = new Button("Published Books");
         Button logoutBtn = new Button("Logout");
         Button crashBtn = new Button("Crash");
 
@@ -1375,7 +1376,10 @@ public class LibrarianPortalApp extends Application {
         manageUsers.setPrefWidth(140);
         borrowedBooks.getStyleClass().add("primary-btn");
         borrowedBooks.setOnAction(event -> { stage.setScene(borrowedBooksScene); refreshBookRequests(); refreshRequestHistory(); });
-        borrowedBooks.setPrefWidth(140);
+        borrowedBooks.setPrefWidth(180);
+        publishedBooks.getStyleClass().add("primary-btn");
+        publishedBooks.setOnAction(e -> { stage.setScene(publishedBooksScene); refreshPublishedBooks(); } );
+        publishedBooks.setPrefWidth(140);
         logoutBtn.getStyleClass().add("secondary-btn");
         logoutBtn.setOnAction(event -> handleLogout());
         crashBtn.getStyleClass().add("secondary-btn");
@@ -1391,9 +1395,11 @@ public class LibrarianPortalApp extends Application {
             case 3: manageUsers.setDisable(true);
             break;
             case 4: borrowedBooks.setDisable(true);
+            break;
+            case 5: publishedBooks.setDisable(true);
         }
 
-        selector.getChildren().addAll(acceptReject, profile, notification, manageUsers, borrowedBooks, logoutBtn, crashBtn);
+        selector.getChildren().addAll(acceptReject, profile, notification, manageUsers, borrowedBooks, publishedBooks, logoutBtn, crashBtn);
 
         return selector;
     }
