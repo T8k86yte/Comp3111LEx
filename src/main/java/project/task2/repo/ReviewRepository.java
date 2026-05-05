@@ -1,16 +1,18 @@
 package project.task2.repo;
 
 import project.task2.model.Review;
+import project.task2.model.BookSubmission;
 
 import java.io.*;
 import java.nio.file.*;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class ReviewRepository {
-    private static final String REVIEWS_FILE = "data/reviews.txt";
+    private static final String TASK1_REVIEWS_FILE = "data/task1/book_reviews.txt";
     private final Map<String, Review> reviewsById = new ConcurrentHashMap<>();
 
     public ReviewRepository() {
@@ -21,64 +23,145 @@ public class ReviewRepository {
     private void createDataDirectory() {
         try {
             Files.createDirectories(Paths.get("data"));
+            Files.createDirectories(Paths.get("data/task1"));
         } catch (IOException e) {
             System.err.println("Error creating data directory: " + e.getMessage());
         }
     }
 
     private void loadFromFile() {
+        reviewsById.clear();
+        loadFromTask1File();
+        System.out.println("📖 从 Task 1 加载了 " + reviewsById.size() + " 条评论");
+    }
+
+    private void loadFromTask1File() {
+        Path path = Paths.get(TASK1_REVIEWS_FILE);
+        if (!Files.exists(path)) {
+            System.out.println("⚠️ Task 1 评论文件不存在: " + TASK1_REVIEWS_FILE);
+            return;
+        }
+
         try {
-            Path path = Paths.get(REVIEWS_FILE);
-            if (Files.exists(path)) {
-                List<String> lines = Files.readAllLines(path);
-                for (String line : lines) {
-                    if (!line.trim().isEmpty()) {
-                        Review review = fromString(line);
-                        if (review != null) {
-                            reviewsById.put(review.getReviewId(), review);
-                        }
+            List<String> lines = Files.readAllLines(path);
+            System.out.println("📄 读取到 " + lines.size() + " 行评论数据");
+            
+            for (int lineNum = 0; lineNum < lines.size(); lineNum++) {
+                String line = lines.get(lineNum);
+                if (line == null || line.trim().isEmpty()) continue;
+                
+                String[] parts = line.split("\\|", -1);
+                System.out.println("行 " + (lineNum+1) + " 有 " + parts.length + " 个字段");
+                
+                // Task 1 的格式: username|bookId|bookTitle|bookAuthor|bookGenre|rating|reviewText|createdAt|anonymous
+                if (parts.length >= 9) {
+                    try {
+                        String reviewerUsername = decode(parts[0]);
+                        String bookId = decode(parts[1]);
+                        String bookTitle = decode(parts[2]);
+                        String bookAuthor = decode(parts[3]);
+                        String bookGenre = decode(parts[4]);
+                        int rating = Integer.parseInt(parts[5]);
+                        String reviewText = decode(parts[6]);
+                        LocalDateTime createdAt = LocalDateTime.parse(parts[7], DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                        boolean anonymous = Boolean.parseBoolean(parts[8]);
+                        
+                        System.out.println("  ✅ 解析: " + bookTitle + " 评分: " + rating);
+                        
+                        String reviewId = "REV_" + bookId + "_" + Math.abs(reviewerUsername.hashCode());
+                        String displayName = anonymous ? "匿名用户" : reviewerUsername;
+                        
+                        // 查找这本书的 submission ID
+                        String submissionId = findSubmissionIdByBookDetails(bookTitle, bookAuthor);
+                        
+                        Review review = new Review(
+                            reviewId,
+                            submissionId != null ? submissionId : bookId,
+                            bookTitle,
+                            reviewerUsername,
+                            displayName,
+                            rating,
+                            reviewText,
+                            createdAt
+                        );
+                        
+                        reviewsById.put(reviewId, review);
+                        
+                    } catch (Exception e) {
+                        System.err.println("  ❌ 解析失败: " + e.getMessage());
+                    }
+                } 
+                // 兼容旧格式 (8个字段)
+                else if (parts.length >= 8) {
+                    try {
+                        String reviewerUsername = decode(parts[0]);
+                        String bookId = decode(parts[1]);
+                        String bookTitle = decode(parts[2]);
+                        String bookAuthor = decode(parts[3]);
+                        int rating = Integer.parseInt(parts[4]);
+                        String reviewText = decode(parts[5]);
+                        LocalDateTime createdAt = LocalDateTime.parse(parts[6], DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                        boolean anonymous = Boolean.parseBoolean(parts[7]);
+                        
+                        System.out.println("  ✅ 解析(旧格式): " + bookTitle + " 评分: " + rating);
+                        
+                        String reviewId = "REV_" + bookId + "_" + Math.abs(reviewerUsername.hashCode());
+                        String displayName = anonymous ? "匿名用户" : reviewerUsername;
+                        
+                        String submissionId = findSubmissionIdByBookDetails(bookTitle, bookAuthor);
+                        
+                        Review review = new Review(
+                            reviewId,
+                            submissionId != null ? submissionId : bookId,
+                            bookTitle,
+                            reviewerUsername,
+                            displayName,
+                            rating,
+                            reviewText,
+                            createdAt
+                        );
+                        
+                        reviewsById.put(reviewId, review);
+                        
+                    } catch (Exception e) {
+                        System.err.println("  ❌ 解析失败(旧格式): " + e.getMessage());
                     }
                 }
-                System.out.println("Loaded " + reviewsById.size() + " reviews");
+                else {
+                    System.out.println("  ❌ 字段数量不足: " + parts.length);
+                }
             }
         } catch (IOException e) {
-            System.err.println("Error loading reviews: " + e.getMessage());
+            System.err.println("读取 Task 1 评论文件失败: " + e.getMessage());
         }
     }
 
-    private void saveToFile() {
-        try {
-            List<String> lines = new ArrayList<>();
-            for (Review review : reviewsById.values()) {
-                lines.add(toString(review));
-            }
-            Path path = Paths.get(REVIEWS_FILE);
-            Files.write(path, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-        } catch (IOException e) {
-            System.err.println("Error saving reviews: " + e.getMessage());
-        }
+    private String findSubmissionIdByBookDetails(String bookTitle, String bookAuthor) {
+        SubmissionRepository submissionRepo = new SubmissionRepository();
+        submissionRepo.refreshFromFile();
+        
+        return submissionRepo.findAll().stream()
+            .filter(sub -> sub.isApproved())
+            .filter(sub -> sub.getTitle().equalsIgnoreCase(bookTitle))
+            .filter(sub -> sub.getAuthorFullName().equalsIgnoreCase(bookAuthor))
+            .map(BookSubmission::getSubmissionId)
+            .findFirst()
+            .orElse(null);
     }
 
-    public void save(Review review) {
-        reviewsById.put(review.getReviewId(), review);
-        saveToFile();
-    }
-
-    public void update(Review review) {
-        reviewsById.put(review.getReviewId(), review);
-        saveToFile();
+    public List<Review> findByAuthorBooks(List<String> bookIds) {
+        List<Review> result = reviewsById.values().stream()
+                .filter(r -> bookIds.contains(r.getBookId()))
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .collect(Collectors.toList());
+        
+        System.out.println("为作者找到 " + result.size() + " 条评论");
+        return result;
     }
 
     public List<Review> findByBookId(String bookId) {
         return reviewsById.values().stream()
                 .filter(r -> r.getBookId().equals(bookId))
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                .collect(Collectors.toList());
-    }
-
-    public List<Review> findByAuthorBooks(List<String> bookIds) {
-        return reviewsById.values().stream()
-                .filter(r -> bookIds.contains(r.getBookId()))
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .collect(Collectors.toList());
     }
@@ -101,49 +184,23 @@ public class ReviewRepository {
                 .count();
     }
 
-    private String toString(Review r) {
-        return String.join("|",
-            r.getReviewId(),
-            r.getBookId(),
-            r.getBookTitle(),
-            r.getReviewerUsername(),
-            r.getReviewerFullName(),
-            String.valueOf(r.getRating()),
-            encode(r.getComment()),
-            r.getCreatedAt().toString(),
-            r.getAuthorReply() != null ? encode(r.getAuthorReply()) : "",
-            r.getReplyDate() != null ? r.getReplyDate().toString() : "",
-            String.valueOf(r.isFlagged()),
-            r.getFlagReason() != null ? encode(r.getFlagReason()) : ""
-        );
+    public void refresh() {
+        loadFromFile();
     }
 
-    private Review fromString(String line) {
-        String[] parts = line.split("\\|", -1);
-        if (parts.length >= 8) {
-            Review r = new Review(
-                parts[0], parts[1], parts[2], parts[3], parts[4],
-                Integer.parseInt(parts[5]),
-                decode(parts[6]),
-                LocalDateTime.parse(parts[7])
-            );
-            if (parts.length > 8 && !parts[8].isEmpty()) {
-                r.setAuthorReply(decode(parts[8]));
-            }
-            if (parts.length > 10) {
-                r.setFlagged(Boolean.parseBoolean(parts[10]), 
-                    parts.length > 11 ? decode(parts[11]) : null);
-            }
-            return r;
-        }
-        return null;
+    public void save(Review review) {
+        reviewsById.put(review.getReviewId(), review);
     }
 
-    private String encode(String value) {
-        return Base64.getEncoder().encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    public void update(Review review) {
+        reviewsById.put(review.getReviewId(), review);
     }
 
     private String decode(String value) {
-        return new String(Base64.getDecoder().decode(value), java.nio.charset.StandardCharsets.UTF_8);
+        try {
+            return new String(Base64.getDecoder().decode(value), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return value;
+        }
     }
 }
