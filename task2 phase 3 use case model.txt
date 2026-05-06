@@ -1,0 +1,137 @@
+﻿@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+
+' ========== ACTORS ==========
+actor "Author" as author
+actor "Librarian" as librarian
+
+
+' ========== SYSTEM BOUNDARY ==========
+rectangle "Task 2: Author Portal" {
+
+
+' ===== LEFT COLUMN =====
+package "Phase 1: Account & Publishing" {
+  
+  usecase "Register Account" as UC_Reg
+  usecase "Login" as UC_Login
+  usecase "Logout" as UC_Logout
+  usecase "Publish New Book" as UC_Publish
+  usecase "Upload Book File" as UC_Upload
+  usecase "Select Multiple Genres" as UC_Genre
+  usecase "Auto-Save Draft" as UC_Draft
+  usecase "Preview Book" as UC_Preview
+  usecase "View Submission Status" as UC_Status
+  usecase "Submit for Approval" as UC_Submit
+}
+
+
+package "Phase 2: Book & Profile Management" {
+  usecase "View/Edit/Delete Books" as UC_EditBook
+  usecase "Bulk Delete" as UC_Bulk
+  usecase "Read Uploaded Book" as UC_Read
+  usecase "Manage Profile" as UC_Profile
+  usecase "Change Password" as UC_Password
+  usecase "Upload Profile Picture" as UC_ProfilePic
+  usecase "Password Strength Meter" as UC_Strength
+}
+
+
+package "Phase 2: Notifications" {
+  usecase "View Notifications" as UC_Notif
+  usecase "Mark Read/Delete" as UC_Mark
+  usecase "Archive Notifications" as UC_Archive
+  usecase "Priority Notifications" as UC_Priority
+}
+
+
+' ===== RIGHT COLUMN =====
+package "Phase 3: LLM Summary" {
+  usecase "Generate AI Summary" as UC_AI
+  usecase "Short Summary" as UC_Short
+  usecase "Medium Summary" as UC_Medium
+  usecase "Detailed Summary" as UC_Detail
+  usecase "Edit AI Summary" as UC_EditAI
+}
+
+
+package "Phase 3: Statistics Dashboard" {
+  usecase "View Statistics" as UC_Stats
+  usecase "Bar Chart (Borrows)" as UC_Bar
+  usecase "Line Chart (Trend)" as UC_Trend
+  usecase "Customize Dashboard" as UC_Custom
+  usecase "Export PDF/Excel" as UC_Export
+}
+
+
+package "Phase 3: Reviews & Feedback" {
+  usecase "View Reviews" as UC_Reviews
+  usecase "Reply to Review" as UC_Reply
+  usecase "Flag Review" as UC_Flag
+  usecase "Sentiment Analysis" as UC_Sentiment
+  usecase "Reply Templates" as UC_Template
+  usecase "Rating Distribution" as UC_RatingDist
+}
+
+
+' ========== AUTHOR CONNECTIONS ==========
+author --> UC_Reg
+author --> UC_Login
+author --> UC_Logout
+author --> UC_Publish
+author --> UC_Preview
+author --> UC_Status
+author --> UC_EditBook
+author --> UC_Profile
+author --> UC_Notif
+author --> UC_AI
+author --> UC_Stats
+author --> UC_Reviews
+
+
+librarian --> UC_Submit
+
+
+' ========== RELATIONSHIPS ==========
+UC_Reg .> UC_Strength : include
+UC_Publish .> UC_Upload : include
+UC_Publish .> UC_Genre : include
+UC_Publish .> UC_Draft : include
+UC_Publish .> UC_Submit : include
+UC_Preview .> UC_Publish : extend
+
+
+UC_EditBook .> UC_Bulk : extend
+UC_EditBook .> UC_Read : extend
+UC_Profile .> UC_Password : include
+UC_Profile .> UC_ProfilePic : extend
+UC_Password .> UC_Strength : include
+
+
+UC_Notif .> UC_Mark : include
+UC_Notif .> UC_Archive : extend
+UC_Notif .> UC_Priority : include
+
+
+UC_AI .> UC_Short : extend
+UC_AI .> UC_Medium : extend
+UC_AI .> UC_Detail : extend
+UC_AI .> UC_EditAI : extend
+
+
+UC_Stats .> UC_Bar : extend
+UC_Stats .> UC_Trend : extend
+UC_Stats .> UC_Custom : extend
+UC_Stats .> UC_Export : include
+
+
+UC_Reviews .> UC_Reply : include
+UC_Reviews .> UC_Flag : extend
+UC_Reviews .> UC_Sentiment : include
+UC_Reviews .> UC_RatingDist : include
+UC_Reply .> UC_Template : include
+
+
+@enduml
