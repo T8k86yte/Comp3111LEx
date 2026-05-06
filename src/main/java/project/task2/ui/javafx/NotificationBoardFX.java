@@ -8,9 +8,12 @@ import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import project.task2.model.AuthorAccount;
 import project.task2.model.Notification;
+import project.task2.model.ArchivedNotification;
 import project.task2.service.AuthorPortalService;
+import project.task2.utils.ProfilePictureManager;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -19,16 +22,19 @@ public class NotificationBoardFX {
     private AuthorAccount currentAuthor;
     private Stage stage;
     private VBox notificationsContainer;
+    private VBox archivedContainer;
     private Label unreadCountLabel;
+    private Label archivedCountLabel;
     
-    // Filter components
     private TextField searchField;
     private ComboBox<String> typeFilterCombo;
     private DatePicker dateFilterPicker;
     private CheckBox urgentOnlyCheckBox;
     private ComboBox<String> sortCombo;
+    private ToggleGroup viewToggle;
     
     private List<Notification> allNotifications;
+    private List<ArchivedNotification> allArchived;
 
     public NotificationBoardFX(AuthorAccount author) {
         this.currentAuthor = author;
@@ -63,32 +69,42 @@ public class NotificationBoardFX {
         
         titleSection.getChildren().addAll(titleLabel, subtitleLabel);
 
-        // Filter bar
+        // View toggle
+        HBox toggleBar = createToggleBar();
         VBox filterBox = createFilterBox();
-        
-        // Control bar
         HBox controlBar = createControlBar();
         
-        // Notifications container
+        // Active notifications container
         notificationsContainer = new VBox(10);
         notificationsContainer.setPadding(new Insets(10));
         
-        ScrollPane scrollPane = new ScrollPane(notificationsContainer);
+        // Archived notifications container
+        archivedContainer = new VBox(10);
+        archivedContainer.setPadding(new Insets(10));
+        archivedContainer.setVisible(false);
+        archivedContainer.setManaged(false);
+        
+        ScrollPane scrollPane = new ScrollPane();
         scrollPane.setFitToWidth(true);
         scrollPane.setPrefHeight(450);
         scrollPane.setStyle("-fx-background-color: transparent; -fx-background: transparent;");
         
-        centerContent.getChildren().addAll(titleSection, filterBox, controlBar, scrollPane);
+        // Stack both containers
+        StackPane contentStack = new StackPane();
+        contentStack.getChildren().addAll(notificationsContainer, archivedContainer);
+        scrollPane.setContent(contentStack);
+        
+        centerContent.getChildren().addAll(titleSection, toggleBar, filterBox, controlBar, scrollPane);
         root.setCenter(centerContent);
 
-        Scene scene = new Scene(root, 650, 700);
+        Scene scene = new Scene(root, 750, 750);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         stage.setTitle("Notification Board - " + currentAuthor.getUsername());
         stage.setScene(scene);
         stage.show();
         
-        loadNotifications();
+        loadData();
     }
 
     private HBox createTopBar() {
@@ -97,12 +113,11 @@ public class NotificationBoardFX {
         topBar.setAlignment(Pos.CENTER_RIGHT);
         topBar.setStyle("-fx-background-color: white; -fx-border-color: #e2e8f0; -fx-border-width: 0 0 1 0;");
 
-        String initial = currentAuthor.getUsername().substring(0, 1).toUpperCase();
-        Label avatar = new Label(initial);
-        avatar.setStyle("-fx-background-color: #2563eb; -fx-text-fill: white; -fx-font-weight: bold; " +
-                       "-fx-padding: 8px; -fx-background-radius: 20px; -fx-font-size: 14px;");
-        avatar.setPrefSize(36, 36);
-        avatar.setAlignment(Pos.CENTER);
+        StackPane avatarContainer = ProfilePictureManager.createAvatar(
+            currentAuthor.getUsername(), 
+            currentAuthor.getFullName(), 
+            40
+        );
 
         Label usernameLabel = new Label(currentAuthor.getUsername());
         usernameLabel.setStyle("-fx-font-weight: 600; -fx-text-fill: #1e293b;");
@@ -111,15 +126,47 @@ public class NotificationBoardFX {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeBtn = new Button("✕");
-        closeBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #64748b; -fx-font-size: 18px; -fx-cursor: hand;");
+        closeBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #64748b; -fx-font-size: 18px; -fx-cursor: hand");
         closeBtn.setOnAction(e -> stage.close());
 
         HBox userInfo = new HBox(12);
         userInfo.setAlignment(Pos.CENTER);
-        userInfo.getChildren().addAll(avatar, usernameLabel);
+        userInfo.getChildren().addAll(avatarContainer, usernameLabel);
         
         topBar.getChildren().addAll(userInfo, spacer, closeBtn);
         return topBar;
+    }
+
+    private HBox createToggleBar() {
+        HBox toggleBar = new HBox(20);
+        toggleBar.setAlignment(Pos.CENTER);
+        toggleBar.setPadding(new Insets(10));
+        
+        viewToggle = new ToggleGroup();
+        
+        RadioButton activeBtn = new RadioButton("📬 Active Notifications");
+        activeBtn.setToggleGroup(viewToggle);
+        activeBtn.setSelected(true);
+        activeBtn.setOnAction(e -> {
+            notificationsContainer.setVisible(true);
+            notificationsContainer.setManaged(true);
+            archivedContainer.setVisible(false);
+            archivedContainer.setManaged(false);
+            loadData();
+        });
+        
+        RadioButton archivedBtn = new RadioButton("📦 Archived Notifications");
+        archivedBtn.setToggleGroup(viewToggle);
+        archivedBtn.setOnAction(e -> {
+            notificationsContainer.setVisible(false);
+            notificationsContainer.setManaged(false);
+            archivedContainer.setVisible(true);
+            archivedContainer.setManaged(true);
+            loadArchivedData();
+        });
+        
+        toggleBar.getChildren().addAll(activeBtn, archivedBtn);
+        return toggleBar;
     }
 
     private VBox createFilterBox() {
@@ -136,7 +183,6 @@ public class NotificationBoardFX {
         filterGrid.setVgap(10);
         filterGrid.setPadding(new Insets(10, 0, 0, 0));
         
-        // Search by title/message
         Label searchLabel = new Label("Search:");
         searchLabel.getStyleClass().add("muted");
         searchField = new TextField();
@@ -144,7 +190,6 @@ public class NotificationBoardFX {
         searchField.setPrefWidth(200);
         searchField.textProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Filter by type
         Label typeLabel = new Label("Type:");
         typeLabel.getStyleClass().add("muted");
         typeFilterCombo = new ComboBox<>();
@@ -152,19 +197,16 @@ public class NotificationBoardFX {
         typeFilterCombo.setValue("All");
         typeFilterCombo.valueProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Filter by date
         Label dateLabel = new Label("Date:");
         dateLabel.getStyleClass().add("muted");
         dateFilterPicker = new DatePicker();
         dateFilterPicker.setPromptText("Filter by date");
         dateFilterPicker.valueProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Urgent only
         urgentOnlyCheckBox = new CheckBox("⚠️ Show urgent only");
         urgentOnlyCheckBox.getStyleClass().add("muted");
         urgentOnlyCheckBox.selectedProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Sort options
         Label sortLabel = new Label("Sort:");
         sortLabel.getStyleClass().add("muted");
         sortCombo = new ComboBox<>();
@@ -172,7 +214,6 @@ public class NotificationBoardFX {
         sortCombo.setValue("Priority First");
         sortCombo.valueProperty().addListener((obs, old, newVal) -> applyFilters());
         
-        // Clear filters button
         Button clearFiltersBtn = new Button("Clear Filters");
         clearFiltersBtn.getStyleClass().addAll("button", "secondary-btn");
         clearFiltersBtn.setPrefWidth(100);
@@ -191,7 +232,6 @@ public class NotificationBoardFX {
         
         filterBox.getChildren().addAll(filterTitle, filterGrid);
         
-        // Add clear filters button row
         HBox clearRow = new HBox();
         clearRow.setAlignment(Pos.CENTER_RIGHT);
         clearRow.getChildren().add(clearFiltersBtn);
@@ -220,27 +260,23 @@ public class NotificationBoardFX {
         
         List<Notification> filtered = allNotifications.stream()
             .filter(n -> {
-                // Search filter
                 if (!searchText.isEmpty()) {
                     if (!n.getTitle().toLowerCase().contains(searchText) &&
                         !n.getMessage().toLowerCase().contains(searchText)) {
                         return false;
                     }
                 }
-                // Type filter
                 if (!typeFilter.equals("All")) {
                     String notificationType = getTypeDisplayName(n.getType());
                     if (!notificationType.equals(typeFilter)) {
                         return false;
                     }
                 }
-                // Date filter
                 if (dateFilter != null) {
                     if (!n.getCreatedAt().toLocalDate().equals(dateFilter)) {
                         return false;
                     }
                 }
-                // Urgent only filter
                 if (urgentOnly && !n.isPriority()) {
                     return false;
                 }
@@ -248,7 +284,6 @@ public class NotificationBoardFX {
             })
             .collect(Collectors.toList());
         
-        // Sort
         switch (sortOption) {
             case "Newest First":
                 filtered.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
@@ -288,39 +323,45 @@ public class NotificationBoardFX {
         unreadCountLabel.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-font-weight: bold; " +
                                   "-fx-padding: 4px 12px; -fx-background-radius: 20px; -fx-font-size: 12px;");
         
+        archivedCountLabel = new Label();
+        archivedCountLabel.setStyle("-fx-background-color: #64748b; -fx-text-fill: white; -fx-font-weight: bold; " +
+                                    "-fx-padding: 4px 12px; -fx-background-radius: 20px; -fx-font-size: 12px;");
+        
         Button refreshBtn = new Button("🔄 Refresh");
-        refreshBtn.setStyle("-fx-background-color: #f1f5f9; -fx-text-fill: #334155; -fx-font-weight: 500; " +
-                           "-fx-background-radius: 8px; -fx-padding: 6px 16px; -fx-cursor: hand;");
-        refreshBtn.setOnAction(e -> loadNotifications());
+        refreshBtn.getStyleClass().addAll("button", "secondary-btn");
+        refreshBtn.setOnAction(e -> loadData());
         
         Button markAllReadBtn = new Button("✓ Mark All as Read");
-        markAllReadBtn.setStyle("-fx-background-color: #f1f5f9; -fx-text-fill: #334155; -fx-font-weight: 500; " +
-                                "-fx-background-radius: 8px; -fx-padding: 6px 16px; -fx-cursor: hand;");
+        markAllReadBtn.getStyleClass().addAll("button", "primary-btn");
         markAllReadBtn.setOnAction(e -> markAllAsRead());
         
-        Button deleteReadBtn = new Button("🗑️ Delete Read");
-        deleteReadBtn.setStyle("-fx-background-color: #f1f5f9; -fx-text-fill: #ef4444; -fx-font-weight: 500; " +
-                               "-fx-background-radius: 8px; -fx-padding: 6px 16px; -fx-cursor: hand;");
-        deleteReadBtn.setOnAction(e -> deleteReadNotifications());
+        Button archiveAllReadBtn = new Button("📦 Archive All Read");
+        archiveAllReadBtn.getStyleClass().addAll("button", "primary-btn");
+        archiveAllReadBtn.setOnAction(e -> archiveAllReadNotifications());
         
-        Button deleteAllBtn = new Button("🗑️ Delete All");
-        deleteAllBtn.setStyle("-fx-background-color: #f1f5f9; -fx-text-fill: #dc2626; -fx-font-weight: 500; " +
-                              "-fx-background-radius: 8px; -fx-padding: 6px 16px; -fx-cursor: hand;");
-        deleteAllBtn.setOnAction(e -> deleteAllNotifications());
+        Button deleteAllArchivedBtn = new Button("🗑️ Delete Archived");
+        deleteAllArchivedBtn.getStyleClass().addAll("button", "danger-btn");
+        deleteAllArchivedBtn.setOnAction(e -> deleteAllArchivedNotifications());
         
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         
-        controlBar.getChildren().addAll(spacer, unreadCountLabel, refreshBtn, markAllReadBtn, deleteReadBtn, deleteAllBtn);
+        controlBar.getChildren().addAll(spacer, unreadCountLabel, refreshBtn, markAllReadBtn, archiveAllReadBtn);
         return controlBar;
     }
 
-    private void loadNotifications() {
+    private void loadData() {
         allNotifications = authorService.getNotifications(currentAuthor.getUsername());
         int unreadCount = authorService.getUnreadNotificationCount(currentAuthor.getUsername());
         
         updateUnreadCount(unreadCount);
         applyFilters();
+    }
+    
+    private void loadArchivedData() {
+        allArchived = authorService.getArchivedNotifications(currentAuthor.getUsername());
+        archivedCountLabel.setText("📦 " + allArchived.size() + " archived");
+        displayArchivedNotifications(allArchived);
     }
     
     private void displayNotifications(List<Notification> notifications) {
@@ -335,15 +376,36 @@ public class NotificationBoardFX {
             emptyIcon.setStyle("-fx-font-size: 48px;");
             Label emptyLabel = new Label("No notifications found");
             emptyLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #64748b;");
-            Label emptyHint = new Label("Try changing your filters or check back later");
-            emptyHint.setStyle("-fx-font-size: 12px; -fx-text-fill: #94a3b8;");
             
-            emptyBox.getChildren().addAll(emptyIcon, emptyLabel, emptyHint);
+            emptyBox.getChildren().addAll(emptyIcon, emptyLabel);
             notificationsContainer.getChildren().add(emptyBox);
         } else {
             for (Notification notification : notifications) {
                 VBox card = createNotificationCard(notification);
                 notificationsContainer.getChildren().add(card);
+            }
+        }
+    }
+    
+    private void displayArchivedNotifications(List<ArchivedNotification> archived) {
+        archivedContainer.getChildren().clear();
+        
+        if (archived.isEmpty()) {
+            VBox emptyBox = new VBox(15);
+            emptyBox.setAlignment(Pos.CENTER);
+            emptyBox.setPadding(new Insets(50));
+            
+            Label emptyIcon = new Label("📦");
+            emptyIcon.setStyle("-fx-font-size: 48px;");
+            Label emptyLabel = new Label("No archived notifications");
+            emptyLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #64748b;");
+            
+            emptyBox.getChildren().addAll(emptyIcon, emptyLabel);
+            archivedContainer.getChildren().add(emptyBox);
+        } else {
+            for (ArchivedNotification archivedNotif : archived) {
+                VBox card = createArchivedCard(archivedNotif);
+                archivedContainer.getChildren().add(card);
             }
         }
     }
@@ -355,7 +417,6 @@ public class NotificationBoardFX {
                      "-fx-border-color: #e2e8f0; -fx-border-radius: 12px; " +
                      "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.03), 4, 0, 0, 1);");
         
-        // Priority highlight
         if (notification.isPriority()) {
             card.setStyle(card.getStyle() + "-fx-border-color: #f97316; -fx-border-width: 2px; " +
                           "-fx-background-color: #fff7ed;");
@@ -369,7 +430,6 @@ public class NotificationBoardFX {
         Label typeIcon = new Label(notification.getTypeIcon());
         typeIcon.setStyle("-fx-font-size: 20px;");
         
-        // Priority badge
         if (notification.isPriority()) {
             Label priorityBadge = new Label("URGENT");
             priorityBadge.setStyle("-fx-background-color: #f97316; -fx-text-fill: white; " +
@@ -402,23 +462,83 @@ public class NotificationBoardFX {
                                 "-fx-font-size: 11px; -fx-cursor: hand; -fx-underline: true;");
             markReadBtn.setOnAction(e -> {
                 authorService.markNotificationAsRead(notification.getNotificationId());
-                loadNotifications();
+                loadData();
             });
             footer.getChildren().add(markReadBtn);
         }
+        
+        Button archiveBtn = new Button("Archive");
+        archiveBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #64748b; " +
+                           "-fx-font-size: 11px; -fx-cursor: hand; -fx-underline: true;");
+        archiveBtn.setOnAction(e -> {
+            authorService.archiveNotification(notification.getNotificationId());
+            loadData();
+            loadArchivedData();
+        });
+        footer.getChildren().add(archiveBtn);
+        
+        card.getChildren().addAll(header, messageLabel, footer);
+        return card;
+    }
+    
+    private VBox createArchivedCard(ArchivedNotification archived) {
+        VBox card = new VBox(8);
+        card.setPadding(new Insets(15));
+        card.setStyle("-fx-background-color: #f8fafc; -fx-background-radius: 12px; " +
+                     "-fx-border-color: #e2e8f0; -fx-border-radius: 12px; " +
+                     "-fx-opacity: 0.8;");
+        
+        HBox header = new HBox(10);
+        header.setAlignment(Pos.CENTER_LEFT);
+        
+        Label typeIcon = new Label(getArchivedTypeIcon(archived.getType()));
+        typeIcon.setStyle("-fx-font-size: 20px;");
+        
+        Label archivedBadge = new Label("ARCHIVED");
+        archivedBadge.setStyle("-fx-background-color: #64748b; -fx-text-fill: white; " +
+                               "-fx-font-size: 10px; -fx-font-weight: bold; -fx-padding: 2px 8px; " +
+                               "-fx-background-radius: 12px;");
+        
+        Label titleLabel = new Label(archived.getTitle());
+        titleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #0f172a;");
+        
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        
+        Label dateLabel = new Label(archived.getArchivedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+        dateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #94a3b8;");
+        
+        header.getChildren().addAll(typeIcon, archivedBadge, titleLabel, spacer, dateLabel);
+        
+        Label messageLabel = new Label(archived.getMessage());
+        messageLabel.setWrapText(true);
+        messageLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #475569;");
+        
+        HBox footer = new HBox(10);
+        footer.setAlignment(Pos.CENTER_RIGHT);
+        
+        Button unarchiveBtn = new Button("Unarchive");
+        unarchiveBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #10b981; " +
+                             "-fx-font-size: 11px; -fx-cursor: hand; -fx-underline: true;");
+        unarchiveBtn.setOnAction(e -> {
+            authorService.unarchiveNotification(archived.getOriginalId());
+            loadArchivedData();
+            loadData();
+        });
+        footer.getChildren().add(unarchiveBtn);
         
         Button deleteBtn = new Button("Delete");
         deleteBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #ef4444; " +
                           "-fx-font-size: 11px; -fx-cursor: hand; -fx-underline: true;");
         deleteBtn.setOnAction(e -> {
             Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-            confirm.setTitle("Delete Notification");
-            confirm.setHeaderText("Delete this notification?");
+            confirm.setTitle("Delete Archived Notification");
+            confirm.setHeaderText("Delete this archived notification?");
             confirm.setContentText("This action cannot be undone.");
             confirm.showAndWait().ifPresent(response -> {
                 if (response == ButtonType.OK) {
-                    authorService.deleteNotification(notification.getNotificationId());
-                    loadNotifications();
+                    authorService.deleteArchivedNotification(archived.getOriginalId());
+                    loadArchivedData();
                 }
             });
         });
@@ -426,6 +546,16 @@ public class NotificationBoardFX {
         
         card.getChildren().addAll(header, messageLabel, footer);
         return card;
+    }
+    
+    private String getArchivedTypeIcon(String type) {
+        return switch (type) {
+            case "BOOK_APPROVED" -> "✅";
+            case "BOOK_REJECTED" -> "❌";
+            case "BOOK_SUBMITTED" -> "📝";
+            case "BOOK_DELETED" -> "🗑️";
+            default -> "📌";
+        };
     }
 
     private void updateUnreadCount(int count) {
@@ -442,7 +572,7 @@ public class NotificationBoardFX {
 
     private void markAllAsRead() {
         authorService.markAllNotificationsAsRead(currentAuthor.getUsername());
-        loadNotifications();
+        loadData();
         
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Notifications");
@@ -451,65 +581,33 @@ public class NotificationBoardFX {
         alert.showAndWait();
     }
     
-    private void deleteReadNotifications() {
-        int readCount = (int) allNotifications.stream()
-            .filter(Notification::isRead)
-            .count();
+    private void archiveAllReadNotifications() {
+        authorService.archiveAllNotifications(currentAuthor.getUsername());
+        loadData();
+        loadArchivedData();
         
-        if (readCount == 0) {
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("No Read Notifications");
-            alert.setHeaderText(null);
-            alert.setContentText("There are no read notifications to delete.");
-            alert.showAndWait();
-            return;
-        }
-        
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-        confirm.setTitle("Delete Read Notifications");
-        confirm.setHeaderText("Delete all read notifications?");
-        confirm.setContentText("This will delete " + readCount + " read notification(s). This action cannot be undone.");
-        
-        confirm.showAndWait().ifPresent(response -> {
-            if (response == ButtonType.OK) {
-                authorService.deleteReadNotifications(currentAuthor.getUsername());
-                loadNotifications();
-                
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Notifications Deleted");
-                alert.setHeaderText(null);
-                alert.setContentText("Deleted " + readCount + " read notification(s).");
-                alert.showAndWait();
-            }
-        });
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Archive Notifications");
+        alert.setHeaderText(null);
+        alert.setContentText("All read notifications have been archived");
+        alert.showAndWait();
     }
     
-    private void deleteAllNotifications() {
-        int totalCount = allNotifications.size();
-        
-        if (totalCount == 0) {
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("No Notifications");
-            alert.setHeaderText(null);
-            alert.setContentText("There are no notifications to delete.");
-            alert.showAndWait();
-            return;
-        }
-        
+    private void deleteAllArchivedNotifications() {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-        confirm.setTitle("Delete All Notifications");
-        confirm.setHeaderText("Delete all notifications?");
-        confirm.setContentText("This will delete " + totalCount + " notification(s). This action cannot be undone.");
+        confirm.setTitle("Delete Archived Notifications");
+        confirm.setHeaderText("Delete all archived notifications?");
+        confirm.setContentText("This action cannot be undone.");
         
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
-                authorService.deleteAllNotifications(currentAuthor.getUsername());
-                loadNotifications();
+                authorService.deleteAllArchivedNotifications(currentAuthor.getUsername());
+                loadArchivedData();
                 
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Notifications Deleted");
+                alert.setTitle("Archived Notifications");
                 alert.setHeaderText(null);
-                alert.setContentText("Deleted all " + totalCount + " notification(s).");
+                alert.setContentText("All archived notifications have been deleted");
                 alert.showAndWait();
             }
         });

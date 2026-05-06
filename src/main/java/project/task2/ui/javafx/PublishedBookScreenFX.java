@@ -14,7 +14,12 @@ import javafx.stage.Stage;
 import project.task2.model.AuthorAccount;
 import project.task2.model.BookSubmission;
 import project.task2.service.AuthorPortalService;
+import project.task2.service.BorrowTrackingService;
+import project.task2.utils.ProfilePictureManager;
 
+import java.awt.Desktop;
+import java.io.File;
+import java.io.IOException;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.Optional;
@@ -22,6 +27,7 @@ import java.util.function.Consumer;
 
 public class PublishedBookScreenFX {
     private AuthorPortalService authorService;
+    private BorrowTrackingService borrowTrackingService;
     private AuthorAccount currentAuthor;
     private Stage stage;
     private TableView<BookSubmission> bookTable;
@@ -33,10 +39,16 @@ public class PublishedBookScreenFX {
     private TextField searchField;
     private ComboBox<String> statusFilterCombo;
     private ComboBox<String> sortCombo;
+    
+    private Button deleteBtn;
+    private Button readBtn;
+    private Button editBtn;
+    private Label selectionLabel;
 
     public PublishedBookScreenFX(AuthorAccount author, Consumer<Void> onDataChanged) {
         this.currentAuthor = author;
         this.authorService = new AuthorPortalService();
+        this.borrowTrackingService = new BorrowTrackingService();
         this.stage = new Stage();
         this.masterData = FXCollections.observableArrayList();
         this.onDataChanged = onDataChanged;
@@ -84,7 +96,7 @@ public class PublishedBookScreenFX {
         loadBooks();
         setupFilterAndSort();
 
-        Scene scene = new Scene(root, 1100, 700);
+        Scene scene = new Scene(root, 1200, 800);
         scene.getStylesheets().add(getClass().getResource("/project/task2/css/author-portal.css").toExternalForm());
         
         stage.setTitle("My Published Books - " + currentAuthor.getFullName());
@@ -98,12 +110,11 @@ public class PublishedBookScreenFX {
         topBar.setAlignment(Pos.CENTER_RIGHT);
         topBar.setStyle("-fx-background-color: white; -fx-border-color: #e2e8f0; -fx-border-width: 0 0 1 0;");
 
-        String initial = currentAuthor.getUsername().substring(0, 1).toUpperCase();
-        Label avatar = new Label(initial);
-        avatar.setStyle("-fx-background-color: #2563eb; -fx-text-fill: white; -fx-font-weight: bold; " +
-                       "-fx-padding: 8px; -fx-background-radius: 20px; -fx-font-size: 14px;");
-        avatar.setPrefSize(36, 36);
-        avatar.setAlignment(Pos.CENTER);
+        StackPane avatarContainer = ProfilePictureManager.createAvatar(
+            currentAuthor.getUsername(), 
+            currentAuthor.getFullName(), 
+            40
+        );
 
         Label usernameLabel = new Label(currentAuthor.getUsername());
         usernameLabel.setStyle("-fx-font-weight: 600; -fx-text-fill: #1e293b;");
@@ -117,7 +128,7 @@ public class PublishedBookScreenFX {
 
         HBox userInfo = new HBox(12);
         userInfo.setAlignment(Pos.CENTER);
-        userInfo.getChildren().addAll(avatar, usernameLabel);
+        userInfo.getChildren().addAll(avatarContainer, usernameLabel);
         
         topBar.getChildren().addAll(userInfo, spacer, closeBtn);
         return topBar;
@@ -170,6 +181,15 @@ public class PublishedBookScreenFX {
         searchField.textProperty().addListener((obs, old, newVal) -> updateFilter());
         statusFilterCombo.valueProperty().addListener((obs, old, newVal) -> updateFilter());
         sortCombo.valueProperty().addListener((obs, old, newVal) -> updateSort());
+        
+        bookTable.getSelectionModel().selectedItemProperty().addListener((obs, old, newVal) -> {
+            updateButtonStates();
+        });
+        
+        bookTable.getSelectionModel().getSelectedItems().addListener((javafx.collections.ListChangeListener.Change<? extends BookSubmission> c) -> {
+            updateButtonStates();
+            updateSelectionLabel();
+        });
     }
 
     private void updateFilter() {
@@ -218,11 +238,40 @@ public class PublishedBookScreenFX {
         
         sortedData.setComparator(comparator);
     }
+    
+    private void updateButtonStates() {
+        int selectedCount = bookTable.getSelectionModel().getSelectedItems().size();
+        boolean hasSelection = selectedCount > 0;
+        boolean isSingleSelection = selectedCount == 1;
+        
+        if (editBtn != null) {
+            editBtn.setDisable(!isSingleSelection);
+        }
+        if (readBtn != null) {
+            readBtn.setDisable(!hasSelection);
+        }
+        if (deleteBtn != null) {
+            deleteBtn.setDisable(!hasSelection);
+        }
+    }
+    
+    private void updateSelectionLabel() {
+        int selectedCount = bookTable.getSelectionModel().getSelectedItems().size();
+        if (selectionLabel != null) {
+            if (selectedCount == 0) {
+                selectionLabel.setText("");
+            } else {
+                selectionLabel.setText("✓ " + selectedCount + " book(s) selected");
+                selectionLabel.setStyle("-fx-text-fill: #2563eb; -fx-font-weight: bold;");
+            }
+        }
+    }
 
     private TableView<BookSubmission> createBookTable() {
         TableView<BookSubmission> table = new TableView<>();
         table.getStyleClass().add("table-view");
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
         TableColumn<BookSubmission, String> idCol = new TableColumn<>("ID");
         idCol.setCellValueFactory(new PropertyValueFactory<>("submissionId"));
@@ -231,6 +280,7 @@ public class PublishedBookScreenFX {
         TableColumn<BookSubmission, String> titleCol = new TableColumn<>("Title");
         titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
         titleCol.setPrefWidth(250);
+        titleCol.setComparator(String.CASE_INSENSITIVE_ORDER);
 
         TableColumn<BookSubmission, String> genreCol = new TableColumn<>("Genres");
         genreCol.setCellValueFactory(cellData -> 
@@ -297,18 +347,32 @@ public class PublishedBookScreenFX {
         HBox actionBox = new HBox(15);
         actionBox.setAlignment(Pos.CENTER);
         actionBox.setPadding(new Insets(20, 0, 0, 0));
+        
+        selectionLabel = new Label();
+        selectionLabel.setPrefWidth(150);
+        
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Button editBtn = new Button("✏️ Edit Selected");
+        readBtn = new Button("📖 Read Selected");
+        readBtn.getStyleClass().addAll("button", "primary-btn");
+        readBtn.setPrefWidth(150);
+        readBtn.setOnAction(e -> readSelectedBooks());
+        readBtn.setDisable(true);
+
+        editBtn = new Button("✏️ Edit Selected");
         editBtn.getStyleClass().addAll("button", "primary-btn");
         editBtn.setPrefWidth(150);
         editBtn.setOnAction(e -> editSelectedBook());
+        editBtn.setDisable(true);
 
-        Button deleteBtn = new Button("🗑️ Delete Selected");
+        deleteBtn = new Button("🗑️ Delete Selected");
         deleteBtn.getStyleClass().addAll("button", "danger-btn");
         deleteBtn.setPrefWidth(150);
-        deleteBtn.setOnAction(e -> deleteSelectedBook());
+        deleteBtn.setOnAction(e -> deleteSelectedBooks());
+        deleteBtn.setDisable(true);
 
-        actionBox.getChildren().addAll(editBtn, deleteBtn);
+        actionBox.getChildren().addAll(selectionLabel, spacer, readBtn, editBtn, deleteBtn);
         return actionBox;
     }
 
@@ -316,13 +380,9 @@ public class PublishedBookScreenFX {
         masterData.clear();
         var submissions = authorService.getAuthorSubmissions(currentAuthor.getUsername());
         
-        System.out.println("📚 Loading " + submissions.size() + " total submissions for " + currentAuthor.getUsername());
-        
         submissions.stream()
             .filter(sub -> !sub.isDraft())
             .forEach(sub -> {
-                System.out.println("   • " + sub.getTitle() + " - Status: " + sub.getStatus() + 
-                                   " | Currently borrowed: " + sub.getCurrentlyBorrowedCount());
                 masterData.add(sub);
             });
         
@@ -330,28 +390,70 @@ public class PublishedBookScreenFX {
             updateFilter();
         }
         
-        System.out.println("📚 Displaying " + masterData.size() + " books in table");
-        
-        if (masterData.isEmpty()) {
-            System.out.println("📭 No published books found");
+        updateButtonStates();
+        updateSelectionLabel();
+    }
+
+    private void readSelectedBooks() {
+        ObservableList<BookSubmission> selected = bookTable.getSelectionModel().getSelectedItems();
+        if (selected.isEmpty()) {
+            showAlert("No Selection", "Please select at least one book to read.", Alert.AlertType.WARNING);
+            return;
         }
+
+        for (BookSubmission book : selected) {
+            String filePath = book.getFilePath();
+            if (filePath == null || filePath.isEmpty()) {
+                showAlert("Cannot Read", "No file available for: " + book.getTitle(), Alert.AlertType.WARNING);
+                continue;
+            }
+            
+            File file = new File(filePath);
+            if (!file.exists()) {
+                showAlert("Cannot Read", "File not found for: " + book.getTitle(), Alert.AlertType.WARNING);
+                continue;
+            }
+            
+            try {
+                Desktop.getDesktop().open(file);
+            } catch (IOException e) {
+                showAlert("Error", "Cannot open file for: " + book.getTitle(), Alert.AlertType.ERROR);
+            }
+        }
+        
+        showAlert("Reading", "Opened " + selected.size() + " book(s).", Alert.AlertType.INFORMATION);
     }
 
     private void editSelectedBook() {
-        BookSubmission selected = bookTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
+        ObservableList<BookSubmission> selected = bookTable.getSelectionModel().getSelectedItems();
+        if (selected.isEmpty()) {
             showAlert("No Selection", "Please select a book to edit.", Alert.AlertType.WARNING);
             return;
         }
+        
+        if (selected.size() > 1) {
+            showAlert("Cannot Edit", "Please select only one book to edit.", Alert.AlertType.WARNING);
+            return;
+        }
+        
+        BookSubmission book = selected.get(0);
 
-        if (!selected.getStatus().equals("PENDING")) {
-            showAlert("Cannot Edit", 
-                "This book is " + selected.getStatus() + ". Only pending books can be edited.", 
-                Alert.AlertType.WARNING);
+        boolean canEdit = false;
+        if (book.getStatus().equals("PENDING")) {
+            canEdit = true;
+        } else if (book.getStatus().equals("APPROVED") && book.getCurrentlyBorrowedCount() == 0) {
+            canEdit = true;
+        }
+
+        if (!canEdit) {
+            String reason = book.getStatus().equals("APPROVED") 
+                ? "This book is APPROVED and has been borrowed. Cannot edit."
+                : "This book is " + book.getStatus() + ". Only pending or unborrowed approved books can be edited.";
+            showAlert("Cannot Edit", reason, Alert.AlertType.WARNING);
             return;
         }
 
-        EditBookDialogFX editDialog = new EditBookDialogFX(selected);
+        EditBookDialogFX editDialog = new EditBookDialogFX(book);
         Optional<BookSubmission> result = editDialog.showAndWait();
         
         if (result.isPresent()) {
@@ -369,77 +471,61 @@ public class PublishedBookScreenFX {
         }
     }
 
-    private void deleteSelectedBook() {
-        BookSubmission selected = bookTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showAlert("No Selection", "Please select a book to delete.", Alert.AlertType.WARNING);
+    private void deleteSelectedBooks() {
+        ObservableList<BookSubmission> selected = bookTable.getSelectionModel().getSelectedItems();
+        if (selected.isEmpty()) {
+            showAlert("No Selection", "Please select at least one book to delete.", Alert.AlertType.WARNING);
             return;
         }
+
+        StringBuilder cannotDeleteList = new StringBuilder();
+        StringBuilder canDeleteList = new StringBuilder();
+        int canDeleteCount = 0;
         
-        if (!selected.canBeDeleted()) {
-            if (selected.isApproved() && selected.getCurrentlyBorrowedCount() > 0) {
-                showAlert("Cannot Delete",
-                        "❌ This book is currently borrowed by " + selected.getCurrentlyBorrowedCount()
-                                + " reader(s) and has not been returned.\n\n"
-                                + "Books that are currently borrowed cannot be deleted.\n"
-                                + "Please wait until all copies are returned before deleting.\n\n"
-                                + "Currently borrowed: " + selected.getCurrentlyBorrowedCount() + " copy/copies",
-                        Alert.AlertType.WARNING);
-            } else if (selected.isRejected()) {
-                showAlert("Cannot Delete",
-                        "Rejected books cannot be deleted. They are kept for record purposes.",
-                        Alert.AlertType.WARNING);
+        for (BookSubmission book : selected) {
+            boolean canDelete = borrowTrackingService.canDeleteBook(book.getSubmissionId());
+            if (canDelete) {
+                canDeleteCount++;
+                canDeleteList.append("• ").append(book.getTitle()).append(" (").append(book.getStatus()).append(")\n");
             } else {
-                showAlert("Cannot Delete",
-                        "This book cannot be deleted because it is in " + selected.getStatus() + " status.",
-                        Alert.AlertType.WARNING);
+                cannotDeleteList.append("• ").append(book.getTitle()).append(" - Currently borrowed by ")
+                    .append(book.getCurrentlyBorrowedCount()).append(" reader(s)\n");
             }
+        }
+
+        String message = "";
+        if (canDeleteCount > 0) {
+            message = "Books that can be deleted (" + canDeleteCount + "):\n" + canDeleteList.toString() + "\n";
+        }
+        if (cannotDeleteList.length() > 0) {
+            message += "\n❌ Cannot delete:\n" + cannotDeleteList.toString();
+        }
+
+        if (canDeleteCount == 0) {
+            showAlert("Cannot Delete", message, Alert.AlertType.WARNING);
             return;
         }
-        confirmDelete(selected);
-    }
-    
-    private void confirmDelete(BookSubmission selected) {
-        String message = "";
-        String additionalInfo = "";
-        
-        if (selected.isPending()) {
-            message = "This book is currently pending review.";
-            additionalInfo = "\n\n⚠️ This book has not been reviewed yet.\n" +
-                            "It can be deleted safely as no readers have access to it.";
-        } else if (selected.isApproved() && selected.getCurrentlyBorrowedCount() == 0) {
-            message = "This book is APPROVED and currently not borrowed by anyone.";
-            additionalInfo = "\n\n📌 Since no readers are currently borrowing this book, you can delete it.\n" +
-                            "Historical borrow records (" + selected.getTotalBorrowedCount() + 
-                            " total borrows) will be kept for reference.\n" +
-                            "The book will be permanently removed from the library.";
-        } else if (selected.isRejected()) {
-            message = "This book is REJECTED.";
-            additionalInfo = "\n\nIt will be removed from your submissions list.";
-        }
-        
+
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Confirm Deletion");
-        confirm.setHeaderText("Delete Book: " + selected.getTitle());
-        confirm.setContentText(
-            message + "\n\n" +
-            additionalInfo +
-            "\n\nAre you sure you want to delete this book?\n" +
-            "This action cannot be undone."
-        );
+        confirm.setHeaderText("Delete " + canDeleteCount + " selected book(s)?");
+        confirm.setContentText(message + "\n\n⚠️ This action cannot be undone!");
 
         Optional<ButtonType> result = confirm.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
-            boolean deleted = authorService.deleteSubmission(selected.getSubmissionId());
-            if (deleted) {
-                loadBooks();
-                if (onDataChanged != null) {
-                    onDataChanged.accept(null);
+            int deletedCount = 0;
+            for (BookSubmission book : selected) {
+                if (borrowTrackingService.canDeleteBook(book.getSubmissionId())) {
+                    boolean deleted = authorService.deleteSubmission(book.getSubmissionId());
+                    if (deleted) deletedCount++;
                 }
-                showAlert("Success", "Book deleted successfully!", Alert.AlertType.INFORMATION);
-            } else {
-                showAlert("Error", "Failed to delete book.", Alert.AlertType.ERROR);
             }
+            
+            loadBooks();
+            if (onDataChanged != null) {
+                onDataChanged.accept(null);
+            }
+            showAlert("Deletion Complete", "Successfully deleted " + deletedCount + " book(s).", Alert.AlertType.INFORMATION);
         }
     }
 

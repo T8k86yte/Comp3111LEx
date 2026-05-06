@@ -23,6 +23,17 @@ rectangle "Task 3: Librarian Portal" {
 
   package "Book Management" {
     usecase "Get Borrowed Book Records" as UC_GetBorrowedBooksRecords
+    usecase "Modify Books" as UC_ModifyBooks
+    usecase "Generate Description" as UC_GenerateDescription
+    usecase "View Book Change Logs" as UC_ViewBookLogs
+  }
+
+  package "Book Request Management" {
+    usecase "Notify Requesters" as UC_NotifyRequesters
+    usecase "Approve Request" as UC_ApproveRequest
+    usecase "Reject Request" as UC_RejectRequest
+    usecase "Download Requested Book" as UC_DownloadRequestedBook
+    usecase "View Request Statistics" as UC_ViewRequestStatistics
   }
 
   package "User Management" {
@@ -33,6 +44,8 @@ rectangle "Task 3: Librarian Portal" {
 
   package "Notifications" {
     usecase "Browse Notifications" as UC_BrowseNotifications
+    usecase "Archive Notifications" as UC_ArchiveNotifications
+    usecase "Delete Notifications" as UC_DeleteNotifications
   }
 }
 
@@ -44,14 +57,25 @@ User --> UC_ViewSubmissions
 User --> UC_Approve
 User --> UC_Reject
 User --> UC_GetBorrowedBooksRecords
+User --> UC_ModifyBooks
+User --> UC_GenerateDescription
+User --> UC_ViewBookLogs
+User --> UC_ApproveRequest
+User --> UC_RejectRequest
+User --> UC_DownloadRequestedBook
+User --> UC_ViewRequestStatistics
 User --> UC_EditAccounts
 User --> UC_DisableActivateAccounts
 User --> UC_BrowseNotifications
+User --> UC_ArchiveNotifications
+User --> UC_DeleteNotifications
 
 UC_Register .> UC_ValidateRegister : include
 UC_Login .> UC_ValidateLogin : include
 UC_Approve .> UC_NotifyAuthors : include
 UC_Reject .> UC_NotifyAuthors : include
+UC_ApproveRequest .> UC_NotifyRequesters : include
+UC_RejectRequest .> UC_NotifyRequesters : include
 UC_EditAccounts .> UC_NotifyUsers : include
 UC_DisableActivateAccounts .> UC_NotifyUsers : include
 @enduml

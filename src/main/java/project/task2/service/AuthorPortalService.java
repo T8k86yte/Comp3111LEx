@@ -4,9 +4,13 @@ import project.task2.model.AuthorAccount;
 import project.task2.repo.AuthorRepository;
 import project.task2.utils.PasswordUtils;
 import project.task2.model.BookSubmission;
+import project.task2.model.Review;
+import project.task2.model.BookStats;
+import project.task2.model.ArchivedNotification;
 import project.task2.repo.SubmissionRepository;
 import project.task2.repo.DraftRepository;
 import project.task2.repo.NotificationRepository;
+import project.task2.repo.ArchivedNotificationRepository;
 import project.task2.model.Notification;
 import project.task2.utils.FileHandler;
 import project.task1.repo.InMemoryBookRepository;
@@ -20,22 +24,27 @@ import java.util.List;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.ArrayList;
 
 public class AuthorPortalService {
     private final AuthorRepository authorRepository;
     private final SubmissionRepository submissionRepository;
     private final DraftRepository draftRepository;
     private final NotificationRepository notificationRepository;
+    private final ArchivedNotificationRepository archivedNotificationRepository;
     private final LibrarianRepository librarianRepository;
     private final UnifiedNotificationStore notificationStore;
+    private final project.task2.repo.ReviewRepository reviewRepo;
 
     public AuthorPortalService() {
         this.authorRepository = new AuthorRepository();
         this.submissionRepository = new SubmissionRepository();
         this.draftRepository = new DraftRepository();
         this.notificationRepository = new NotificationRepository();
+        this.archivedNotificationRepository = new ArchivedNotificationRepository();
         this.librarianRepository = new LibrarianRepository();
         this.notificationStore = new UnifiedNotificationStore();
+        this.reviewRepo = new project.task2.repo.ReviewRepository();
     }
 
     // ========== REGISTRATION ==========
@@ -83,6 +92,8 @@ public class AuthorPortalService {
                 salt,
                 hash,
                 false,
+                null,
+                "",
                 bio != null ? bio.trim() : ""
             );
 
@@ -152,7 +163,7 @@ public class AuthorPortalService {
         
         String[] parts = draftData.split("\\|", 5);
         if (parts.length >= 4) {
-            return parts; // [title, genres, description, filePath, coverImagePath]
+            return parts;
         }
         return null;
     }
@@ -185,7 +196,6 @@ public class AuthorPortalService {
                 FileHandler.getAllowedFileTypes());
         }
 
-        // Validate cover image if provided
         if (coverImagePath != null && !coverImagePath.isEmpty()) {
             if (!isValidCoverImage(coverImagePath)) {
                 return SubmissionResult.failure("Invalid cover image. Allowed: JPG, PNG (max 5MB)");
@@ -203,7 +213,6 @@ public class AuthorPortalService {
             submissionRepository.save(submission);
             clearDraft(authorUsername);
             
-            // Send notification for submission
             sendNotification(authorUsername, 
                 "📝 Book Submitted: " + title,
                 "Your book '" + title + "' has been submitted and is pending review by a librarian.",
@@ -223,11 +232,9 @@ public class AuthorPortalService {
 
     private boolean isValidCoverImage(String filePath) {
         String lower = filePath.toLowerCase();
-        // Check extension
         if (!lower.endsWith(".jpg") && !lower.endsWith(".jpeg") && !lower.endsWith(".png")) {
             return false;
         }
-        // Check file size (5MB limit)
         try {
             java.io.File file = new java.io.File(filePath);
             if (file.exists() && file.length() > 5 * 1024 * 1024) {
@@ -409,7 +416,6 @@ public class AuthorPortalService {
         notificationRepository.markAllAsRead(authorUsername);
     }
 
-    // ========== NOTIFICATION DELETE METHODS ==========
     public void deleteNotification(String notificationId) {
         notificationRepository.delete(notificationId);
     }
@@ -420,6 +426,174 @@ public class AuthorPortalService {
     
     public void deleteReadNotifications(String authorUsername) {
         notificationRepository.deleteReadByAuthor(authorUsername);
+    }
+
+    // ========== STATS METHODS (Task 2.8) ==========
+    
+    public List<BookStats> getAuthorBookStats(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        List<BookStats> statsList = new ArrayList<>();
+        
+        for (BookSubmission sub : submissions) {
+            if (sub.isApproved()) {
+                double avgRating = reviewRepo.getAverageRatingForBook(sub.getSubmissionId());
+                int reviewCount = reviewRepo.getReviewCountForBook(sub.getSubmissionId());
+                
+                statsList.add(new BookStats(
+                    sub.getSubmissionId(),
+                    sub.getTitle(),
+                    sub.getTotalBorrowedCount(),
+                    avgRating,
+                    reviewCount,
+                    sub.getTotalBorrowedCount(),
+                    sub.getStatus()
+                ));
+            }
+        }
+        return statsList;
+    }
+    
+    public int getTotalBorrowsForAuthor(String authorUsername) {
+        return getAuthorSubmissions(authorUsername).stream()
+                .filter(BookSubmission::isApproved)
+                .mapToInt(BookSubmission::getTotalBorrowedCount)
+                .sum();
+    }
+    
+    // FIXED: Now averages individual ratings, not book averages
+    public double getAverageRatingForAuthor(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        long totalRatingSum = 0;
+        int totalReviewCount = 0;
+        
+        for (BookSubmission sub : submissions) {
+            if (sub.isApproved()) {
+                List<Review> reviews = reviewRepo.findByBookId(sub.getSubmissionId());
+                for (Review review : reviews) {
+                    totalRatingSum += review.getRating();
+                    totalReviewCount++;
+                }
+            }
+        }
+        
+        return totalReviewCount > 0 ? (double) totalRatingSum / totalReviewCount : 0.0;
+    }
+    
+    public int getTotalReviewsForAuthor(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        int total = 0;
+        for (BookSubmission sub : submissions) {
+            if (sub.isApproved()) {
+                total += reviewRepo.getReviewCountForBook(sub.getSubmissionId());
+            }
+        }
+        return total;
+    }
+
+    // ========== REVIEW METHODS (Task 2.9) ==========
+    
+    public List<Review> getReviewsForAuthorBooks(String authorUsername) {
+        List<BookSubmission> submissions = getAuthorSubmissions(authorUsername);
+        List<String> bookIds = submissions.stream()
+                .map(BookSubmission::getSubmissionId)
+                .collect(java.util.stream.Collectors.toList());
+        return reviewRepo.findByAuthorBooks(bookIds);
+    }
+    
+    public boolean replyToReview(String reviewId, String replyMessage) {
+        var reviewOpt = reviewRepo.findById(reviewId);
+        if (reviewOpt.isEmpty()) {
+            return false;
+        }
+        Review review = reviewOpt.get();
+        review.setAuthorReply(replyMessage);
+        reviewRepo.update(review);
+        
+        sendNotificationToReviewer(review, replyMessage);
+        return true;
+    }
+    
+    public boolean flagReview(String reviewId, String reason) {
+        var reviewOpt = reviewRepo.findById(reviewId);
+        if (reviewOpt.isEmpty()) {
+            return false;
+        }
+        Review review = reviewOpt.get();
+        review.setFlagged(true, reason);
+        reviewRepo.update(review);
+        return true;
+    }
+    
+    private void sendNotificationToReviewer(Review review, String replyMessage) {
+        String title = "📝 Author replied to your review";
+        String message = "Author replied to your review on '" + review.getBookTitle() + "':\n\"" + replyMessage + "\"";
+        
+        notificationStore.create(
+            "TASK1",
+            review.getReviewerUsername(),
+            title,
+            message,
+            "AUTHOR_REPLY",
+            "AUTHOR_REPLY",
+            false,
+            review.getReviewId()
+        );
+    }
+
+    // ========== ARCHIVE METHODS (Task 2.6) ==========
+    
+    public void archiveNotification(String notificationId) {
+        List<Notification> notifications = notificationRepository.findByAuthor("");
+        for (Notification notification : notifications) {
+            if (notification.getNotificationId().equals(notificationId)) {
+                archivedNotificationRepository.archive(notification);
+                notificationRepository.delete(notificationId);
+                break;
+            }
+        }
+    }
+    
+    public void archiveAllNotifications(String authorUsername) {
+        List<Notification> notifications = notificationRepository.findByAuthor(authorUsername);
+        for (Notification notification : notifications) {
+            if (notification.isRead()) {
+                archivedNotificationRepository.archive(notification);
+                notificationRepository.delete(notification.getNotificationId());
+            }
+        }
+    }
+    
+    public List<ArchivedNotification> getArchivedNotifications(String authorUsername) {
+        return archivedNotificationRepository.findByAuthor(authorUsername);
+    }
+    
+    public void unarchiveNotification(String originalId) {
+        var archivedOpt = archivedNotificationRepository.findById(originalId);
+        if (archivedOpt.isPresent()) {
+            ArchivedNotification archived = archivedOpt.get();
+            Notification restored = new Notification(
+                archived.getOriginalId(),
+                archived.getAuthorUsername(),
+                archived.getTitle(),
+                archived.getMessage(),
+                archived.getType(),
+                true,
+                archived.getCreatedAt(),
+                archived.getRelatedSubmissionId(),
+                false,
+                false
+            );
+            notificationRepository.save(restored);
+            archivedNotificationRepository.unarchive(originalId);
+        }
+    }
+    
+    public void deleteArchivedNotification(String originalId) {
+        archivedNotificationRepository.deleteArchived(originalId);
+    }
+    
+    public void deleteAllArchivedNotifications(String authorUsername) {
+        archivedNotificationRepository.deleteAllByAuthor(authorUsername);
     }
 
     // ========== VALIDATION HELPER METHODS ==========

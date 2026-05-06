@@ -15,7 +15,9 @@ import project.task2.model.BookSubmission;
 import project.task2.repo.AuthorRepository;
 import project.task2.repo.SubmissionRepository;
 import project.task3.model.LibrarianAccount;
+import project.task3.model.SummaryGenerator;
 import project.task3.repo.LibrarianRepository;
+import project.task3.repo.BookChangeLogRepository;
 import project.shared.notification.UnifiedNotification;
 import project.shared.notification.UnifiedNotificationStore;
 
@@ -46,6 +48,7 @@ public class LibrarianPortalService {
     private final AuthorRepository authorRepository;
     private final SharedAuthFacade sharedAuthFacade;
     private final BookRepository bookRepository;
+    private final BookChangeLogRepository bookChangeLogRepository;
     private final SubmissionRepository bookSubmissionRepository;
     private final UnifiedNotificationStore notificationStore;
 
@@ -63,6 +66,7 @@ public class LibrarianPortalService {
         this.authorRepository = authorRepository;
         this.sharedAuthFacade = new SharedAuthFacade(studentStaffRepository, authorRepository, librarianRepository);
         this.bookRepository = bookRepository;
+        this.bookChangeLogRepository = new BookChangeLogRepository();
         this.bookSubmissionRepository = bookSubmissionRepository;
         this.notificationStore = new UnifiedNotificationStore();
         migrateLegacyTask3Notifications();
@@ -287,6 +291,13 @@ public class LibrarianPortalService {
                 .sorted(Comparator.comparing(BookRequestView::createdAt).reversed())
                 .collect(Collectors.toList());
     }
+    public String getBookRequestTitle(String requestId) {
+        List<BookRequestView> requests = loadBookRequests();
+        for (BookRequestView view : requests) {
+            if (view.requestId.equals(requestId)) return view.title;
+        }
+        return "";
+    }
 
     public OperationResult approveBookRequest(String requestId, String librarianUsername, String comment) {
         String normalizedRequestId = safeTrim(requestId);
@@ -482,8 +493,18 @@ public class LibrarianPortalService {
     public List<Book> getPublishedBooksScreenData() {
         return bookRepository.findAll();
     }
+    public List<Book> getDownloadedBooksData() {
+        List<Book> list = new ArrayList<>();
+        for (Book b : bookRepository.findAll()) {
+            if (!authorRepository.existsByUsername(b.getAuthor())) list.add(b);
+        }
+        return list;
+    }
 
-
+    public OperationResult validateBookId(String bookId) {
+        if (bookRepository.findById(bookId).isEmpty()) return OperationResult.failure("Invalid book Id: " + bookId);
+        else return OperationResult.success("");
+    }
     public OperationResult modifyBook(String bookId,
                                       String newTitle,
                                       String newAuthor,
@@ -493,6 +514,8 @@ public class LibrarianPortalService {
                                       String newCoverPath) {
         if (bookId.isEmpty()) return OperationResult.failure("Modification failed: Id should not be empty.");
         if (bookRepository.findById(bookId).isEmpty()) return OperationResult.failure("Modification failed: Invalid book Id.");
+
+        bookChangeLogRepository.logChange(bookRepository.findById(bookId).get());//Log changes
 
         boolean success = bookRepository.modifyBook(bookId, newTitle, newAuthor, newGenre, newDescription, newFilePath, newCoverPath);
         return success ? OperationResult.success("Modification successful: Modified book with Id \"" + bookId + "\".") :
@@ -506,6 +529,9 @@ public class LibrarianPortalService {
                                       String coverPath) {
         bookRepository.addApprovedBook(title, author, LocalDate.now(), description, genre, filePath, coverPath);
         return OperationResult.success("Creation successful: Created the book + \"" + title + "\".");
+    }
+    public String getBookChangeLog(String bookId) {
+        return bookChangeLogRepository.getChangeLogs(bookId);
     }
 
 
@@ -588,7 +614,7 @@ public class LibrarianPortalService {
         return OperationResult.success("Successfully opened file: " + path);
     }
 
-    public OperationResult updateProfile(String username, String newFullName, String oldPassword, String newPassword, String confirmNewPassword, String newEmployeeID) {
+    public OperationResult updateProfile(String username, String newFullName, String oldPassword, String newPassword, String confirmNewPassword, String newEmployeeID, String newProfilePicturePath) {
         String normalizedUsername = safeTrim(username);
         String normalizedFullName = safeTrim(newFullName);
         String pwd = newPassword == null ? "" : newPassword;
@@ -634,6 +660,8 @@ public class LibrarianPortalService {
                 salt,
                 hash,
                 existing.isDisabled(),
+                existing.getLastLogin(),
+                newProfilePicturePath,
                 eID
         ));
         appendNotification(normalizedUsername, "ANNOUNCEMENT", "Your profile was updated successfully.");
@@ -752,7 +780,9 @@ public class LibrarianPortalService {
                         salt,
                         hash,
                         userStudentStaff.get().getRole(),
-                        user.isDisabled()//Preserve the disabled state
+                        user.isDisabled(),//Preserve the disabled state
+                        user.getLastLogin(),
+                        user.getProfilePicturePath()
                 ));
                 break;
             case AUTHOR:
@@ -762,6 +792,8 @@ public class LibrarianPortalService {
                         salt,
                         hash,
                         user.isDisabled(),
+                        user.getLastLogin(),
+                        user.getProfilePicturePath(),
                         userAuthor.get().getBio()
                 ));
                 break;
@@ -772,6 +804,8 @@ public class LibrarianPortalService {
                         salt,
                         hash,
                         user.isDisabled(),
+                        user.getLastLogin(),
+                        user.getProfilePicturePath(),
                         userLibrarian.get().getEmployeeID()
                 ));
                 break;
@@ -1152,24 +1186,27 @@ public class LibrarianPortalService {
                                               String categoryFilter,
                                               LocalDateTime timeMin,
                                               LocalDateTime timeMax,
-                                              String urgencyFilter) {
+                                              String urgencyFilter,
+                                              boolean archiveFilter) {
         if (!(categoryFilter.equals("ALL") || categoryFilter.equals(notification.category()))) return false;
         if (timeMin != null && notification.timestamp().isBefore(timeMin)) return false;
         if (timeMax != null && notification.timestamp().isAfter(timeMax)) return false;
         if ("URGENT".equalsIgnoreCase(urgencyFilter) && !notification.isUrgent()) return false;
         if ("NORMAL".equalsIgnoreCase(urgencyFilter) && notification.isUrgent()) return false;
+        if (archiveFilter != notification.archived()) return false;
         return true;
     }
 
     public List<NotificationView> getNotificationBoard(String username) {
-        return getNotificationBoard(username, "ALL", null, null, "ALL");
+        return getNotificationBoard(username, "ALL", null, null, "ALL", "NOT ARCHIVED");
     }
     public List<NotificationView> getNotificationBoard(
             String username,
             String categoryFilter,
             LocalDateTime dateMin,
             LocalDateTime dateMax,
-            String urgencyFilter) {
+            String urgencyFilter,
+            String viewArchived) {
         String normalized = safeTrim(username);
         if (normalized.isEmpty()) return List.of();
 
@@ -1178,7 +1215,7 @@ public class LibrarianPortalService {
         notifications.sort((n1, n2) -> Boolean.compare(n2.isUrgent(), n1.isUrgent()));
         return notifications
                 .stream()
-                .filter(n -> filterNotification(n, categoryFilter, dateMin, dateMax, urgencyFilter))
+                .filter(n -> filterNotification(n, categoryFilter, dateMin, dateMax, urgencyFilter, viewArchived.equals("ARCHIVED")))
                 .collect(Collectors.toList());
     }
 
@@ -1274,15 +1311,70 @@ public class LibrarianPortalService {
     }
 
     private List<NotificationView> loadStoredNotifications(String username) {
-        return notificationStore.findByScopeAndUser(TASK3_NOTIFICATION_SCOPE, username).stream()
+        List<String> archivedIds = loadNotificationArchives().stream()
+                .filter(a -> username.equals(a.username()))
+                .map(n -> n.notificationId())
+                .collect(Collectors.toCollection(ArrayList::new));
+        return notificationStore.findByScopeAndUser(TASK3_NOTIFICATION_SCOPE, username)
+                .stream()
                 .map(n -> new NotificationView(
                         n.id(),
                         n.createdAt(),
                         n.category().isBlank() ? n.type() : n.category(),
                         n.message(),
-                        n.read()
+                        n.read(),
+                        n.priority(),
+                        archivedIds.contains(n.id())
                 ))
                 .collect(Collectors.toList());
+    }
+    private List<NotificationArchiveEntry> loadNotificationArchives() {
+        Path path = Paths.get("data/task3/notification_archives.txt");
+        if (!Files.exists(path)) {
+            return new ArrayList<>();
+        }
+        try {
+            List<NotificationArchiveEntry> rows = new ArrayList<>();
+            for (String line : Files.readAllLines(path)) {
+                if (line == null || line.isBlank()) {
+                    continue;
+                }
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 2) {
+                    continue;
+                }
+                rows.add(new NotificationArchiveEntry(decode(parts[0]), decode(parts[1])));
+            }
+            return rows;
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+    private void saveNotificationArchives(List<NotificationArchiveEntry> rows) {
+        try {
+            Files.createDirectories(Paths.get("data/task1"));
+            List<String> lines = new ArrayList<>();
+            for (NotificationArchiveEntry row : rows) {
+                lines.add(encode(row.username()) + "|" + encode(row.notificationId()));
+            }
+            Files.write(Paths.get("data/task3/notification_archives.txt"), lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception ignored) {
+        }
+    }
+
+    public void archiveNotification(String username, String notificationId) {
+        String normalized = safeTrim(username);
+        String normalizedId = safeTrim(notificationId);
+        if (normalized.isEmpty() || normalizedId.isEmpty()) return;
+        boolean owned = notificationStore.findByScopeAndUser(TASK3_NOTIFICATION_SCOPE, normalized).stream()
+                .anyMatch(n -> n.id().equals(normalizedId));
+        if (!owned) return;
+        List<NotificationArchiveEntry> rows = loadNotificationArchives();
+        boolean exists = rows.stream().anyMatch(r -> normalized.equals(r.username()) && normalizedId.equals(r.notificationId()));
+        if (!exists) {
+            rows.add(new NotificationArchiveEntry(normalized, normalizedId));
+            saveNotificationArchives(rows);
+        }
     }
 
     public record NotificationView(
@@ -1290,18 +1382,15 @@ public class LibrarianPortalService {
             LocalDateTime timestamp,
             String category,
             String message,
-            boolean read
-    )
-    {
+            boolean read,
+            boolean urgent,
+            boolean archived
+    ) {
         public boolean isUrgent() {
-            String c = safeTrim(category).toUpperCase();
-            return c.equals("NEW_BOOK_SUBMISSION")
-                    || c.equals("USER_ACCOUNT_UPDATE")
-                    || c.equals("BOOK_REJECTED")
-                    || c.equals("RESPONSE")
-                    || c.contains("URGENT");
+            return urgent;
         }
     }
+    private record NotificationArchiveEntry(String username, String notificationId) {}
 
     public SharedAuthFacade.UserPrincipal getLibrarianPrinciple(String username) {
         if (username == null) return null;
