@@ -134,6 +134,7 @@ public class LibrarianPortalApp extends Application {
     private DatePicker notificationDateMin;
     private DatePicker notificationDateMax;
     private ComboBox<String> notificationUrgencyFilter;
+    private ComboBox<String> notificationArchivedFilter;
 
     private TableView<BorrowedBookRecordView> borrowedBooksTable;
     private TextField bookTableTitleFilter;
@@ -441,13 +442,7 @@ public class LibrarianPortalApp extends Application {
                     setText(null);
                     return;
                 }
-                String c = item.category() == null ? "" : item.category().toUpperCase();
-                boolean urgent = c.equals("NEW_BOOK_SUBMISSION")
-                        || c.equals("USER_ACCOUNT_UPDATE")
-                        || c.equals("BOOK_REJECTED")
-                        || c.equals("RESPONSE")
-                        || c.contains("URGENT");
-                String urgentTag = urgent ? "[URGENT] " : "";
+                String urgentTag = item.isUrgent() ? "[URGENT] " : "";
                 String readTag = item.read() ? "" : "[NEW] ";
                 setText(readTag + urgentTag
                         + "[" + item.timestamp().toLocalDate() + " " + item.timestamp().toLocalTime().withNano(0) + "] "
@@ -463,7 +458,10 @@ public class LibrarianPortalApp extends Application {
         Button deleteReadBtn = new Button("Delete Read");
         deleteReadBtn.getStyleClass().add("secondary-btn");
         deleteReadBtn.setOnAction(e -> handleDeleteTask3ReadNotifications());
-        HBox actions = new HBox(8, markReadBtn, deleteBtn, deleteReadBtn);
+        Button archiveBtn = new Button("Archive");
+        archiveBtn.getStyleClass().add("secondary-btn");
+        archiveBtn.setOnAction(e -> handleArchiveNotification());
+        HBox actions = new HBox(8, markReadBtn, deleteBtn, deleteReadBtn, archiveBtn);
         actions.setAlignment(Pos.CENTER_LEFT);
         VBox.setVgrow(notificationList, Priority.ALWAYS);
         card.getChildren().addAll(heading, hint, buildNotificationFilterCard(), notificationList, actions);
@@ -672,9 +670,11 @@ public class LibrarianPortalApp extends Application {
         notificationDateMax = new DatePicker();
         notificationUrgencyFilter = new ComboBox<>(FXCollections.observableArrayList("ALL", "URGENT", "NORMAL"));
         notificationUrgencyFilter.setValue("ALL");
+        notificationArchivedFilter = new ComboBox<>(FXCollections.observableArrayList("ARCHIVED", "NOT ARCHIVED"));
+        notificationArchivedFilter.setValue("NOT ARCHIVED");
 
         HBox fields = new HBox(10);
-        fields.getChildren().addAll(notificationCategoryFilter, notificationDateMin, notificationDateMax, notificationUrgencyFilter);
+        fields.getChildren().addAll(notificationCategoryFilter, notificationDateMin, notificationDateMax, notificationUrgencyFilter, notificationArchivedFilter);
 
 
         Button refreshBtn = new Button("Refresh");
@@ -2067,6 +2067,19 @@ public class LibrarianPortalApp extends Application {
         showInfoPopup("Change Logs", "Change Log for book with id " + id, logs);
     }
 
+    private void handleArchiveNotification() {
+        if (currentUser == null || notificationList == null) {
+            return;
+        }
+        LibrarianPortalService.NotificationView selected = notificationList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showErrorPopup("Notifications", "No selection.", "Select a notification first.");
+            return;
+        }
+        portalService.archiveNotification(currentUser.username(), selected.notificationId());
+        refreshNotifications();
+    }
+
 
     private void refreshBorrowedBooks() {
         borrowedBooksTable.setItems(FXCollections.observableArrayList(
@@ -2192,11 +2205,13 @@ public class LibrarianPortalApp extends Application {
         LocalDate minDate = notificationDateMin.getValue();
         LocalDate maxDate = notificationDateMax.getValue();
         List<LibrarianPortalService.NotificationView> rows = portalService.getNotificationBoard(
-                        currentUser.username(),
-                        notificationCategoryFilter.getValue(),
-                        minDate == null ? null : minDate.atStartOfDay(),
-                        maxDate == null ? null : maxDate.atTime(23, 59, 59),
-                        notificationUrgencyFilter.getValue());
+                currentUser.username(),
+                notificationCategoryFilter.getValue(),
+                minDate == null ? null : minDate.atStartOfDay(),
+                maxDate == null ? null : maxDate.atTime(23, 59, 59),
+                notificationUrgencyFilter.getValue(),
+                notificationArchivedFilter.getValue()
+        );
         if (rows.isEmpty()) {
             notificationList.setItems(FXCollections.observableArrayList());
             return;

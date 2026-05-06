@@ -38,15 +38,15 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 public class BookDownloadHelper {
-    private static final String DOWNLOAD_DIR = System.getenv("user.dir") + "/data/bookFiles";
-
     public static void crawl(String bookTitle, ProgressBar bar, Label prompt) {
         System.setProperty("webdriver.chrome.driver", "chromedriver.exe");
         Platform.runLater(() -> prompt.setText("Preparing for download..."));
 
+        String downloadDir = System.getProperty("user.dir") + "/data/bookFiles";
+
         ChromeOptions options = new ChromeOptions();
         Map<String, Object> prefs = new HashMap<>();
-        prefs.put("download.default_directory", DOWNLOAD_DIR);
+        prefs.put("download.default_directory", downloadDir);
         prefs.put("download.prompt_for_download", false);
         prefs.put("profile.default_content_setting_values.automatic_downloads", 1);
         options.setExperimentalOption("prefs", prefs);
@@ -112,9 +112,9 @@ public class BookDownloadHelper {
             pdfDownloadLink.click();
 
             Platform.runLater(() -> prompt.setText("Download started."));
-            DownloadMonitor monitor = new DownloadMonitor(DownloadUrl, new File(DOWNLOAD_DIR), bar, cookieHeader.toString());
+            DownloadMonitor monitor = new DownloadMonitor(DownloadUrl, new File(downloadDir), bar, cookieHeader.toString());
             monitor.call();
-            Platform.runLater(() -> prompt.setText("Download complete, the file is at " + DOWNLOAD_DIR));
+            Platform.runLater(() -> prompt.setText("Download complete, the file is at " + downloadDir));
         } catch (Exception e) {
             System.err.println(e.getMessage());
         } finally {
